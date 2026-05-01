@@ -30,6 +30,11 @@ pub enum ValidationKind {
 
 impl Config {
     /// Returns all validation errors. Empty Vec means OK.
+    ///
+    /// **Note:** when `backend == Sherpa` and `sherpa.model_dir` is set, this
+    /// function performs a synchronous `is_dir()` filesystem syscall. Callers
+    /// running on a tokio executor should wrap with `spawn_blocking` if
+    /// validation may run on a slow filesystem (NFS, encrypted volume, etc.).
     pub fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
 
