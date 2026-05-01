@@ -7,6 +7,8 @@
 
 pub mod io;
 pub mod schema;
+pub mod validate;
 
 pub use io::{ConfigError, ConfigIo};
 pub use schema::*;
+pub use validate::{ValidationError, ValidationKind};
