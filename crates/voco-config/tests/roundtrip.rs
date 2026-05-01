@@ -36,3 +36,14 @@ fn save_is_atomic() {
         .collect();
     assert_eq!(entries, vec!["config.toml".to_string()]);
 }
+
+#[test]
+#[cfg(unix)]
+fn save_writes_with_mode_600() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    voco_config::ConfigIo::save_to(&path, &Config::default()).unwrap();
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "config.toml must be created with 0o600 perms");
+}

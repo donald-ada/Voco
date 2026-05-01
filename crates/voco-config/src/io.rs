@@ -65,20 +65,25 @@ impl ConfigIo {
         );
 
         {
+            #[cfg(unix)]
+            let mut f = {
+                use std::os::unix::fs::OpenOptionsExt;
+                fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600) // chmod 600 at create time — protects plaintext access_token (spec §3.1).
+                    .open(&tmp)?
+            };
+            #[cfg(not(unix))]
             let mut f = fs::OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(&tmp)?;
+
             f.write_all(content.as_bytes())?;
             f.sync_all()?;
-        }
-
-        // chmod 600 to protect plaintext access_token (spec §3.1).
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
         }
 
         fs::rename(&tmp, path)?;
