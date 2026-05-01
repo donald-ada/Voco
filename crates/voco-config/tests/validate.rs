@@ -70,6 +70,21 @@ fn doubao_with_empty_token_fails() {
 }
 
 #[test]
+fn doubao_with_empty_model_id_fails() {
+    let mut cfg = cfg_with_backend(BackendChoice::Doubao);
+    cfg.doubao = Some(DoubaoCreds {
+        app_id: "x".into(),
+        access_token: "y".into(),
+        endpoint: "wss://example.invalid/asr".into(),
+        model_id: "".into(),
+    });
+    let errors = cfg.validate();
+    assert!(errors
+        .iter()
+        .any(|e| matches!(e.kind, ValidationKind::DoubaoCredsEmpty("model_id"))));
+}
+
+#[test]
 fn recording_max_duration_zero_fails() {
     let cfg = Config {
         doubao: Some(DoubaoCreds {

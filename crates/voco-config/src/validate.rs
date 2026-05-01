@@ -50,6 +50,12 @@ impl Config {
                             message: "doubao.endpoint must not be empty".into(),
                         });
                     }
+                    if c.model_id.is_empty() {
+                        errors.push(ValidationError {
+                            kind: ValidationKind::DoubaoCredsEmpty("model_id"),
+                            message: "doubao.model_id must not be empty".into(),
+                        });
+                    }
                 }
             },
             BackendChoice::Sherpa => match &self.sherpa {
