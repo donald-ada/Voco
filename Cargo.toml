@@ -2,9 +2,6 @@
 resolver = "2"
 members = [
     "crates/voco-config",
-    "crates/voco-ipc",
-    "crates/voco-daemon",
-    "crates/voco-cli",
 ]
 
 [workspace.package]
