@@ -5,6 +5,8 @@
 //! * `io`     — load/save with atomic writes
 //! * `validate` — semantic checks before applying
 
+pub mod io;
 pub mod schema;
 
+pub use io::{ConfigError, ConfigIo};
 pub use schema::*;
