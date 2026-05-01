@@ -15,7 +15,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [features]
-default = ["server"]
+default = ["server", "client"]
 server = ["tokio", "async-trait"]
 client = []     # no extra deps; uses std::os::unix::net
 
