@@ -35,8 +35,8 @@ impl IpcServer {
                         format!("daemon already running at {}", socket_path.display()),
                     ));
                 }
-                Err(_) => {
-                    warn!(?socket_path, "removing stale socket");
+                Err(e) => {
+                    warn!(?socket_path, error = %e, "removing stale socket");
                     std::fs::remove_file(&socket_path)?;
                 }
             }
@@ -134,6 +134,9 @@ async fn write_async(stream: &mut UnixStream, env: &Envelope) -> Result<(), Prot
         .len()
         .try_into()
         .map_err(|_| ProtocolError::FrameTooLarge(u32::MAX, MAX_FRAME_BYTES))?;
+    if len > MAX_FRAME_BYTES {
+        return Err(ProtocolError::FrameTooLarge(len, MAX_FRAME_BYTES));
+    }
     stream.write_all(&len.to_be_bytes()).await?;
     stream.write_all(&body).await?;
     stream.flush().await?;
