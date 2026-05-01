@@ -101,3 +101,73 @@ fn recording_max_duration_zero_fails() {
         .iter()
         .any(|e| matches!(e.kind, ValidationKind::RecordingMaxDurationOutOfRange)));
 }
+
+#[test]
+fn hotkey_keycode_zero_fails() {
+    let mut cfg = Config {
+        doubao: Some(DoubaoCreds {
+            app_id: "x".into(),
+            access_token: "y".into(),
+            endpoint: "wss://example.invalid/asr".into(),
+            model_id: "bigmodel-streaming".into(),
+        }),
+        ..Config::default()
+    };
+    cfg.hotkey.keycode = 0;
+    let errors = cfg.validate();
+    assert!(errors
+        .iter()
+        .any(|e| matches!(e.kind, ValidationKind::HotkeyKeycodeUnset)));
+}
+
+#[test]
+fn sherpa_threads_zero_fails() {
+    let cfg = Config {
+        backend: BackendChoice::Sherpa,
+        sherpa: Some(SherpaPaths {
+            model_dir: std::env::temp_dir(), // exists
+            num_threads: 0,
+            provider: "cpu".into(),
+        }),
+        ..Config::default()
+    };
+    let errors = cfg.validate();
+    assert!(errors
+        .iter()
+        .any(|e| matches!(e.kind, ValidationKind::SherpaThreadsOutOfRange)));
+}
+
+#[test]
+fn sherpa_threads_too_many_fails() {
+    let cfg = Config {
+        backend: BackendChoice::Sherpa,
+        sherpa: Some(SherpaPaths {
+            model_dir: std::env::temp_dir(),
+            num_threads: 64,
+            provider: "cpu".into(),
+        }),
+        ..Config::default()
+    };
+    let errors = cfg.validate();
+    assert!(errors
+        .iter()
+        .any(|e| matches!(e.kind, ValidationKind::SherpaThreadsOutOfRange)));
+}
+
+#[test]
+fn recording_max_duration_too_long_fails() {
+    let cfg = Config {
+        doubao: Some(DoubaoCreds {
+            app_id: "x".into(),
+            access_token: "y".into(),
+            endpoint: "wss://example.invalid/asr".into(),
+            model_id: "bigmodel-streaming".into(),
+        }),
+        recording_max_duration_secs: 601,
+        ..Config::default()
+    };
+    let errors = cfg.validate();
+    assert!(errors
+        .iter()
+        .any(|e| matches!(e.kind, ValidationKind::RecordingMaxDurationOutOfRange)));
+}
