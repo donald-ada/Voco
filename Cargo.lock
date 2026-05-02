@@ -1765,6 +1765,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "voco-config",
  "voco-daemon",
  "voco-ipc",

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const MAX_FRAME_BYTES: u32 = 1024 * 1024; // 1 MiB; status payloads are tiny
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -33,14 +33,25 @@ pub enum Request {
     DaemonShutdown,
     RecordingStart,
     RecordingStop,
+    /// Returns the daemon's current effective config as JSON. Phase 2:
+    /// readers verify reload took effect; later phases can introspect.
+    DumpConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Response {
     Ok,
+    /// Phase 2 reload result: succeeded, but some changes only take effect
+    /// after `voco daemon restart` (backend swap, hotkey, log path, etc.).
+    OkWithWarnings {
+        warnings: Vec<String>,
+    },
     Status(StatusInfo),
-    Error { message: String },
+    Config(serde_json::Value),
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

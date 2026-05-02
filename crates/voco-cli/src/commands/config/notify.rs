@@ -9,6 +9,7 @@ use voco_ipc::protocol::{Request, Response};
 pub enum ReloadOutcome {
     DaemonNotRunning,
     Reloaded,
+    ReloadedWithWarnings(Vec<String>),
     ReloadFailed(String),
 }
 
@@ -19,6 +20,7 @@ pub fn notify_daemon_reload() -> ReloadOutcome {
     };
     match client.call(&Request::ReloadConfig) {
         Ok(Response::Ok) => ReloadOutcome::Reloaded,
+        Ok(Response::OkWithWarnings { warnings }) => ReloadOutcome::ReloadedWithWarnings(warnings),
         Ok(Response::Error { message }) => ReloadOutcome::ReloadFailed(message),
         Ok(other) => ReloadOutcome::ReloadFailed(format!("unexpected response: {:?}", other)),
         Err(e) => ReloadOutcome::ReloadFailed(e.to_string()),
@@ -33,9 +35,14 @@ pub fn print_outcome(o: ReloadOutcome) {
         ReloadOutcome::Reloaded => {
             println!("✓ Daemon reloaded.");
         }
+        ReloadOutcome::ReloadedWithWarnings(warnings) => {
+            println!("✓ Daemon reloaded, but some changes need a restart:");
+            for w in warnings {
+                println!("  - {w}");
+            }
+            println!("  run `voco daemon restart` to apply those.");
+        }
         ReloadOutcome::ReloadFailed(msg) => {
-            // Phase 1 daemon returns a "not yet implemented" message — treat as
-            // a hint, not a failure. Phase 2 Task 6 makes this real.
             println!("  (daemon could not reload: {msg})");
             println!("  run `voco daemon restart` to apply.");
         }
