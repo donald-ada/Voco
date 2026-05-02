@@ -1,0 +1,21 @@
+[package]
+name = "voco-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "voco"
+path = "src/main.rs"
+
+[dependencies]
+voco-config = { path = "../voco-config" }
+voco-ipc = { path = "../voco-ipc", default-features = false, features = ["client"] }
+voco-daemon = { path = "../voco-daemon" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
