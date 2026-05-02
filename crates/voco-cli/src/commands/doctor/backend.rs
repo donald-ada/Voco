@@ -2,6 +2,7 @@
 //! Task 7 lands the real handshake (start()->stop()) once voco-asr is in.
 
 use super::CheckResult;
+use tokio;
 use voco_config::{BackendChoice, ConfigIo};
 
 pub fn doubao_creds_present() -> CheckResult {
@@ -45,7 +46,68 @@ pub fn doubao_creds_present() -> CheckResult {
 }
 
 pub fn doubao_handshake() -> CheckResult {
-    CheckResult::Skip("real handshake wired in Task 7 (voco-asr)".into())
+    use super::skip_on_ci;
+    if let Some(s) = skip_on_ci("CI=true (skip live network)") {
+        return s;
+    }
+    let cfg = match ConfigIo::load_from(&ConfigIo::default_path()) {
+        Ok(c) => c,
+        Err(_) => return CheckResult::Skip("config unparseable".into()),
+    };
+    if !matches!(cfg.backend, BackendChoice::Doubao) {
+        return CheckResult::Skip("backend != doubao".into());
+    }
+    if cfg.doubao.is_none() {
+        return CheckResult::Skip("doubao creds missing (see above)".into());
+    }
+    let mut be = match voco_asr::build_backend(&cfg) {
+        Ok(b) => b,
+        Err(e) => {
+            return CheckResult::Fail {
+                headline: format!("backend build failed: {e}"),
+                fix: "voco config (interactive wizard) re-checks creds".into(),
+            }
+        }
+    };
+
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => {
+            return CheckResult::Fail {
+                headline: format!("tokio runtime: {e}"),
+                fix: "this should never happen — file a bug".into(),
+            }
+        }
+    };
+    rt.block_on(async {
+        let t0 = std::time::Instant::now();
+        if let Err(e) = be.start().await {
+            return CheckResult::Fail {
+                headline: format!("ws handshake failed: {e}"),
+                fix: "verify endpoint/auth via `voco config show`; check network".into(),
+            };
+        }
+        // No audio sent — server should answer 45000002 (empty audio), which
+        // is the green-light signal that the handshake + auth path works.
+        match be.stop().await {
+            Err(voco_asr::AsrError::EmptyAudio) => {
+                CheckResult::Ok(format!("handshake ok ({}ms)", t0.elapsed().as_millis()))
+            }
+            Err(e) => CheckResult::Fail {
+                headline: format!("server rejected probe: {e}"),
+                fix:
+                    "check resource_id, model_id, and that creds match the expected console flavor"
+                        .into(),
+            },
+            Ok(_) => CheckResult::Warn {
+                headline: "server returned a normal Final on an empty session — unexpected".into(),
+                hint: "investigate; the server should have errored with 45000002".into(),
+            },
+        }
+    })
 }
 
 pub fn sherpa() -> CheckResult {

@@ -15,6 +15,10 @@ tracing = { workspace = true }
 flate2 = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+url = "2"
 
 [dev-dependencies]
 tokio = { workspace = true }
