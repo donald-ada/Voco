@@ -122,10 +122,21 @@ let cfg = cpal::StreamConfig {
 };
 ```
 
-If the device doesn't support `i16` directly, cpal will surface an error
-on `build_input_stream::<i16, _>(...)`. Fallback strategy: try `f32` and
-quantize to `i16` ourselves (multiply by `i16::MAX`, clamp). Most macOS
-mics report `f32` natively, so prepare for both branches.
+**Staged implementation (decision: ship i16-first, add f32 only if it
+fails on a dev mac).**
+
+- **Step 1 (always):** `build_input_stream::<i16, _>(...)`. If the dev
+  mac's default mic supports it, we're done — single sample-format
+  branch, simpler tests, smaller binary.
+- **Step 2 (only if step 1 surfaces a `BuildStreamError::StreamConfigNotSupported`
+  on the dev mac):** add an f32 fallback that quantizes via
+  `(sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16`. Land that as a
+  separate commit before Task 4 so the i16 path stays bisectable.
+
+Risk note: most macOS internal mics report f32 natively. Be ready to do
+the f32 work — but don't pre-implement it. The Task 1 step 1 smoke test
+(open mic on a dev mac, log negotiated config) tells us in one minute
+which branch we're in.
 
 ### 1.3 RMS computation
 
@@ -160,11 +171,16 @@ consumer. Updated the spec wording in passing.)
 ### 1.5 Steps
 
 - [ ] **Step 1:** Crate scaffold + cpal probe (open default input, log
-  the negotiated config). Compile on macOS.
+  the negotiated config). Compile on macOS. Use this step's log output
+  to decide whether i16 alone is enough or step 3a is required.
 - [ ] **Step 2:** Implement RMS function with unit tests covering: silence,
   full-scale square, half-scale sine.
 - [ ] **Step 3:** Wire the cpal callback to push PCM via `try_send` and
-  amplitude via `watch::Sender::send`. `f32`-input fallback included.
+  amplitude via `watch::Sender::send`. **i16 only** for this commit.
+- [ ] **Step 3a (conditional):** If the dev mac surfaced
+  `StreamConfigNotSupported` in step 1, add an f32 input branch that
+  quantizes to i16 inline before pushing. Separate commit so bisecting
+  the i16 path stays clean.
 - [ ] **Step 4:** Smoke test: `cargo test -p voco-audio --test live` (an
   `#[ignore]` test that opens the real mic and asserts a non-zero
   amplitude after 100ms — only meaningful when `cargo test -- --ignored`
@@ -173,7 +189,8 @@ consumer. Updated the spec wording in passing.)
   ```
   feat(audio): voco-audio crate — cpal capture + RMS amplitude watch
 
-  - AudioCapture::start opens 16kHz mono i16 (or f32 → i16 fallback)
+  - AudioCapture::start opens 16kHz mono i16 (f32 fallback in a follow-up
+    commit if the dev mac doesn't support i16 natively)
   - PCM frames flow via mpsc::channel(64) with drop-oldest backpressure
   - RMS amplitude flows via watch<f32> in [0, 1]
   - Drop on Session ends the cpal stream cleanly
