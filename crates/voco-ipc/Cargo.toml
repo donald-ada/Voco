@@ -1,0 +1,25 @@
+[package]
+name = "voco-ipc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+async-trait = { version = "0.1", optional = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+default = ["server", "client"]
+server = ["tokio", "async-trait"]
+client = []     # no extra deps; uses std::os::unix::net
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
+async-trait = "0.1"

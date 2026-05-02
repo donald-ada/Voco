@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/voco-config",
+    "crates/voco-ipc",
+    "crates/voco-daemon",
+    "crates/voco-cli",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+authors = ["Voco contributors"]
+repository = "https://github.com/zhangxiaolong/voco"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+directories = "5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+uuid = { version = "1", features = ["v4", "serde"] }
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
