@@ -87,6 +87,7 @@ mod tests {
             access_token: "Y".into(),
             endpoint: "Z".into(),
             model_id: "M".into(),
+            ..Default::default()
         });
         assert!(diff_for_restart(&a, &b).is_empty());
     }

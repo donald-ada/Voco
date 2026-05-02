@@ -240,8 +240,12 @@ fn prompt_doubao_creds(current: Option<&DoubaoCreds>) -> Result<DoubaoCreds> {
     Ok(DoubaoCreds {
         app_id,
         access_token,
+        api_key: current.and_then(|c| c.api_key.clone()),
         endpoint,
         model_id: model_id.to_string(),
+        resource_id: current
+            .map(|c| c.resource_id.clone())
+            .unwrap_or_else(|| "volc.bigasr.sauc.duration".to_string()),
     })
 }
 
@@ -392,6 +396,7 @@ mod tests {
             access_token: "Y".into(),
             endpoint: "Z".into(),
             model_id: "M".into(),
+            ..Default::default()
         });
         let choices = WizardChoices {
             backend: BackendChoice::Doubao,
@@ -412,6 +417,7 @@ mod tests {
             access_token: "TKN".into(),
             endpoint: "ENDP".into(),
             model_id: "bigmodel".into(),
+            ..Default::default()
         };
         let choices = WizardChoices {
             backend: BackendChoice::Doubao,
@@ -438,6 +444,7 @@ mod tests {
                 access_token: "".into(),
                 endpoint: "y".into(),
                 model_id: "m".into(),
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -452,6 +459,7 @@ mod tests {
                 access_token: "y".into(),
                 endpoint: "z".into(),
                 model_id: "m".into(),
+                ..Default::default()
             }),
             ..Default::default()
         };

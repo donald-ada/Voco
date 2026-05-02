@@ -58,8 +58,16 @@ fn apply(cfg: &mut Config, key: &str, value: &str) -> Result<()> {
 
         "doubao.app_id" => doubao_mut(cfg).app_id = value.to_string(),
         "doubao.access_token" => doubao_mut(cfg).access_token = value.to_string(),
+        "doubao.api_key" => {
+            doubao_mut(cfg).api_key = if value.is_empty() {
+                None
+            } else {
+                Some(value.to_string())
+            }
+        }
         "doubao.endpoint" => doubao_mut(cfg).endpoint = value.to_string(),
         "doubao.model_id" => doubao_mut(cfg).model_id = value.to_string(),
+        "doubao.resource_id" => doubao_mut(cfg).resource_id = value.to_string(),
 
         "sherpa.model_dir" => sherpa_mut(cfg).model_dir = PathBuf::from(value),
         "sherpa.num_threads" => sherpa_mut(cfg).num_threads = parse_num(value)?,
@@ -134,8 +142,10 @@ fn doubao_mut(cfg: &mut Config) -> &mut DoubaoCreds {
     cfg.doubao.get_or_insert_with(|| DoubaoCreds {
         app_id: String::new(),
         access_token: String::new(),
+        api_key: None,
         endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string(),
         model_id: "bigmodel".to_string(),
+        resource_id: "volc.bigasr.sauc.duration".to_string(),
     })
 }
 

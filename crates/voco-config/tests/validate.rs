@@ -27,6 +27,7 @@ fn doubao_with_creds_is_valid() {
         access_token: "y".into(),
         endpoint: "wss://example.invalid/asr".into(),
         model_id: "bigmodel-streaming".into(),
+        ..Default::default()
     });
     assert!(cfg.validate().is_empty());
 }
@@ -62,6 +63,7 @@ fn doubao_with_empty_token_fails() {
         access_token: "".into(),
         endpoint: "wss://example.invalid/asr".into(),
         model_id: "bigmodel-streaming".into(),
+        ..Default::default()
     });
     let errors = cfg.validate();
     assert!(errors
@@ -77,6 +79,7 @@ fn doubao_with_empty_model_id_fails() {
         access_token: "y".into(),
         endpoint: "wss://example.invalid/asr".into(),
         model_id: "".into(),
+        ..Default::default()
     });
     let errors = cfg.validate();
     assert!(errors
@@ -92,6 +95,7 @@ fn recording_max_duration_zero_fails() {
             access_token: "y".into(),
             endpoint: "wss://example.invalid/asr".into(),
             model_id: "bigmodel-streaming".into(),
+            ..Default::default()
         }),
         recording_max_duration_secs: 0,
         ..Config::default()
@@ -110,6 +114,7 @@ fn hotkey_keycode_zero_fails() {
             access_token: "y".into(),
             endpoint: "wss://example.invalid/asr".into(),
             model_id: "bigmodel-streaming".into(),
+            ..Default::default()
         }),
         ..Config::default()
     };
@@ -162,6 +167,7 @@ fn recording_max_duration_too_long_fails() {
             access_token: "y".into(),
             endpoint: "wss://example.invalid/asr".into(),
             model_id: "bigmodel-streaming".into(),
+            ..Default::default()
         }),
         recording_max_duration_secs: 601,
         ..Config::default()

@@ -59,10 +59,41 @@ pub enum HudStyle {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DoubaoCreds {
+    /// Old-console: pair `app_id` with `access_token`. New-console: leave
+    /// these empty and set `api_key` instead.
     pub app_id: String,
     pub access_token: String,
+
+    /// New-console single-key auth. When `Some`, `app_id`/`access_token`
+    /// can be empty. Phase 2 supports either auth mode.
+    #[serde(default)]
+    pub api_key: Option<String>,
+
     pub endpoint: String,
     pub model_id: String,
+
+    /// Volcengine resource ID — selects model SKU & billing tier. Default
+    /// is Doubao 1.0 hourly. Override for 2.0 (`volc.seedasr.sauc.duration`)
+    /// or concurrent tiers.
+    #[serde(default = "default_resource_id")]
+    pub resource_id: String,
+}
+
+fn default_resource_id() -> String {
+    "volc.bigasr.sauc.duration".to_string()
+}
+
+impl Default for DoubaoCreds {
+    fn default() -> Self {
+        Self {
+            app_id: String::new(),
+            access_token: String::new(),
+            api_key: None,
+            endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string(),
+            model_id: "bigmodel".to_string(),
+            resource_id: default_resource_id(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -90,6 +121,11 @@ impl Config {
         if let Some(d) = c.doubao.as_mut() {
             if !d.access_token.is_empty() {
                 d.access_token = "********".to_string();
+            }
+            if let Some(k) = d.api_key.as_mut() {
+                if !k.is_empty() {
+                    *k = "********".to_string();
+                }
             }
         }
         c

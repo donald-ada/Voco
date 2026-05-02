@@ -10,6 +10,7 @@ fn cfg_with_token(token: &str) -> Config {
             access_token: token.into(),
             endpoint: "wss://example/api".into(),
             model_id: "bigmodel".into(),
+            ..Default::default()
         }),
         ..Default::default()
     }
