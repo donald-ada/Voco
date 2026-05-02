@@ -29,8 +29,8 @@ Checking permissions ... (skip on CI)
 Checking config ...      ✓
 Checking daemon ...      ✓ socket reachable, hotkey not yet installed (Phase 4)
 Checking microphone ...  ✓ default input device available
-Checking backend ...     ⚠ doubao endpoint reachable but auth not yet wired
-All checks: 4 ok / 1 warn / 0 fail
+Checking backend ...     ✓ doubao handshake ok (logid=...), empty-audio probe returned 45000002 as expected
+All checks: 5 ok / 0 warn / 0 fail
 ```
 
 **Tech additions:**
@@ -38,7 +38,10 @@ All checks: 4 ok / 1 warn / 0 fail
 - `crossterm = "0.27"` — raw-mode keypress capture for "Custom..." hotkey option
 - `cpal = "0.15"` — only used by doctor's microphone probe (full audio capture lands in Phase 3; doctor uses default-host enumeration only, no stream `play()`)
 - `core-graphics = "0.24"` — only the `AXIsProcessTrustedWithOptions` shim for accessibility check (added behind `#[cfg(target_os = "macos")]`)
-- `reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }` — doubao TCP/HTTPS reachability probe (single short HEAD/GET; full WebSocket waits for Phase 3)
+- `tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }` — Doubao WebSocket transport (Task 8); the same dep also covers doctor's auth probe so we can drop the temporary `reqwest` plan
+- `flate2 = "1"` — Gzip frame compression for the Volcengine binary protocol
+- `bytes = "1"` — frame buffer hygiene
+- `async-trait = "0.1"` — already in voco-daemon; promote to workspace dep so voco-asr can share
 
 **Test additions:**
 - `expectrl` — drive interactive wizard transcript in tests
@@ -315,8 +318,8 @@ pub struct Check {
 | Daemon | Socket reachable | `UnixStream::connect(default_socket_path())` |
 | Daemon | Hotkey installed | not in Phase 2; Skip with "(Phase 4)" |
 | Microphone | Default input device | cpal `default_host().default_input_device()` and `supported_input_configs()` |
-| Backend | Doubao endpoint reachable | Single `reqwest` GET to the configured endpoint's HTTP origin (3s timeout). Don't authenticate yet — that lands when Phase 3 brings up the real WS client. |
-| Backend | Doubao credentials present | non-empty app_id + access_token |
+| Backend | Doubao credentials present | non-empty app_id + access_token (or new-console api_key) |
+| Backend | Doubao handshake | Build the `voco-asr::DoubaoBackend` (Task 8), `start().await`, `stop().await`. Server returns `45000002 empty audio` — treat that as ✓ (handshake + auth ok, no audio sent is expected). Other errors propagate as Fail with the error code/message. 5s timeout. |
 | Backend | Sherpa | Skip (Phase v2) |
 | Model files | sherpa skipped | always Skip |
 
@@ -340,9 +343,10 @@ Microphone
   ✓ Default input device: MacBook Pro Microphone (16 kHz mono supported)
 Backend
   ✓ Doubao endpoint reachable (rtt 84ms)
-  ⚠ Doubao auth: not yet wired (Phase 3)
+  ✓ Doubao credentials present
+  ✓ Doubao handshake (logid=20260502xxxxx, rtt 320ms; empty-audio probe returned 45000002 as expected)
 
-Summary: 9 ok / 1 warn / 1 fail / 2 skip
+Summary: 10 ok / 0 warn / 1 fail / 2 skip
 ```
 
 Exit code: 0 if no Fail, else 1.
@@ -355,7 +359,7 @@ Exit code: 0 if no Fail, else 1.
 - [ ] **Step 1:** Define `CheckResult` / `Check` types and the renderer.
 - [ ] **Step 2:** Implement each check module (alphabetical: backend → config → daemon → microphone → permissions). Each module ships with its own test.
 - [ ] **Step 3:** Wire into `commands::doctor::run`.
-- [ ] **Step 4:** Update `voco-cli/Cargo.toml` deps (cpal, reqwest, core-graphics, objc2 for the perm checks).
+- [ ] **Step 4:** Update `voco-cli/Cargo.toml` deps (cpal, core-graphics, objc2 for the perm checks; voco-asr for the backend probe).
 - [ ] **Step 5:** Smoke test invocation in `tests/doctor_smoke.rs`.
 - [ ] **Step 6:** Commit.
 
@@ -421,7 +425,179 @@ Phase 1 returned a stub error. Phase 2 wires it for the subset of fields that do
 
 ---
 
-## Task 7: end-to-end smoke updates + final verification
+## Task 7: voco-asr crate + Doubao WebSocket backend (protocol layer)
+
+**Why in Phase 2:** Phase 1 spec scheduled this for Phase 3, but the Phase 2 doctor wants a real handshake probe (Task 4 §"Backend"). Doing the protocol layer now means doctor can be honest about whether auth works, and Phase 3 only needs to wire `cpal` PCM into `feed()` — no protocol work left. **Task 4 lands first with a temporary `Skip("backend probe wired in Task 7")` stub for the handshake check; this Task 7 fills it in for real.**
+
+**Out of scope (still Phase 3):** real microphone capture, the orchestrator-level recording state machine, partial-text streaming to UI. This task only delivers a self-contained `AsrBackend` that you can drive with synthetic PCM bytes from a test or doctor probe.
+
+**Spec reference:** §3.3, plus the official Volcengine doc at `~/Downloads/volcengine-api.md` (binary frame layout, header bit packing, error codes).
+
+**Files:**
+- Add: `crates/voco-asr/Cargo.toml`
+- Add: `crates/voco-asr/src/lib.rs`            — `AsrBackend` trait + `Partial` / `Final` / `Segment` structs + `build_backend(&Config)`
+- Add: `crates/voco-asr/src/error.rs`          — `AsrError` (network / auth / protocol / decode / not_implemented)
+- Add: `crates/voco-asr/src/sherpa.rs`         — Phase 2 stub: `start()` returns `AsrError::NotImplemented`. Trait shape settled here so Phase v0.2 can fill it in.
+- Add: `crates/voco-asr/src/doubao/mod.rs`     — `DoubaoBackend` struct + AsrBackend impl
+- Add: `crates/voco-asr/src/doubao/protocol.rs` — pure functions: encode/decode the 4-byte header, build full-client-request frame, build audio-only frame, parse server response, parse error message
+- Add: `crates/voco-asr/src/doubao/codec.rs`   — Gzip wrappers around `flate2`
+- Add: `crates/voco-asr/src/doubao/auth.rs`    — `DoubaoAuth` enum + header-builder for old-console (`X-Api-App-Key` + `X-Api-Access-Key`) and new-console (`X-Api-Key`) flavors
+- Add: `crates/voco-asr/src/doubao/types.rs`   — `FullClientRequest` payload struct (audio / request / user / corpus sub-structs) — serde-serializable
+- Add: `crates/voco-asr/src/doubao/ws.rs`      — `tokio_tungstenite::connect_async_with_config` wrapper that injects auth headers + tracks logid
+- Add: `crates/voco-asr/tests/protocol.rs`     — pure-function header roundtrips, gzip roundtrips, server-response parsing on captured fixtures
+- Add: `crates/voco-asr/tests/mock_server.rs`  — full e2e against a `tokio_tungstenite::accept_async` mock that asserts request headers + frames and replies with canned responses
+- Add: `crates/voco-asr/tests/live.rs`         — `#[ignore]` smoke against the real endpoint, gated on `VOCO_DOUBAO_*` env vars
+- Modify: workspace `Cargo.toml` — promote `async-trait` to `[workspace.dependencies]`; add the new dep set
+- Modify: `crates/voco-config/src/schema.rs` — add `DoubaoCreds::api_key: Option<String>` (new-console single-key flavor) and `DoubaoCreds::resource_id: String` (default `volc.bigasr.sauc.duration`)
+
+### 7.1 Public API (`voco-asr/src/lib.rs`)
+
+```rust
+#[async_trait::async_trait]
+pub trait AsrBackend: Send + Sync {
+    async fn start(&mut self) -> Result<(), AsrError>;
+    async fn feed(&mut self, pcm: &[i16]) -> Result<Option<Partial>, AsrError>;
+    async fn stop(&mut self) -> Result<Final, AsrError>;
+    fn name(&self) -> &'static str;
+}
+
+pub struct Partial { pub text: String, pub stable_prefix_len: usize }
+pub struct Final   { pub text: String, pub segments: Vec<Segment>, pub logid: Option<String> }
+pub struct Segment { pub text: String, pub start_ms: u32, pub end_ms: u32, pub definite: bool }
+
+pub fn build_backend(cfg: &voco_config::Config) -> Result<Box<dyn AsrBackend>, AsrError> { ... }
+```
+
+### 7.2 Endpoint + protocol decisions
+
+- **Endpoint:** `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` (双向流式优化版). Phase 1's default config already calls this `endpoint`; Task 8 adds it as the literal default in `Config::default()`.
+- **Auth flavor:** dispatch on `(api_key, app_id)` presence:
+  - `api_key.is_some()` → new-console: send only `X-Api-Key`, `X-Api-Resource-Id`, `X-Api-Request-Id`, `X-Api-Connect-Id`
+  - else if `app_id.is_some() && access_token.is_some()` → old-console: send `X-Api-App-Key` + `X-Api-Access-Key` + the rest
+  - else → `AsrError::Auth("no credentials configured")`
+- **Resource ID:** default `volc.bigasr.sauc.duration` (Doubao 1.0 hourly). Surfaced in `Config::doubao.resource_id` so users on 2.0 can override.
+- **Audio params (full client request):** `format=pcm`, `codec=raw`, `rate=16000`, `bits=16`, `channel=1`. PCM s16le, mono. (Locked to spec §3.4 — voco-audio also produces this exact format.)
+- **Request params:** `model_name=bigmodel`, `enable_punc=true`, `enable_itn=true`, `enable_ddc=false`, `result_type=full`, `end_window_size=800` (default judging window). Configurable knobs (`enable_punc`, `enable_itn`, `result_type`) are added to `Config::doubao` as optional fields with these defaults.
+- **Sequence numbers:** start at 1 on the first audio frame; increment per send. Last frame uses `-(N+1)` and message-type-specific-flags = `0b0011` (negative-with-sequence + last-packet).
+- **Frame size:** `feed()` accepts arbitrary PCM chunks but internally buffers to ~200ms (= 6400 samples = 12800 bytes at 16kHz/16bit/mono) before sending — spec doc says 100-200ms is optimal. Buffering happens in DoubaoBackend, not the trait, so other backends can pick a different cadence.
+- **Compression:** Gzip (`flate2::write::GzEncoder`). Compressed before `payload_size` is computed; size is big-endian u32.
+
+### 7.3 Header packing (verified against the spec doc table)
+
+```rust
+struct Header {
+    protocol_version: u8,    // always 1
+    header_size: u8,         // always 1 (= 4 bytes)
+    message_type: MessageType,
+    flags: u8,
+    serialization: Serialization,
+    compression: Compression,
+}
+
+enum MessageType { FullClientRequest = 0b0001, AudioOnlyRequest = 0b0010,
+                   FullServerResponse = 0b1001, ServerError = 0b1111 }
+enum Serialization { None = 0, Json = 1 }
+enum Compression { None = 0, Gzip = 1 }
+
+impl Header {
+    fn encode(&self) -> [u8; 4] {
+        [
+            (self.protocol_version << 4) | self.header_size,
+            ((self.message_type as u8) << 4) | (self.flags & 0x0F),
+            ((self.serialization as u8) << 4) | (self.compression as u8),
+            0x00,
+        ]
+    }
+    fn decode(b: [u8; 4]) -> Result<Self, AsrError> { ... }
+}
+```
+
+### 7.4 Server response parsing
+
+- Header → if `message_type == ServerError`, read 4-byte error code + 4-byte size + utf-8 message → `AsrError::Server { code, message, logid }`
+- Else read 4-byte sequence + 4-byte payload_size + payload (gunzip if needed) → JSON
+- Map `result.utterances[]` to `Vec<Segment>`. `definite=true` segments are stable; latest concatenation forms the partial text. Final = last response with `flags & 0b0010` (last-packet flag).
+- Capture `X-Tt-Logid` from the upgrade response and stash on `DoubaoBackend.logid`. Surface it in `Final.logid` and in tracing spans (every error log includes logid for support tickets).
+
+### 7.5 Error code mapping
+
+| Volcengine code | AsrError variant | doctor verdict |
+|---|---|---|
+| 20000000 | n/a (success) | ✓ |
+| 45000001 | `AsrError::BadRequest` | Fail (config bug, won't self-heal) |
+| 45000002 | `AsrError::EmptyAudio` | **doctor treats as ✓** — empty-audio probe success path |
+| 45000081 | `AsrError::Timeout` | Warn (transient) |
+| 45000151 | `AsrError::AudioFormat` | Fail (config bug) |
+| 550xxxxx | `AsrError::ServerInternal { code }` | Warn |
+| 55000031 | `AsrError::ServerBusy` | Warn |
+| network / TLS / WS upgrade | `AsrError::Transport` | Fail with hint about endpoint reachability |
+
+### 7.6 Tests
+
+- [ ] **Step 1: Header roundtrip** — `tests/protocol.rs::header_roundtrips_for_all_message_types`. 4×2×2 = 16 combos, encode → decode → assert eq.
+- [ ] **Step 2: Frame roundtrip** — gzip + size prefix + JSON serialize/deserialize a known FullClientRequest payload; assert byte-level equality against a hand-checked fixture.
+- [ ] **Step 3: Server response parser** — `tests/protocol.rs::parses_definite_utterances` against the spec doc's JSON example (paste it as a `&str` fixture, gzip it, prepend a fake header, run through the parser).
+- [ ] **Step 4: Mock server e2e** — `tests/mock_server.rs::full_session_returns_final`. Use `tokio_tungstenite::accept_async` on a tempdir-bound localhost listener. Assert: handshake headers contain auth keys; first frame is FullClientRequest with the expected JSON; second frame is AudioOnlyRequest with sequence=1; last frame has negative sequence + last-packet flag; client receives a Final with the stitched-together text.
+- [ ] **Step 5: Mock server error path** — server replies with ServerError frame (code 45000002, message "empty audio") → client returns `AsrError::EmptyAudio` → doctor's check sees this and ticks ✓.
+- [ ] **Step 6: Live smoke** — `tests/live.rs::handshake_only` `#[ignore]` test. Reads `VOCO_DOUBAO_APP_ID` + `VOCO_DOUBAO_ACCESS_TOKEN` env vars; if either missing, returns Ok(()) (so `cargo test` doesn't fail). Calls `start()` → `stop()` (no audio); asserts the logid header was received and the response was an EmptyAudio error. Run manually with `VOCO_DOUBAO_APP_ID=... VOCO_DOUBAO_ACCESS_TOKEN=... cargo test -p voco-asr --test live -- --ignored`.
+
+### 7.7 Wiring into doctor (Task 4 update)
+
+Doctor's `backend.rs` becomes:
+
+```rust
+pub fn doubao_handshake() -> CheckResult {
+    let cfg = match ConfigIo::load() { Ok(c) => c, Err(e) => return CheckResult::Fail{...} };
+    if cfg.doubao.is_none() { return CheckResult::Skip("doubao not configured".into()); }
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    rt.block_on(async {
+        let mut be = match voco_asr::build_backend(&cfg) { Ok(b) => b, Err(e) => return CheckResult::Fail{...} };
+        let t0 = Instant::now();
+        match be.start().await {
+            Err(e) => return CheckResult::Fail { headline: format!("start failed: {e}"), fix: ... },
+            Ok(()) => {}
+        }
+        match be.stop().await {
+            Err(AsrError::EmptyAudio) => CheckResult::Ok(format!("handshake ok ({}ms, logid=...)", t0.elapsed().as_millis())),
+            Err(e)                    => CheckResult::Fail { ... },
+            Ok(_)                     => CheckResult::Warn { ... },   // shouldn't happen — flag for review
+        }
+    })
+}
+```
+
+### 7.8 Steps + commit
+
+- [ ] **Step 1:** Scaffold `voco-asr` crate, add to workspace, stub trait + sherpa stub. Compile.
+- [ ] **Step 2:** `protocol.rs` (header + frame builders) with full unit coverage.
+- [ ] **Step 3:** `codec.rs` gzip helpers + tests.
+- [ ] **Step 4:** `types.rs` payload structs + serde tests.
+- [ ] **Step 5:** `auth.rs` + `ws.rs` (auth header injection + connection setup).
+- [ ] **Step 6:** `doubao/mod.rs` glue: `start` (handshake + send FullClientRequest), `feed` (buffer + send AudioOnlyRequest frames), `stop` (send last-packet, drain final, close WS).
+- [ ] **Step 7:** Mock-server e2e tests pass.
+- [ ] **Step 8:** Wire `doubao_handshake()` into doctor; smoke test the doctor with mock backend behind a feature flag (`#[cfg(test)]` swap-in) so CI doesn't hit the network.
+- [ ] **Step 9:** Manual live probe (set env vars, run `voco doctor` against the real endpoint, paste output into commit body).
+- [ ] **Step 10:** Commit:
+
+```
+feat(asr): voco-asr crate with Doubao WebSocket backend (protocol layer)
+
+- AsrBackend trait per spec §3.3 (start/feed/stop, Partial/Final/Segment)
+- DoubaoBackend implements the Volcengine binary protocol from
+  ~/Downloads/volcengine-api.md (4-byte header, gzipped JSON or PCM,
+  big-endian sequence numbers, last-packet flag)
+- Default endpoint = bigmodel_async (双向流式优化版); old-console (App
+  Key + Access Token) and new-console (X-Api-Key) auth both supported
+- Mock-server tests cover: handshake, FullClientRequest framing,
+  audio-only frames, last-packet, server-error path
+- Doctor's "Backend handshake" check now does start()->stop() and
+  treats 45000002 (empty audio) as ✓
+- Sherpa backend stays a NotImplemented stub for v0.2
+```
+
+---
+
+## Task 8: end-to-end smoke updates + final verification
 
 - [ ] **Step 1:** Extend `crates/voco-cli/tests/smoke.rs`:
   - `wizard_save_then_show` — drive wizard via expectrl with all defaults; assert `voco config show` reflects them.
@@ -444,6 +620,8 @@ Phase 1 returned a stub error. Phase 2 wires it for the subset of fields that do
 - [ ] Smoke suite ≥ 6 tests, no test touches `~/Library` (all use `VOCO_HOME=tmp`)
 - [ ] `voco daemon logs --lines 10` works against a date-rotated log file
 - [ ] `voco config set output.mode ...` reflects in subsequent `voco status` (via DumpConfig or hash) without `daemon restart`
+- [ ] `cargo test -p voco-asr` green; mock-server e2e covers handshake + frame framing + error path
+- [ ] Manual: with valid Doubao creds, `voco doctor` → `Doubao handshake` ✓ within 5s, logid printed
 
 ---
 
@@ -452,7 +630,7 @@ Phase 1 returned a stub error. Phase 2 wires it for the subset of fields that do
 | Item | Phase that owns it |
 |---|---|
 | Real audio capture (cpal `Stream::play`) | Phase 3 |
-| Doubao WebSocket auth + protocol frames | Phase 3 |
+| Orchestrator-level recording state machine + partial-text streaming to UI | Phase 3 |
 | Hotkey installation (CGEventTap) | Phase 4 |
 | Text injection (CGEvent) | Phase 4 |
 | HUD (SwiftUI) | Phase 5 |
@@ -466,12 +644,14 @@ doctor's "Microphone access" and "Accessibility" checks **report** status only; 
 ## Open issues for Phase 3 carry-over
 
 1. **HotkeyPreset → keycode table** is hardcoded in the wizard. Phase 4 will need the same table inside `voco-hotkey`; consider promoting it to a `voco-config::hotkey_presets` module then. Don't refactor pre-emptively — wait until Phase 4 actually consumes it.
-2. **Doctor's backend-reachability check** does an unauthenticated probe. Phase 3 should add an authenticated probe (`backend.start().await`) and have doctor delegate to that path so we test the real handshake.
-3. **Effective-config introspection** (added in Task 6 via DumpConfig or hash on StatusInfo) — Phase 5's HUD might want to subscribe to changes; we'll know more then.
-4. **Wizard's "Custom..." hotkey capture** uses crossterm raw mode. On weird terminals (tmux with funky pass-through, JetBrains-embedded terminals) this can swallow input — collect issues and consider a manual entry fallback ("type the keycode in hex").
+2. **Effective-config introspection** (added in Task 6 via DumpConfig or hash on StatusInfo) — Phase 5's HUD might want to subscribe to changes; we'll know more then.
+3. **Wizard's "Custom..." hotkey capture** uses crossterm raw mode. On weird terminals (tmux with funky pass-through, JetBrains-embedded terminals) this can swallow input — collect issues and consider a manual entry fallback ("type the keycode in hex").
+4. **DoubaoBackend frame buffering** — Task 8 buffers ~200ms before sending. Phase 3 (orchestrator + cpal) must produce frames at that cadence anyway, so the internal buffer is mostly defensive. Once the cpal pipeline is stable, consider removing the buffer to cut ~100ms of latency, or expose `frame_ms` as a config knob.
+5. **Reconnect strategy** — if the WebSocket drops mid-recording, Task 8's `feed()` returns `AsrError::Transport`. Phase 3's orchestrator should decide: stitch already-received partials as the Final, or attempt one reconnect. Spec §4.6 says option A (stitch and finalize); confirm during Phase 3 implementation.
+6. **2.0 model rollout** — Task 8 defaults to ASR 1.0 (`volc.bigasr.sauc.duration`). When Doubao 2.0 (`volc.seedasr.sauc.duration`) becomes the better choice, just flip `Config::default().doubao.resource_id`; no code changes needed.
 
 ---
 
 ## Estimated scope
 
-7 tasks, ~10-12 commits, 2-3 days of focused work. The wizard + doctor checks are the bulk; everything else is plumbing.
+9 tasks, ~14-17 commits, 4-5 days of focused work. Task 8 (Doubao protocol layer) is roughly half the work — bit-level header packing + mock-server e2e is meticulous but mechanical. Everything else (wizard / doctor / reload) is plumbing built on top of Phase 1's IPC + config.
