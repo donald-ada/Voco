@@ -20,6 +20,8 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 toml = "0.8"
+inquire = "0.9"
+crossterm = "0.29"
 
 [dev-dependencies]
 assert_cmd = "2"

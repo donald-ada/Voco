@@ -8,19 +8,18 @@ use crate::ConfigAction;
 use anyhow::Result;
 
 pub mod edit;
+pub mod hotkey_preset;
+pub mod keymap;
 pub mod notify;
 pub mod reset;
 pub mod set;
 pub mod show;
 pub mod validate;
+pub mod wizard;
 
 pub fn run(action: Option<ConfigAction>) -> Result<()> {
     match action {
-        None => {
-            eprintln!("voco config: interactive wizard lands in Task 3");
-            eprintln!("  available now: voco config show / set / validate / reset / edit");
-            std::process::exit(1);
-        }
+        None => wizard::run(),
         Some(ConfigAction::Show {
             unsafe_show_secrets,
         }) => show::run(unsafe_show_secrets),
