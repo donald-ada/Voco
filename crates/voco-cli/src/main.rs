@@ -46,10 +46,23 @@ pub enum DaemonAction {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    Show,
+    /// Print the current config (access_token masked).
+    Show {
+        /// Print the actual token. Use only for verifying creds.
+        #[arg(long)]
+        unsafe_show_secrets: bool,
+    },
+    /// Set a single leaf field by dotted path.
     Set { key: String, value: String },
+    /// Open `$EDITOR` on the config file (validates after save).
     Edit,
-    Reset,
+    /// Reset to default config. Requires confirmation.
+    Reset {
+        /// Skip the y/N confirmation. Use in scripts.
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Exit 0 if config is valid, 1 otherwise.
     Validate,
 }
 

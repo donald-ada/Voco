@@ -1151,6 +1151,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "voco-config",

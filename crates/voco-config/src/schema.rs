@@ -82,6 +82,20 @@ pub enum LogLevel {
     Error,
 }
 
+impl Config {
+    /// Return a clone with secrets replaced by `"********"`. Used by
+    /// `voco config show`. Length is masked too — never reveal token length.
+    pub fn redacted_clone(&self) -> Self {
+        let mut c = self.clone();
+        if let Some(d) = c.doubao.as_mut() {
+            if !d.access_token.is_empty() {
+                d.access_token = "********".to_string();
+            }
+        }
+        c
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
