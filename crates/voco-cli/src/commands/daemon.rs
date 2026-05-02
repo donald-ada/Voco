@@ -7,7 +7,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use voco_daemon::{default_log_file, default_socket_path};
+use voco_daemon::{default_log_file, default_socket_path, latest_log_file, logs_dir};
 use voco_ipc::client::IpcClient;
 use voco_ipc::protocol::{Request, Response};
 
@@ -20,7 +20,7 @@ pub fn run(action: DaemonAction) -> Result<()> {
             std::thread::sleep(Duration::from_millis(200));
             start()
         }
-        DaemonAction::Logs { follow } => logs(follow),
+        DaemonAction::Logs { follow, lines } => logs(follow, lines),
     }
 }
 
@@ -97,17 +97,24 @@ fn stop() -> Result<()> {
     }
 }
 
-fn logs(follow: bool) -> Result<()> {
-    let path = default_log_file();
-    if !path.exists() {
-        println!("(no log file yet at {})", path.display());
-        return Ok(());
-    }
+fn logs(follow: bool, lines: u32) -> Result<()> {
+    let path = match latest_log_file() {
+        Some(p) => p,
+        None => {
+            let dir = logs_dir();
+            println!("(no log files yet in {})", dir.display());
+            if !is_daemon_running() {
+                println!("  start the daemon with: voco daemon start");
+            }
+            return Ok(());
+        }
+    };
     let mut cmd = Command::new("tail");
+    cmd.arg("-n").arg(lines.to_string());
     if follow {
         cmd.arg("-F");
     }
-    cmd.arg(path);
+    cmd.arg(&path);
     let status = cmd.status()?;
     if !status.success() {
         bail!("tail exited with {}", status);

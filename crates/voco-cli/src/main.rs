@@ -41,6 +41,9 @@ pub enum DaemonAction {
     Logs {
         #[arg(short, long)]
         follow: bool,
+        /// How many trailing lines to show before following.
+        #[arg(short = 'n', long, default_value_t = 50)]
+        lines: u32,
     },
 }
 
