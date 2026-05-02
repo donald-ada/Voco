@@ -13,15 +13,23 @@ path = "src/main.rs"
 voco-config = { path = "../voco-config" }
 voco-ipc = { path = "../voco-ipc", default-features = false, features = ["client"] }
 voco-daemon = { path = "../voco-daemon" }
+voco-asr = { path = "../voco-asr" }
+tokio = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+toml = "0.8"
+inquire = "0.9"
+crossterm = "0.29"
+cpal = "0.15"
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
 serial_test = "3"
 tempfile = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }

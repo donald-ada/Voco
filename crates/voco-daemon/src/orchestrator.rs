@@ -1,21 +1,21 @@
-//! Phase 1 orchestrator: only knows how to answer Status.
-//! Phases 2-5 progressively grow this into the full state machine in spec §4.1.
+//! Orchestrator. Phase 2 wires `ReloadConfig` and `DumpConfig`; the rest
+//! (recording state machine) lands in later phases.
 
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
-use voco_config::Config;
+use voco_config::{Config, ConfigIo};
 use voco_ipc::protocol::{Request, Response, StatusInfo};
 use voco_ipc::server::RequestHandler;
 
+use crate::reload::{diff_for_restart, format_validation};
 use crate::state::DaemonState;
 
 pub struct Orchestrator {
     started_at: Instant,
     state: Arc<RwLock<DaemonState>>,
-    #[allow(dead_code)]
     config: Arc<RwLock<Config>>,
     shutdown: Arc<Notify>,
 }
@@ -60,15 +60,43 @@ impl RequestHandler for Orchestrator {
                 self.shutdown.notify_one();
                 Response::Ok
             }
-            Request::ReloadConfig => {
-                warn!("reload not yet implemented in Phase 1");
-                Response::Error {
-                    message: "reload_config: not yet implemented".into(),
+            Request::ReloadConfig => match ConfigIo::load_from(&ConfigIo::default_path()) {
+                Err(e) => Response::Error {
+                    message: format!("reload: {e}"),
+                },
+                Ok(new) => {
+                    let errs = new.validate();
+                    if !errs.is_empty() {
+                        return Response::Error {
+                            message: format_validation(&errs),
+                        };
+                    }
+                    let mut cfg = self.config.write().await;
+                    let warnings = diff_for_restart(&cfg, &new);
+                    *cfg = new;
+                    info!(?warnings, "config reloaded");
+                    if warnings.is_empty() {
+                        Response::Ok
+                    } else {
+                        Response::OkWithWarnings { warnings }
+                    }
+                }
+            },
+            Request::DumpConfig => {
+                let cfg = self.config.read().await;
+                match serde_json::to_value(cfg.redacted_clone()) {
+                    Ok(v) => Response::Config(v),
+                    Err(e) => Response::Error {
+                        message: format!("serialize config: {e}"),
+                    },
                 }
             }
-            Request::RecordingStart | Request::RecordingStop => Response::Error {
-                message: "recording: not yet implemented (Phase 3)".into(),
-            },
+            Request::RecordingStart | Request::RecordingStop => {
+                warn!("recording requested before Phase 3 lands");
+                Response::Error {
+                    message: "recording: not yet implemented (Phase 3)".into(),
+                }
+            }
         }
     }
 }

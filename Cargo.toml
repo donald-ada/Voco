@@ -5,6 +5,7 @@ members = [
     "crates/voco-ipc",
     "crates/voco-daemon",
     "crates/voco-cli",
+    "crates/voco-asr",
 ]
 
 [workspace.package]
@@ -27,6 +28,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4", "serde"] }
 tempfile = "3"
+async-trait = "0.1"
+flate2 = "1"
+bytes = "1"
 
 [profile.release]
 opt-level = 3
