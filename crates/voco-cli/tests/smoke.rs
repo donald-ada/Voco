@@ -1,44 +1,45 @@
 //! End-to-end verification: voco daemon start && voco status returns idle.
 //!
-//! These tests touch the real ~/Library/Application Support/voco/voco.sock
-//! because Phase 1 hasn't introduced a path-override env var yet (that lands
-//! in Phase 2). serial_test prevents them from racing each other.
+//! Each test sets `VOCO_HOME` to a tempdir so the cli + spawned daemon
+//! share an isolated socket/log/config root. `~/Library` is never touched.
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 use std::time::Duration;
+use tempfile::TempDir;
 
-fn voco() -> Command {
-    Command::cargo_bin("voco").unwrap()
+fn voco_with_home(tmp: &TempDir) -> Command {
+    let mut c = Command::cargo_bin("voco").unwrap();
+    c.env("VOCO_HOME", tmp.path());
+    c
 }
 
 #[test]
 #[serial_test::serial]
 fn daemon_start_status_stop_cycle() -> anyhow::Result<()> {
-    // Make sure voco-daemon is built so the locate_daemon_binary lookup hits.
-    let _ = Command::cargo_bin("voco-daemon")?;
+    let tmp = tempfile::tempdir()?;
 
-    voco()
+    voco_with_home(&tmp)
         .args(["daemon", "start"])
         .assert()
         .success()
         .stdout(predicate::str::contains("daemon started"));
 
-    voco()
+    voco_with_home(&tmp)
         .arg("status")
         .assert()
         .success()
         .stdout(predicate::str::contains("daemon running"))
         .stdout(predicate::str::contains("state:           idle"));
 
-    voco()
+    voco_with_home(&tmp)
         .args(["daemon", "stop"])
         .assert()
         .success()
         .stdout(predicate::str::contains("daemon stopped"));
 
-    voco()
+    voco_with_home(&tmp)
         .arg("status")
         .assert()
         .failure()
@@ -50,27 +51,35 @@ fn daemon_start_status_stop_cycle() -> anyhow::Result<()> {
 #[test]
 #[serial_test::serial]
 fn double_start_is_idempotent() -> anyhow::Result<()> {
-    let _ = Command::cargo_bin("voco-daemon")?;
+    let tmp = tempfile::tempdir()?;
 
-    voco().args(["daemon", "start"]).assert().success();
+    voco_with_home(&tmp)
+        .args(["daemon", "start"])
+        .assert()
+        .success();
 
-    voco()
+    voco_with_home(&tmp)
         .args(["daemon", "start"])
         .assert()
         .success()
         .stdout(predicate::str::contains("already running"));
 
-    voco().args(["daemon", "stop"]).assert().success();
+    voco_with_home(&tmp)
+        .args(["daemon", "stop"])
+        .assert()
+        .success();
     Ok(())
 }
 
 #[test]
 #[serial_test::serial]
 fn stop_without_start_is_idempotent() -> anyhow::Result<()> {
-    let _ = voco().args(["daemon", "stop"]).output();
+    let tmp = tempfile::tempdir()?;
+    // Pre-flight: ensure no daemon is bound to *this* tempdir's socket.
+    let _ = voco_with_home(&tmp).args(["daemon", "stop"]).output();
     std::thread::sleep(Duration::from_millis(200));
 
-    voco()
+    voco_with_home(&tmp)
         .args(["daemon", "stop"])
         .assert()
         .success()

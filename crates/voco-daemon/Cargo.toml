@@ -22,3 +22,6 @@ tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 directories = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

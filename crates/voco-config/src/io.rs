@@ -21,8 +21,12 @@ pub enum ConfigError {
 pub struct ConfigIo;
 
 impl ConfigIo {
-    /// Default path: `~/.config/voco/config.toml`.
+    /// Default path: `~/.config/voco/config.toml` — or `$VOCO_HOME/config.toml`
+    /// when that env var is set (test/dev only).
     pub fn default_path() -> PathBuf {
+        if let Some(root) = std::env::var_os("VOCO_HOME") {
+            return PathBuf::from(root).join("config.toml");
+        }
         directories::BaseDirs::new()
             .map(|b| {
                 b.home_dir()
@@ -88,5 +92,30 @@ impl ConfigIo {
 
         fs::rename(&tmp, path)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod voco_home_tests {
+    use super::*;
+
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn voco_home_redirects_default_path() {
+        let _g = LOCK.lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        std::env::set_var("VOCO_HOME", tmp.path());
+        assert_eq!(ConfigIo::default_path(), tmp.path().join("config.toml"));
+        std::env::remove_var("VOCO_HOME");
+    }
+
+    #[test]
+    fn unset_voco_home_uses_base_dirs() {
+        let _g = LOCK.lock().unwrap();
+        std::env::remove_var("VOCO_HOME");
+        let p = ConfigIo::default_path();
+        assert!(p.ends_with("config.toml"));
+        assert!(p.to_string_lossy().contains("voco"));
     }
 }
