@@ -51,8 +51,8 @@ fn init_logging() -> anyhow::Result<()> {
         .filename_suffix("log")
         .max_log_files(5)
         .build(&dir)?;
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,voco=debug"));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,voco=debug"));
     tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(appender)
