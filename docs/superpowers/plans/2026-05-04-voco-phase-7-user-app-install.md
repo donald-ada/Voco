@@ -1020,6 +1020,24 @@ Verification note (2026-05-04):
 - `git diff --check` passed.
 ```
 
+Verification note (2026-05-04):
+
+- `packaging/tests/app_bundle_smoke.sh` passed.
+- `cargo fmt --all --check` passed.
+- `cargo test --workspace` passed; live network/microphone tests remained ignored as designed.
+- `cargo clippy --workspace --all-targets -- -D warnings` passed.
+- `target/debug/voco app install --app-bundle target/Voco.app` passed and copied the bundle to `~/Applications/Voco.app`.
+- `~/Applications/Voco.app/Contents/MacOS/voco-daemon` existed and was executable.
+- `plutil -lint ~/Library/LaunchAgents/com.voco.daemon.plist` passed.
+- Installed plist `ProgramArguments:0` pointed at `~/Applications/Voco.app/Contents/MacOS/voco-daemon`.
+- Installed plist `WorkingDirectory` pointed at `~/Applications/Voco.app/Contents/MacOS`.
+- `target/debug/voco daemon start` passed via `launchctl`.
+- `target/debug/voco status` reported daemon running with `state: idle`.
+- `target/debug/voco daemon stop` passed.
+- `target/debug/voco daemon uninstall` removed the plist.
+- `test ! -f ~/Library/LaunchAgents/com.voco.daemon.plist` passed.
+- `git diff --check` passed.
+
 - [ ] **Step 8: Commit verification update**
 
 Run:
