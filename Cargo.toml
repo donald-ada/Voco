@@ -6,6 +6,7 @@ members = [
     "crates/voco-daemon",
     "crates/voco-cli",
     "crates/voco-asr",
+    "crates/voco-audio",
 ]
 
 [workspace.package]
@@ -31,6 +32,7 @@ tempfile = "3"
 async-trait = "0.1"
 flate2 = "1"
 bytes = "1"
+cpal = "0.15"
 
 [profile.release]
 opt-level = 3

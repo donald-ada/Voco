@@ -128,15 +128,17 @@ fails on a dev mac).**
 - **Step 1 (always):** `build_input_stream::<i16, _>(...)`. If the dev
   mac's default mic supports it, we're done — single sample-format
   branch, simpler tests, smaller binary.
-- **Step 2 (only if step 1 surfaces a `BuildStreamError::StreamConfigNotSupported`
-  on the dev mac):** add an f32 fallback that quantizes via
-  `(sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16`. Land that as a
-  separate commit before Task 4 so the i16 path stays bisectable.
+- **Step 2 (required on the dev Mac):** add an f32 fallback that selects
+  a mono input config at 16kHz or an integer multiple of 16kHz, quantizes
+  via `(sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16`, and downsamples
+  integer-multiple rates to 16kHz before publishing PCM frames. Land that
+  as a separate commit before Task 4 so the i16 path stays bisectable.
 
 Risk note: most macOS internal mics report f32 natively. Be ready to do
 the f32 work — but don't pre-implement it. The Task 1 step 1 smoke test
 (open mic on a dev mac, log negotiated config) tells us in one minute
-which branch we're in.
+which branch we're in. On this dev Mac, `MacBook Pro麦克风` reports mono
+F32 at 44.1/48/88.2/96kHz; Phase 3 uses 48kHz and downsamples by 3.
 
 ### 1.3 RMS computation
 
@@ -170,22 +172,22 @@ consumer. Updated the spec wording in passing.)
 
 ### 1.5 Steps
 
-- [ ] **Step 1:** Crate scaffold + cpal probe (open default input, log
+- [x] **Step 1:** Crate scaffold + cpal probe (open default input, log
   the negotiated config). Compile on macOS. Use this step's log output
   to decide whether i16 alone is enough or step 3a is required.
-- [ ] **Step 2:** Implement RMS function with unit tests covering: silence,
+- [x] **Step 2:** Implement RMS function with unit tests covering: silence,
   full-scale square, half-scale sine.
-- [ ] **Step 3:** Wire the cpal callback to push PCM via `try_send` and
+- [x] **Step 3:** Wire the cpal callback to push PCM via `try_send` and
   amplitude via `watch::Sender::send`. **i16 only** for this commit.
-- [ ] **Step 3a (conditional):** If the dev mac surfaced
+- [x] **Step 3a (conditional):** If the dev mac surfaced
   `StreamConfigNotSupported` in step 1, add an f32 input branch that
   quantizes to i16 inline before pushing. Separate commit so bisecting
   the i16 path stays clean.
-- [ ] **Step 4:** Smoke test: `cargo test -p voco-audio --test live` (an
+- [x] **Step 4:** Smoke test: `cargo test -p voco-audio --test live` (an
   `#[ignore]` test that opens the real mic and asserts a non-zero
   amplitude after 100ms — only meaningful when `cargo test -- --ignored`
   is run on a dev mac with mic permission).
-- [ ] **Step 5:** Commit:
+- [x] **Step 5:** Commit:
   ```
   feat(audio): voco-audio crate — cpal capture + RMS amplitude watch
 

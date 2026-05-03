@@ -2265,6 +2265,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "voco-audio"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "voco-cli"
 version = "0.1.0"
 dependencies = [
