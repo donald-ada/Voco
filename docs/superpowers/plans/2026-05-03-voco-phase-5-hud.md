@@ -1475,9 +1475,10 @@ Task 7 note (2026-05-03):
 - `cd hud && swift test` is environment-blocked on this machine with CommandLineTools XCTest unavailable: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`. I did not run `sudo`, change global `xcode-select`, or accept the Xcode license.
 - Rust checks passed separately: `cargo fmt --all --check`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`.
 - Initial lifecycle smoke across separate tool invocations produced a false negative because the tool runner cleaned up the detached child process after the command exited. A reliable same-shell lifecycle smoke passed: `daemon start` returned pid `38019`, `status` reported idle, `pgrep -x voco-daemon` returned `38019`, `pgrep -x voco-hud` returned `38020`, `daemon stop` succeeded, and a final `pgrep -x` check found no daemon or HUD helper remaining.
+- The lifecycle smoke verified process lifecycle only. I did not visually verify that no HUD window is visible while idle.
 - Manual hotkey HUD smoke was not visually verified.
 
-- [x] **Step 4: Manual lifecycle smoke**
+- [x] **Step 4: Manual lifecycle smoke (process lifecycle only)**
 
 Run:
 
@@ -1492,7 +1493,11 @@ Expected:
 - daemon starts;
 - `voco status` reports idle;
 - `voco-hud` process exists;
-- no HUD window is visible while idle.
+- no daemon or HUD helper remains after stop.
+
+- [ ] **Step 4b: Idle HUD visual smoke**
+
+Expected: no HUD window is visible while idle.
 
 - [ ] **Step 5: Manual hotkey HUD smoke**
 

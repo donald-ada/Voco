@@ -6,7 +6,7 @@ See `docs/superpowers/specs/2026-05-01-voco-design.md` for the full design.
 
 ## Status
 
-Phase 1 (scaffold) in progress. Not yet usable as a voice-input tool.
+Phase 5 development branch: Phase 4 hotkey recording and text injection are implemented; Phase 5 adds a hidden Swift HUD helper.
 
 ## Build
 
