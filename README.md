@@ -48,7 +48,23 @@ target/debug/voco daemon stop
 target/debug/voco daemon uninstall
 ```
 
-`Voco.app` bundling, signing, notarization, and installer packaging remain future work.
+## Development App Bundle
+
+Build a local unsigned development bundle:
+
+```bash
+packaging/build_app_bundle.sh --profile debug
+```
+
+The bundle is written to:
+
+```text
+target/Voco.app
+```
+
+This bundle contains `voco`, `voco-daemon`, and `voco-hud` under `Contents/MacOS`.
+It is not signed, notarized, installed under `/Applications`, or used by the
+LaunchAgent installer yet.
 
 ## Phase 5 HUD Development
 

@@ -1,10 +1,16 @@
 # packaging/
 
-LaunchAgent template and future bundle assets.
+Packaging templates and development bundle scripts.
 
-## com.voco.daemon.plist.tmpl
+## LaunchAgent
 
-`voco daemon install` renders this template to:
+`com.voco.daemon.plist.tmpl` is rendered by:
+
+```bash
+target/debug/voco daemon install
+```
+
+The rendered plist is written to:
 
 ```text
 ~/Library/LaunchAgents/com.voco.daemon.plist
@@ -20,4 +26,34 @@ Template variables:
 
 Phase 6-A uses a user-level LaunchAgent and does not require `sudo`.
 
-`Voco.app`, signing, notarization, and installer packaging are deferred.
+## Development App Bundle
+
+Build an unsigned local `Voco.app` bundle:
+
+```bash
+packaging/build_app_bundle.sh --profile debug
+```
+
+The generated bundle is:
+
+```text
+target/Voco.app
+```
+
+It contains:
+
+```text
+Contents/Info.plist
+Contents/MacOS/voco
+Contents/MacOS/voco-daemon
+Contents/MacOS/voco-hud
+```
+
+Run the bundle smoke test:
+
+```bash
+packaging/tests/app_bundle_smoke.sh
+```
+
+Signing, notarization, DMG/pkg creation, `/Applications` installation, and
+LaunchAgent integration with the app bundle are deferred.
