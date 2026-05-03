@@ -73,14 +73,13 @@ pub struct DoubaoCreds {
     pub model_id: String,
 
     /// Volcengine resource ID — selects model SKU & billing tier. Default
-    /// is Doubao 1.0 hourly. Override for 2.0 (`volc.seedasr.sauc.duration`)
-    /// or concurrent tiers.
+    /// is Seed ASR 2.0 hourly. Override for concurrent tiers when needed.
     #[serde(default = "default_resource_id")]
     pub resource_id: String,
 }
 
 fn default_resource_id() -> String {
-    "volc.bigasr.sauc.duration".to_string()
+    "volc.seedasr.sauc.duration".to_string()
 }
 
 impl Default for DoubaoCreds {
@@ -153,7 +152,7 @@ impl Default for Config {
             doubao: None,
             sherpa: None,
             log_level: LogLevel::Info,
-            recording_max_duration_secs: 60,
+            recording_max_duration_secs: 300,
         }
     }
 }

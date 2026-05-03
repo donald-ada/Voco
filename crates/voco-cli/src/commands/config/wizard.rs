@@ -245,7 +245,7 @@ fn prompt_doubao_creds(current: Option<&DoubaoCreds>) -> Result<DoubaoCreds> {
         model_id: model_id.to_string(),
         resource_id: current
             .map(|c| c.resource_id.clone())
-            .unwrap_or_else(|| "volc.bigasr.sauc.duration".to_string()),
+            .unwrap_or_else(|| "volc.seedasr.sauc.duration".to_string()),
     })
 }
 
