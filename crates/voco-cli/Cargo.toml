@@ -14,6 +14,7 @@ voco-config = { path = "../voco-config" }
 voco-ipc = { path = "../voco-ipc", default-features = false, features = ["client"] }
 voco-daemon = { path = "../voco-daemon" }
 voco-asr = { path = "../voco-asr" }
+voco-hotkey = { path = "../voco-hotkey" }
 tokio = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

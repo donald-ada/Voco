@@ -14,6 +14,8 @@ voco-config = { path = "../voco-config" }
 voco-ipc = { path = "../voco-ipc", features = ["server"] }
 voco-asr = { path = "../voco-asr" }
 voco-audio = { path = "../voco-audio" }
+voco-hotkey = { path = "../voco-hotkey" }
+voco-injector = { path = "../voco-injector" }
 async-trait = "0.1"
 tokio = { workspace = true }
 serde = { workspace = true }

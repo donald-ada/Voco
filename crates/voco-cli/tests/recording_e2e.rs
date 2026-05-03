@@ -5,6 +5,8 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use voco_ipc::client::IpcClient;
+use voco_ipc::protocol::{Request, Response};
 
 static DAEMON_BINARY_READY: OnceLock<()> = OnceLock::new();
 
@@ -13,6 +15,7 @@ fn voco(tmp: &TempDir) -> Command {
     let mut c = Command::cargo_bin("voco").unwrap();
     c.env("VOCO_HOME", tmp.path());
     c.env("VOCO_FORCE_MOCK_BACKEND", "1");
+    c.env("VOCO_FORCE_MOCK_INJECTOR", "1");
     c
 }
 
@@ -49,6 +52,12 @@ fn wait_for_socket(tmp: &TempDir, deadline: Duration) {
         std::thread::sleep(Duration::from_millis(50));
     }
     panic!("socket {} never appeared", p.display());
+}
+
+fn ipc_client(tmp: &TempDir) -> anyhow::Result<IpcClient> {
+    Ok(IpcClient::connect(
+        tmp.path().join("data").join("voco.sock"),
+    )?)
 }
 
 #[test]
@@ -184,6 +193,41 @@ fn recording_duration_is_capped_by_config_max() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("final: \"mock final\""))
         .stdout(predicate::str::contains(
             "timing: first partial 120ms, total 2000ms",
+        ));
+
+    voco(&tmp).args(["daemon", "stop"]).assert().success();
+    Ok(())
+}
+
+#[test]
+#[serial_test::serial]
+fn recording_start_stop_ipc_returns_final() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+
+    voco_with_mock_delay(&tmp, 500)
+        .args(["daemon", "start"])
+        .assert()
+        .success();
+    wait_for_socket(&tmp, Duration::from_secs(2));
+
+    let mut client = ipc_client(&tmp)?;
+    assert_eq!(client.call(&Request::RecordingStart)?, Response::Ok);
+
+    let mut client = ipc_client(&tmp)?;
+    match client.call(&Request::RecordingStop)? {
+        Response::RecordingResult { text, logid, .. } => {
+            assert_eq!(text, "mock final");
+            assert_eq!(logid.as_deref(), Some("mock-logid"));
+        }
+        other => panic!("expected RecordingResult, got {other:?}"),
+    }
+
+    voco(&tmp)
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "sessions:        1 total (1 ok, 0 failed)",
         ));
 
     voco(&tmp).args(["daemon", "stop"]).assert().success();

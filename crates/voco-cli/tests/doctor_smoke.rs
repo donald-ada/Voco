@@ -41,6 +41,17 @@ fn doctor_skips_tcc_on_ci() -> anyhow::Result<()> {
 }
 
 #[test]
+fn doctor_skips_hotkey_install_check_on_ci() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    voco(&tmp)
+        .arg("doctor")
+        .assert()
+        .stdout(predicate::str::contains("Hotkey installed (CI=true)"))
+        .stdout(predicate::str::contains("CGEventTap wiring lands in Phase 4").not());
+    Ok(())
+}
+
+#[test]
 fn doctor_fails_when_config_unparseable() -> anyhow::Result<()> {
     let tmp = tempfile::tempdir()?;
     std::fs::write(tmp.path().join("config.toml"), "not toml @@@")?;

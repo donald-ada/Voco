@@ -4,9 +4,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::{oneshot, Notify, RwLock};
+use tokio::sync::{oneshot, Mutex, Notify, RwLock};
 use tracing::{info, warn};
-use voco_config::{Config, ConfigIo};
+use voco_config::{Config, ConfigIo, OutputConfig};
+use voco_injector::{InjectionError, InjectionOutcome, Injector};
 use voco_ipc::protocol::{Request, Response};
 use voco_ipc::server::RequestHandler;
 
@@ -22,6 +23,8 @@ pub struct Orchestrator {
     stats: Arc<RwLock<Stats>>,
     shutdown: Arc<Notify>,
     recording_runner: Arc<dyn RecordingRunner>,
+    text_injector: Arc<dyn TextInjector>,
+    active_recording: Arc<Mutex<Option<ActiveRecording>>>,
 }
 
 impl Orchestrator {
@@ -30,6 +33,14 @@ impl Orchestrator {
     }
 
     fn with_runner(config: Config, recording_runner: Arc<dyn RecordingRunner>) -> Self {
+        Self::with_parts(config, recording_runner, default_text_injector())
+    }
+
+    fn with_parts(
+        config: Config,
+        recording_runner: Arc<dyn RecordingRunner>,
+        text_injector: Arc<dyn TextInjector>,
+    ) -> Self {
         let backend = backend_label(&config);
         Self {
             started_at: Instant::now(),
@@ -38,6 +49,8 @@ impl Orchestrator {
             stats: Arc::new(RwLock::new(Stats::new(backend))),
             shutdown: Arc::new(Notify::new()),
             recording_runner,
+            text_injector,
+            active_recording: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -46,8 +59,29 @@ impl Orchestrator {
         Self::with_runner(config, recording_runner)
     }
 
+    #[cfg(test)]
+    fn with_runner_and_injector(
+        config: Config,
+        recording_runner: Arc<dyn RecordingRunner>,
+        text_injector: Arc<dyn TextInjector>,
+    ) -> Self {
+        Self::with_parts(config, recording_runner, text_injector)
+    }
+
     pub fn shutdown_signal(&self) -> Arc<Notify> {
         self.shutdown.clone()
+    }
+
+    pub async fn handle_hotkey_toggle(&self) -> Response {
+        let state = *self.state.read().await;
+        match state {
+            DaemonState::Idle => self.handle_recording_start().await,
+            DaemonState::Recording => self.handle_hotkey_recording_stop().await,
+            state => {
+                warn!(?state, "hotkey toggle ignored while daemon is busy");
+                Response::Ok
+            }
+        }
     }
 
     async fn handle_recording_once(&self, duration_ms: u32, include_partials: bool) -> Response {
@@ -71,21 +105,124 @@ impl Orchestrator {
 
         match result {
             Ok(payload) => {
-                *self.state.write().await = DaemonState::Transcribing;
-                *self.state.write().await = DaemonState::Injecting;
-                self.stats.write().await.record_success(&payload);
-                *self.state.write().await = DaemonState::Idle;
-                payload_to_response(payload)
+                finalize_recording_result(
+                    Ok(payload),
+                    self.state.clone(),
+                    self.stats.clone(),
+                    self.config.clone(),
+                    self.text_injector.clone(),
+                    false,
+                )
+                .await
             }
             Err(err) => {
+                finalize_recording_result(
+                    Err(err),
+                    self.state.clone(),
+                    self.stats.clone(),
+                    self.config.clone(),
+                    self.text_injector.clone(),
+                    false,
+                )
+                .await
+            }
+        }
+    }
+
+    async fn handle_recording_start(&self) -> Response {
+        {
+            let mut state = self.state.write().await;
+            if *state != DaemonState::Idle {
+                return Response::Error {
+                    message: format!("busy: state={state:?}"),
+                };
+            }
+            *state = DaemonState::Recording;
+        }
+
+        let cfg = self.config.read().await.clone();
+        let duration_ms = cfg.recording_max_duration_secs.saturating_mul(1_000);
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
+        let runner = self.recording_runner.clone();
+        let state = self.state.clone();
+        let stats = self.stats.clone();
+        let config = self.config.clone();
+        let injector = self.text_injector.clone();
+        let active_slot = self.active_recording.clone();
+
+        tokio::spawn(async move {
+            let result = runner.run_once(cfg, duration_ms, false, stop_rx).await;
+            let response =
+                finalize_recording_result(result, state, stats, config, injector, true).await;
+            let mut active = active_slot.lock().await;
+            active.take();
+            drop(active);
+            let _ = response_tx.send(response);
+        });
+
+        *self.active_recording.lock().await = Some(ActiveRecording {
+            stop_tx: Some(stop_tx),
+            response_rx,
+        });
+        Response::Ok
+    }
+
+    async fn take_active_recording(&self) -> Result<ActiveRecording, Response> {
+        let Some(mut active) = self.active_recording.lock().await.take() else {
+            return Err(Response::Error {
+                message: "not recording".into(),
+            });
+        };
+        if let Some(stop_tx) = active.stop_tx.take() {
+            let _ = stop_tx.send(());
+        }
+        *self.state.write().await = DaemonState::Transcribing;
+        Ok(active)
+    }
+
+    async fn handle_hotkey_recording_stop(&self) -> Response {
+        let active = match self.take_active_recording().await {
+            Ok(active) => active,
+            Err(err) => return err,
+        };
+        let state = self.state.clone();
+        let stats = self.stats.clone();
+        tokio::spawn(async move {
+            match active.response_rx.await {
+                Ok(Response::Error { message }) => {
+                    warn!(error = %message, "hotkey recording stop finalized with error");
+                }
+                Ok(_) => {}
+                Err(_) => {
+                    *state.write().await = DaemonState::Error;
+                    stats
+                        .write()
+                        .await
+                        .record_failure("recording task stopped", now_unix_secs());
+                    *state.write().await = DaemonState::Idle;
+                }
+            }
+        });
+        Response::Ok
+    }
+
+    async fn handle_recording_stop(&self) -> Response {
+        let active = match self.take_active_recording().await {
+            Ok(active) => active,
+            Err(err) => return err,
+        };
+        match active.response_rx.await {
+            Ok(response) => response,
+            Err(_) => {
                 *self.state.write().await = DaemonState::Error;
                 self.stats
                     .write()
                     .await
-                    .record_failure(err.to_string(), now_unix_secs());
+                    .record_failure("recording task stopped", now_unix_secs());
                 *self.state.write().await = DaemonState::Idle;
                 Response::Error {
-                    message: format!("recording: {err}"),
+                    message: "recording task stopped".into(),
                 }
             }
         }
@@ -101,6 +238,57 @@ trait RecordingRunner: Send + Sync {
         include_partials: bool,
         stop_rx: oneshot::Receiver<()>,
     ) -> Result<RecordingPayload, SessionError>;
+}
+
+trait TextInjector: Send + Sync {
+    fn insert(&self, text: &str, output: &OutputConfig)
+        -> Result<InjectionOutcome, InjectionError>;
+}
+
+struct RealTextInjector;
+
+impl TextInjector for RealTextInjector {
+    fn insert(
+        &self,
+        text: &str,
+        output: &OutputConfig,
+    ) -> Result<InjectionOutcome, InjectionError> {
+        Injector::insert(text, output)
+    }
+}
+
+fn default_text_injector() -> Arc<dyn TextInjector> {
+    #[cfg(debug_assertions)]
+    {
+        if std::env::var("VOCO_FORCE_MOCK_INJECTOR").ok().as_deref() == Some("1") {
+            warn!("VOCO_FORCE_MOCK_INJECTOR=1 active; using debug mock text injector");
+            return Arc::new(DebugMockTextInjector);
+        }
+    }
+    Arc::new(RealTextInjector)
+}
+
+#[cfg(debug_assertions)]
+struct DebugMockTextInjector;
+
+#[cfg(debug_assertions)]
+impl TextInjector for DebugMockTextInjector {
+    fn insert(
+        &self,
+        text: &str,
+        _output: &OutputConfig,
+    ) -> Result<InjectionOutcome, InjectionError> {
+        info!(
+            chars = text.chars().count(),
+            "debug mock text injection completed"
+        );
+        Ok(InjectionOutcome::Injected)
+    }
+}
+
+struct ActiveRecording {
+    stop_tx: Option<oneshot::Sender<()>>,
+    response_rx: oneshot::Receiver<Response>,
 }
 
 struct RealRecordingRunner;
@@ -220,6 +408,59 @@ fn payload_to_response(payload: RecordingPayload) -> Response {
     }
 }
 
+async fn finalize_recording_result(
+    result: Result<RecordingPayload, SessionError>,
+    state: Arc<RwLock<DaemonState>>,
+    stats: Arc<RwLock<Stats>>,
+    config: Arc<RwLock<Config>>,
+    injector: Arc<dyn TextInjector>,
+    inject: bool,
+) -> Response {
+    match result {
+        Ok(payload) => {
+            *state.write().await = DaemonState::Transcribing;
+            if inject {
+                *state.write().await = DaemonState::Injecting;
+                let output = config.read().await.output.clone();
+                match injector.insert(&payload.text, &output) {
+                    Ok(outcome) => {
+                        info!(
+                            outcome = ?outcome,
+                            chars = payload.text.chars().count(),
+                            "text injection completed"
+                        );
+                    }
+                    Err(err) => {
+                        *state.write().await = DaemonState::Error;
+                        stats
+                            .write()
+                            .await
+                            .record_failure(format!("injection: {err}"), now_unix_secs());
+                        *state.write().await = DaemonState::Idle;
+                        return Response::Error {
+                            message: format!("injection: {err}"),
+                        };
+                    }
+                }
+            }
+            stats.write().await.record_success(&payload);
+            *state.write().await = DaemonState::Idle;
+            payload_to_response(payload)
+        }
+        Err(err) => {
+            *state.write().await = DaemonState::Error;
+            stats
+                .write()
+                .await
+                .record_failure(err.to_string(), now_unix_secs());
+            *state.write().await = DaemonState::Idle;
+            Response::Error {
+                message: format!("recording: {err}"),
+            }
+        }
+    }
+}
+
 fn backend_label(cfg: &Config) -> String {
     format!("{:?}", cfg.backend).to_lowercase()
 }
@@ -288,12 +529,8 @@ impl RequestHandler for Orchestrator {
                 self.handle_recording_once(duration_ms, include_partials)
                     .await
             }
-            Request::RecordingStart | Request::RecordingStop => {
-                warn!("recording requested before Phase 3 lands");
-                Response::Error {
-                    message: "recording: not yet implemented (Phase 3)".into(),
-                }
-            }
+            Request::RecordingStart => self.handle_recording_start().await,
+            Request::RecordingStop => self.handle_recording_stop().await,
         }
     }
 }
@@ -303,7 +540,10 @@ mod recording_tests {
     use super::*;
     use async_trait::async_trait;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex as StdMutex;
     use tokio::sync::{oneshot, Mutex};
+    use voco_config::OutputConfig;
+    use voco_injector::{InjectionError, InjectionOutcome};
     use voco_ipc::protocol::{PartialSnapshot, Segment};
 
     use crate::session::{RecordingPayload, SessionError};
@@ -356,6 +596,71 @@ mod recording_tests {
             self.durations.lock().await.push(duration_ms);
             tokio::time::sleep(self.delay).await;
             Ok(self.payload.clone())
+        }
+    }
+
+    struct StopAwareRunner {
+        payload: RecordingPayload,
+        calls: AtomicUsize,
+        delay_after_stop: std::time::Duration,
+    }
+
+    impl StopAwareRunner {
+        fn new() -> Self {
+            Self {
+                payload: RecordingPayload {
+                    text: "toggle final".into(),
+                    segments: vec![],
+                    partials: vec![],
+                    logid: Some("toggle-log".into()),
+                    first_partial_ms: Some(90),
+                    total_latency_ms: 510,
+                    error_hint: None,
+                },
+                calls: AtomicUsize::new(0),
+                delay_after_stop: std::time::Duration::ZERO,
+            }
+        }
+
+        fn with_delay(delay_after_stop: std::time::Duration) -> Self {
+            Self {
+                delay_after_stop,
+                ..Self::new()
+            }
+        }
+    }
+
+    #[async_trait]
+    impl RecordingRunner for StopAwareRunner {
+        async fn run_once(
+            &self,
+            _config: Config,
+            _duration_ms: u32,
+            _include_partials: bool,
+            stop_rx: oneshot::Receiver<()>,
+        ) -> Result<RecordingPayload, SessionError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let _ = stop_rx.await;
+            if !self.delay_after_stop.is_zero() {
+                tokio::time::sleep(self.delay_after_stop).await;
+            }
+            Ok(self.payload.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeInjector {
+        inserted: StdMutex<Vec<String>>,
+    }
+
+    impl TextInjector for FakeInjector {
+        fn insert(
+            &self,
+            text: &str,
+            _output: &OutputConfig,
+        ) -> Result<InjectionOutcome, InjectionError> {
+            self.inserted.lock().unwrap().push(text.to_string());
+            Ok(InjectionOutcome::Injected)
         }
     }
 
@@ -457,5 +762,92 @@ mod recording_tests {
             .await;
 
         assert_eq!(*runner.durations.lock().await, vec![2_000]);
+    }
+
+    #[tokio::test]
+    async fn recording_start_then_stop_returns_result_and_injects_text() {
+        let runner = Arc::new(StopAwareRunner::new());
+        let injector = Arc::new(FakeInjector::default());
+        let orch = Orchestrator::with_runner_and_injector(
+            Config::default(),
+            runner.clone(),
+            injector.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "recording"),
+            other => panic!("expected Status, got {other:?}"),
+        }
+
+        let stopped = orch.handle(Request::RecordingStop).await;
+        match stopped {
+            Response::RecordingResult { text, logid, .. } => {
+                assert_eq!(text, "toggle final");
+                assert_eq!(logid.as_deref(), Some("toggle-log"));
+            }
+            other => panic!("expected RecordingResult, got {other:?}"),
+        }
+
+        assert_eq!(*injector.inserted.lock().unwrap(), vec!["toggle final"]);
+        assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn recording_start_rejects_when_already_recording() {
+        let runner = Arc::new(StopAwareRunner::new());
+        let injector = Arc::new(FakeInjector::default());
+        let orch = Orchestrator::with_runner_and_injector(Config::default(), runner, injector);
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        match orch.handle(Request::RecordingStart).await {
+            Response::Error { message } => assert!(message.contains("busy: state=Recording")),
+            other => panic!("expected busy Error, got {other:?}"),
+        }
+        let _ = orch.handle(Request::RecordingStop).await;
+    }
+
+    #[tokio::test]
+    async fn recording_stop_requires_active_recording() {
+        let runner = Arc::new(StopAwareRunner::new());
+        let injector = Arc::new(FakeInjector::default());
+        let orch = Orchestrator::with_runner_and_injector(Config::default(), runner, injector);
+
+        match orch.handle(Request::RecordingStop).await {
+            Response::Error { message } => assert!(message.contains("not recording")),
+            other => panic!("expected not-recording Error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn hotkey_stop_does_not_wait_for_finalization_and_ignores_pending_toggle() {
+        let runner = Arc::new(StopAwareRunner::with_delay(
+            std::time::Duration::from_millis(100),
+        ));
+        let injector = Arc::new(FakeInjector::default());
+        let orch = Orchestrator::with_runner_and_injector(
+            Config::default(),
+            runner.clone(),
+            injector.clone(),
+        );
+
+        assert_eq!(orch.handle_hotkey_toggle().await, Response::Ok);
+        let started = std::time::Instant::now();
+        assert_eq!(orch.handle_hotkey_toggle().await, Response::Ok);
+        assert!(started.elapsed() < std::time::Duration::from_millis(50));
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "transcribing"),
+            other => panic!("expected Status, got {other:?}"),
+        }
+
+        assert_eq!(orch.handle_hotkey_toggle().await, Response::Ok);
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "idle"),
+            other => panic!("expected Status, got {other:?}"),
+        }
+        assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(*injector.inserted.lock().unwrap(), vec!["toggle final"]);
     }
 }

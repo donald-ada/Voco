@@ -7,6 +7,8 @@ members = [
     "crates/voco-cli",
     "crates/voco-asr",
     "crates/voco-audio",
+    "crates/voco-hotkey",
+    "crates/voco-injector",
 ]
 
 [workspace.package]

@@ -181,6 +181,38 @@ pub fn skip_on_ci(why: &str) -> Option<CheckResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        fn unset(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
 
     fn mk(group: &'static str, name: &'static str, result: CheckResult) -> Check {
         Check {
@@ -218,14 +250,15 @@ mod tests {
 
     #[test]
     fn skip_on_ci_when_set() {
-        std::env::set_var("CI", "1");
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::set("CI", "1");
         assert!(matches!(skip_on_ci("test"), Some(CheckResult::Skip(_))));
-        std::env::remove_var("CI");
     }
 
     #[test]
     fn skip_on_ci_returns_none_when_unset() {
-        std::env::remove_var("CI");
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::unset("CI");
         assert!(skip_on_ci("test").is_none());
     }
 }

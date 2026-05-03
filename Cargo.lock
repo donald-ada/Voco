@@ -2299,6 +2299,7 @@ dependencies = [
  "voco-asr",
  "voco-config",
  "voco-daemon",
+ "voco-hotkey",
  "voco-ipc",
 ]
 
@@ -2334,7 +2335,26 @@ dependencies = [
  "voco-asr",
  "voco-audio",
  "voco-config",
+ "voco-hotkey",
+ "voco-injector",
  "voco-ipc",
+]
+
+[[package]]
+name = "voco-hotkey"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "tokio",
+ "voco-config",
+]
+
+[[package]]
+name = "voco-injector"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "voco-config",
 ]
 
 [[package]]

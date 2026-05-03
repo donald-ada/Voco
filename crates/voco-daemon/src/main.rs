@@ -6,6 +6,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use voco_config::ConfigIo;
 use voco_daemon::{default_socket_path, logs_dir, Orchestrator};
+use voco_hotkey::{HotkeyEvent, HotkeyManager};
 use voco_ipc::server::IpcServer;
 
 #[tokio::main]
@@ -17,12 +18,14 @@ async fn main() -> anyhow::Result<()> {
         error!(error = %e, "failed to load config; using defaults");
         Default::default()
     });
+    let hotkey_cfg = cfg.hotkey.clone();
 
     let socket_path = default_socket_path();
     let server = IpcServer::bind(&socket_path)?;
 
     let orch = Arc::new(Orchestrator::new(cfg));
     let shutdown = orch.shutdown_signal();
+    let (hotkey_tx, mut hotkey_rx) = tokio::sync::mpsc::channel(8);
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
@@ -30,6 +33,31 @@ async fn main() -> anyhow::Result<()> {
     let serve_handle = tokio::spawn({
         let orch = orch.clone();
         async move { server.serve(orch).await }
+    });
+    let hotkey_manager = match HotkeyManager::install(&hotkey_cfg, hotkey_tx) {
+        Ok(manager) => {
+            info!(hotkey = %hotkey_cfg.display_name, "global hotkey installed");
+            Some(manager)
+        }
+        Err(err) => {
+            error!(error = %err, "failed to install global hotkey");
+            None
+        }
+    };
+    let hotkey_handle = tokio::spawn({
+        let orch = orch.clone();
+        async move {
+            while let Some(event) = hotkey_rx.recv().await {
+                match event {
+                    HotkeyEvent::Toggle => {
+                        let response = orch.handle_hotkey_toggle().await;
+                        if let voco_ipc::protocol::Response::Error { message } = response {
+                            error!(error = %message, "hotkey toggle failed");
+                        }
+                    }
+                }
+            }
+        }
     });
 
     tokio::select! {
@@ -39,6 +67,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     serve_handle.abort();
+    hotkey_handle.abort();
+    drop(hotkey_manager);
     info!("voco-daemon stopped");
     Ok(())
 }

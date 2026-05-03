@@ -88,7 +88,7 @@ impl RecordingSession {
                     }
                 }
                 _ = &mut stop_rx => {
-                    return Err(SessionError::Aborted);
+                    break TerminalReason::Stopped;
                 }
                 _ = &mut timeout => {
                     break TerminalReason::Timeout;
@@ -174,6 +174,7 @@ impl RecordingSession {
 
 enum TerminalReason {
     Timeout,
+    Stopped,
     AudioEnded,
     BackendError(String),
 }
@@ -182,6 +183,7 @@ impl TerminalReason {
     fn error_hint(self) -> Option<String> {
         match self {
             Self::Timeout => Some("max duration reached".into()),
+            Self::Stopped => None,
             Self::AudioEnded => Some("audio input ended".into()),
             Self::BackendError(message) => Some(message),
         }
@@ -380,7 +382,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn daemon_shutdown_aborts_session() {
+    async fn stop_signal_drains_backend_final() {
         let (pcm_tx, pcm_rx) = mpsc::channel(4);
         pcm_tx.send(vec![1, 2, 3]).await.unwrap();
         let (stop_tx, stop_rx) = oneshot::channel();
@@ -393,8 +395,9 @@ mod tests {
         );
 
         stop_tx.send(()).unwrap();
-        let err = session.run(1_000, true, stop_rx).await.unwrap_err();
+        let payload = session.run(1_000, true, stop_rx).await.unwrap();
 
-        assert!(matches!(err, SessionError::Aborted));
+        assert_eq!(payload.text, "final text");
+        assert_eq!(payload.error_hint, None);
     }
 }
