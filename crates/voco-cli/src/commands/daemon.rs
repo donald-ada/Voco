@@ -19,18 +19,13 @@ pub fn run(action: DaemonAction) -> Result<()> {
         DaemonAction::Uninstall => uninstall(),
         DaemonAction::Start => start(),
         DaemonAction::Stop => stop(),
-        DaemonAction::Restart => {
-            let _ = stop();
-            std::thread::sleep(Duration::from_millis(200));
-            start()
-        }
+        DaemonAction::Restart => restart(),
         DaemonAction::Logs { follow, lines } => logs(follow, lines),
     }
 }
 
 fn install() -> Result<()> {
-    let daemon_path = locate_daemon_binary()?;
-    let agent = launch_agent::LaunchAgent::discover(daemon_path)?;
+    let agent = discover_launch_agent()?;
     match agent.install()? {
         launch_agent::InstallOutcome::Created => {
             println!(
@@ -56,14 +51,25 @@ fn install() -> Result<()> {
 }
 
 fn uninstall() -> Result<()> {
-    let daemon_path = locate_daemon_binary()?;
-    let agent = launch_agent::LaunchAgent::discover(daemon_path)?;
+    let agent = discover_launch_agent()?;
+    if agent.is_installed() {
+        agent.stop()?;
+        let _ = wait_for_socket_to_disappear(Duration::from_secs(3));
+    }
     if agent.uninstall_plist()? {
-        println!("✓ removed LaunchAgent: {}", agent.paths.plist_path.display());
+        println!(
+            "✓ removed LaunchAgent: {}",
+            agent.paths.plist_path.display()
+        );
     } else {
         println!("✓ LaunchAgent already uninstalled");
     }
     Ok(())
+}
+
+fn discover_launch_agent() -> Result<launch_agent::LaunchAgent> {
+    let daemon_path = locate_daemon_binary()?;
+    launch_agent::LaunchAgent::discover(daemon_path)
 }
 
 fn start() -> Result<()> {
@@ -72,6 +78,19 @@ fn start() -> Result<()> {
         return Ok(());
     }
 
+    let agent = discover_launch_agent()?;
+    if agent.is_installed() {
+        agent.start()?;
+        wait_for_socket(Duration::from_secs(3))?;
+        println!("✓ daemon started via launchctl");
+        println!("  service: {}", agent.service_target()?);
+        return Ok(());
+    }
+
+    start_direct_spawn()
+}
+
+fn start_direct_spawn() -> Result<()> {
     let bin = locate_daemon_binary()?;
     let log_file = default_log_file();
     if let Some(parent) = log_file.parent() {
@@ -97,23 +116,28 @@ fn start() -> Result<()> {
     println!("✓ daemon started (pid {pid})");
     println!("  logs: {}", log_file.display());
 
-    // Wait up to 2s for the socket to appear so 'voco status' works immediately.
-    let deadline = Instant::now() + Duration::from_secs(2);
-    let sock = default_socket_path();
-    while Instant::now() < deadline {
-        if UnixStream::connect(&sock).is_ok() {
-            return Ok(());
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    Err(anyhow!(
-        "daemon spawned but socket {} not ready after 2s — check {}",
-        sock.display(),
-        log_file.display()
-    ))
+    wait_for_socket(Duration::from_secs(2)).map_err(|_| {
+        anyhow!(
+            "daemon spawned but socket {} not ready after 2s — check {}",
+            default_socket_path().display(),
+            log_file.display()
+        )
+    })
 }
 
 fn stop() -> Result<()> {
+    let agent = discover_launch_agent()?;
+    if agent.is_installed() {
+        agent.stop()?;
+        wait_for_socket_to_disappear(Duration::from_secs(3))?;
+        println!("✓ daemon stopped");
+        return Ok(());
+    }
+
+    stop_via_ipc()
+}
+
+fn stop_via_ipc() -> Result<()> {
     let sock = default_socket_path();
     let mut client = match IpcClient::connect(&sock) {
         Ok(c) => c,
@@ -137,6 +161,53 @@ fn stop() -> Result<()> {
         }
         other => bail!("unexpected response: {:?}", other),
     }
+}
+
+fn restart() -> Result<()> {
+    let agent = discover_launch_agent()?;
+    if agent.is_installed() {
+        agent.restart()?;
+        wait_for_socket(Duration::from_secs(3))?;
+        println!("✓ daemon restarted via launchctl");
+        println!("  service: {}", agent.service_target()?);
+        return Ok(());
+    }
+
+    let _ = stop_via_ipc();
+    std::thread::sleep(Duration::from_millis(200));
+    start_direct_spawn()
+}
+
+fn wait_for_socket(timeout: Duration) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+    let sock = default_socket_path();
+    while Instant::now() < deadline {
+        if UnixStream::connect(&sock).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(anyhow!(
+        "daemon socket {} not ready after {:?}",
+        sock.display(),
+        timeout
+    ))
+}
+
+fn wait_for_socket_to_disappear(timeout: Duration) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+    let sock = default_socket_path();
+    while Instant::now() < deadline {
+        if UnixStream::connect(&sock).is_err() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    bail!(
+        "daemon socket {} still reachable after {:?}",
+        sock.display(),
+        timeout
+    )
 }
 
 fn logs(follow: bool, lines: u32) -> Result<()> {

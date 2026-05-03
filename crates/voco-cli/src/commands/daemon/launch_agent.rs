@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 pub const LABEL: &str = "com.voco.daemon";
@@ -55,6 +56,123 @@ impl LaunchAgent {
     pub fn uninstall_plist(&self) -> Result<bool> {
         remove_plist(&self.paths.plist_path)
     }
+
+    pub fn domain(&self) -> Result<String> {
+        let output = std::process::Command::new("id").arg("-u").output()?;
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "id -u failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        let uid = String::from_utf8(output.stdout)?.trim().to_string();
+        Ok(format!("gui/{uid}"))
+    }
+
+    pub fn service_target(&self) -> Result<String> {
+        Ok(format!("{}/{}", self.domain()?, self.label))
+    }
+
+    pub fn bootstrap(&self) -> Result<()> {
+        let domain = self.domain()?;
+        let plist = self.paths.plist_path.display().to_string();
+        let output = run_launchctl(["bootstrap", domain.as_str(), plist.as_str()])?;
+        if output.status_code.is_none() {
+            return Ok(());
+        }
+        if bootstrap_means_already_loaded(&output) {
+            return Ok(());
+        }
+        Err(launchctl_error("bootstrap", &domain, &output))
+    }
+
+    pub fn kickstart(&self) -> Result<()> {
+        let target = self.service_target()?;
+        let output = run_launchctl(["kickstart", "-k", target.as_str()])?;
+        if output.status_code.is_none() {
+            return Ok(());
+        }
+        Err(launchctl_error("kickstart", &target, &output))
+    }
+
+    pub fn bootout(&self) -> Result<()> {
+        let target = self.service_target()?;
+        let output = run_launchctl(["bootout", target.as_str()])?;
+        if output.status_code.is_none() || bootout_means_already_stopped(&output) {
+            return Ok(());
+        }
+        Err(launchctl_error("bootout", &target, &output))
+    }
+
+    pub fn start(&self) -> Result<()> {
+        self.bootstrap()?;
+        self.kickstart()
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        self.bootout()
+    }
+
+    pub fn restart(&self) -> Result<()> {
+        self.bootout()?;
+        self.bootstrap()?;
+        self.kickstart()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LaunchctlOutput {
+    pub status_code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+pub fn bootout_means_already_stopped(output: &LaunchctlOutput) -> bool {
+    let text = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
+    text.contains("no such process")
+        || text.contains("service not found")
+        || text.contains("could not find service")
+}
+
+pub fn bootstrap_means_already_loaded(output: &LaunchctlOutput) -> bool {
+    let text = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
+    text.contains("service already loaded") || text.contains("already bootstrapped")
+}
+
+pub fn launchctl_error(action: &str, target: &str, output: &LaunchctlOutput) -> anyhow::Error {
+    anyhow::anyhow!(
+        "launchctl {action} {target} failed with exit {}: {}{}{}",
+        output
+            .status_code
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "signal".to_string()),
+        output.stderr.trim(),
+        if output.stdout.trim().is_empty() {
+            ""
+        } else {
+            "\nstdout: "
+        },
+        output.stdout.trim()
+    )
+}
+
+fn run_launchctl<I, S>(args: I) -> Result<LaunchctlOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let output = std::process::Command::new("launchctl")
+        .args(args)
+        .output()?;
+    Ok(LaunchctlOutput {
+        status_code: if output.status.success() {
+            None
+        } else {
+            output.status.code()
+        },
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
 }
 
 pub fn render_plist(paths: &LaunchAgentPaths) -> String {
@@ -291,5 +409,40 @@ mod tests {
         assert!(!paths.plist_path.exists());
         assert!(!remove_plist(&paths.plist_path)?);
         Ok(())
+    }
+
+    #[test]
+    fn bootout_service_not_found_is_already_stopped() {
+        let output = LaunchctlOutput {
+            status_code: Some(3),
+            stdout: String::new(),
+            stderr: "Boot-out failed: 3: No such process".to_string(),
+        };
+
+        assert!(bootout_means_already_stopped(&output));
+    }
+
+    #[test]
+    fn bootstrap_service_already_loaded_is_non_fatal() {
+        let output = LaunchctlOutput {
+            status_code: Some(5),
+            stdout: String::new(),
+            stderr: "Bootstrap failed: 5: Input/output error: service already loaded".to_string(),
+        };
+
+        assert!(bootstrap_means_already_loaded(&output));
+    }
+
+    #[test]
+    fn unknown_launchctl_failure_is_descriptive() {
+        let output = LaunchctlOutput {
+            status_code: Some(78),
+            stdout: "stdout detail".to_string(),
+            stderr: "bad plist".to_string(),
+        };
+
+        let err = launchctl_error("bootstrap", "gui/501", &output).to_string();
+        assert!(err.contains("launchctl bootstrap gui/501 failed with exit 78"));
+        assert!(err.contains("bad plist"));
     }
 }

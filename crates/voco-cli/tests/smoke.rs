@@ -11,7 +11,10 @@ use tempfile::TempDir;
 
 fn voco_with_home(tmp: &TempDir) -> Command {
     let mut c = Command::cargo_bin("voco").unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
     c.env("VOCO_HOME", tmp.path());
+    c.env("HOME", home);
     c
 }
 
