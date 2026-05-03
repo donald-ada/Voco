@@ -522,6 +522,8 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - `mock_backend_full_session_returns_final`
   - `mock_backend_partials_arrive_in_order`
   - `recording_busy_response_when_concurrent`
+  - `status_reports_stats_after_mock_recording`
+  - `recording_duration_is_capped_by_config_max`
 - [ ] **Step 2:** Manual demo against real Doubao backend:
   ```sh
   # Set creds
@@ -546,6 +548,8 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
     `cargo build --workspace`, `cargo test --workspace`,
     `cargo clippy --workspace --all-targets -- -D warnings`, and
     `cargo build --workspace --release`.
+  - 2026-05-03 mock e2e also covers status stats and
+    `recording_max_duration_secs` capping.
   - 2026-05-03 live `voco doctor` blocked: local run exits non-zero with
     missing `[doubao]` credentials plus Accessibility/Input Monitoring not
     granted (`Summary: 2 ok / 2 warn / 4 fail / 4 skip`).
@@ -553,24 +557,25 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   ```
   test(cli): end-to-end recording smoke + Phase 3 verification
 
-  3 mock-backend smoke tests cover: full session, partial ordering,
-  busy rejection. Manual demo with real creds attached below.
+  Mock-backend smoke tests cover: full session, partial ordering,
+  busy rejection, status stats, and max-duration capping. Manual demo with
+  real creds attached below.
   ```
 
 ---
 
 ## Phase 3 — Verification (must pass before Phase 4 starts)
 
-- [ ] All Phase 1 + Phase 2 gates still green
+- [x] All Phase 1 + Phase 2 gates still green
 - [ ] `voco _internal_record --duration 3` against a running daemon with
   real Doubao creds returns a Chinese transcription within 5s
-- [ ] `voco _internal_record --show-partials` prints ≥ 1 partial before
+- [x] `voco _internal_record --show-partials` prints ≥ 1 partial before
   the final
-- [ ] Two concurrent `voco _internal_record` invocations: second one
+- [x] Two concurrent `voco _internal_record` invocations: second one
   fails fast with "busy: state=Recording"
-- [ ] `voco status` shows non-zero `sessions_total` after a session;
+- [x] `voco status` shows non-zero `sessions_total` after a session;
   `last total latency` and `last first partial` populated
-- [ ] Recording exceeding `recording_max_duration_secs` (e.g. config →
+- [x] Recording exceeding `recording_max_duration_secs` (e.g. config →
   `recording_max_duration_secs = 2`, then `voco _internal_record
   --duration 10`) auto-stops at 2s and returns whatever was captured
 - [ ] CI green on master after merge

@@ -193,7 +193,7 @@ impl RecordingRunner for DebugMockRecordingRunner {
             partials,
             logid: Some("mock-logid".into()),
             first_partial_ms: Some(120),
-            total_latency_ms: 240,
+            total_latency_ms: duration_ms.into(),
             error_hint: None,
         })
     }

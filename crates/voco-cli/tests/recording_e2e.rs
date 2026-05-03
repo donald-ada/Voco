@@ -135,3 +135,57 @@ fn recording_busy_response_when_concurrent() -> anyhow::Result<()> {
     voco(&tmp).args(["daemon", "stop"]).assert().success();
     Ok(())
 }
+
+#[test]
+#[serial_test::serial]
+fn status_reports_stats_after_mock_recording() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+
+    voco(&tmp).args(["daemon", "start"]).assert().success();
+    wait_for_socket(&tmp, Duration::from_secs(2));
+
+    voco(&tmp)
+        .args(["_internal_record", "--duration", "1"])
+        .assert()
+        .success();
+
+    voco(&tmp)
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "sessions:        1 total (1 ok, 0 failed)",
+        ))
+        .stdout(predicate::str::contains("last first partial: 120ms"))
+        .stdout(predicate::str::contains("last total latency: 1000ms"))
+        .stdout(predicate::str::contains("last logid:        mock-logid"));
+
+    voco(&tmp).args(["daemon", "stop"]).assert().success();
+    Ok(())
+}
+
+#[test]
+#[serial_test::serial]
+fn recording_duration_is_capped_by_config_max() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+
+    voco(&tmp)
+        .args(["config", "set", "recording_max_duration_secs", "2"])
+        .assert()
+        .success();
+    voco(&tmp).args(["daemon", "start"]).assert().success();
+    wait_for_socket(&tmp, Duration::from_secs(2));
+
+    voco(&tmp)
+        .args(["_internal_record", "--duration", "10"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("recording for 10s"))
+        .stdout(predicate::str::contains("final: \"mock final\""))
+        .stdout(predicate::str::contains(
+            "timing: first partial 120ms, total 2000ms",
+        ));
+
+    voco(&tmp).args(["daemon", "stop"]).assert().success();
+    Ok(())
+}
