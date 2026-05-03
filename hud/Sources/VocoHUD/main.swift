@@ -6,6 +6,7 @@ import VocoHUDCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = HudModel()
     private var panel: NSPanel?
+    private var errorGeneration = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -57,10 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .state(.hidden, _):
             panel?.orderOut(nil)
         case .state(.error, _):
+            errorGeneration += 1
+            let generation = errorGeneration
             positionPanel()
             panel?.orderFrontRegardless()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                if self.model.state == .error {
+                if self.model.state == .error && self.errorGeneration == generation {
                     self.model.apply(.state(.hidden, message: nil))
                     self.panel?.orderOut(nil)
                 }

@@ -39,4 +39,13 @@ final class HudModelTests: XCTestCase {
         model.apply(.state(.hidden, message: nil))
         XCTAssertFalse(model.isVisible)
     }
+
+    func testHiddenStateClearsAmplitudeAndMessage() {
+        let model = HudModel()
+        model.apply(.amplitude(0.7))
+        model.apply(.state(.error, message: "microphone unavailable"))
+        model.apply(.state(.hidden, message: nil))
+        XCTAssertEqual(model.amplitude, 0.0)
+        XCTAssertNil(model.message)
+    }
 }
