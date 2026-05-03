@@ -31,6 +31,19 @@ enum Cmd {
     },
     /// Self-diagnostic
     Doctor,
+    /// Internal recording smoke command for Phase 3 development.
+    #[command(name = "_internal_record", hide = true)]
+    InternalRecord {
+        /// How many seconds to record. Accepts `3` or `3s`.
+        #[arg(long, default_value = "5")]
+        duration: String,
+        /// Print returned partial snapshots.
+        #[arg(long)]
+        show_partials: bool,
+        /// Placeholder for Phase 3 amplitude debugging.
+        #[arg(long)]
+        debug_amp: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -77,6 +90,11 @@ fn main() -> anyhow::Result<()> {
         Cmd::Daemon { action } => commands::daemon::run(action),
         Cmd::Config { action } => commands::config::run(action),
         Cmd::Doctor => commands::doctor::run(),
+        Cmd::InternalRecord {
+            duration,
+            show_partials,
+            debug_amp,
+        } => commands::internal_record::run(duration, show_partials, debug_amp),
     }
 }
 

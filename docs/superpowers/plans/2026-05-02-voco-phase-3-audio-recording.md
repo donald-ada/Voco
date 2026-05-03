@@ -454,18 +454,18 @@ include_partials }`, prints the response, exits.
 
 ### 3.2 Steps
 
-- [ ] **Step 1:** Add the subcommand + its handler.
-- [ ] **Step 2:** End-to-end smoke test using the MockBackend feature
+- [x] **Step 1:** Add the subcommand + its handler.
+- [x] **Step 2:** End-to-end smoke test using the MockBackend feature
   flag on the daemon side. Decision: Phase 3 wires a `--mock-backend`
   daemon flag (env var `VOCO_FORCE_MOCK_BACKEND=1`) so smoke tests
   don't need real Doubao creds. The flag is dev-only and refuses to
   activate on release builds (`#[cfg(debug_assertions)]` plus a runtime
   check in main.rs).
-- [ ] **Step 3:** `crates/voco-cli/tests/recording_smoke.rs`:
+- [x] **Step 3:** `crates/voco-cli/tests/recording_smoke.rs`:
   - `internal_record_with_mock_backend_returns_canned_final`
   - `internal_record_partials_flag_emits_partials`
   - `internal_record_returns_busy_when_concurrent`
-- [ ] **Step 4:** Commit:
+- [x] **Step 4:** Commit:
   ```
   feat(cli): voco _internal_record debug subcommand
 

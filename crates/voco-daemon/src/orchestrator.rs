@@ -26,7 +26,7 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     pub fn new(config: Config) -> Self {
-        Self::with_runner(config, Arc::new(RealRecordingRunner))
+        Self::with_runner(config, default_recording_runner())
     }
 
     fn with_runner(config: Config, recording_runner: Arc<dyn RecordingRunner>) -> Self {
@@ -105,6 +105,23 @@ trait RecordingRunner: Send + Sync {
 
 struct RealRecordingRunner;
 
+fn default_recording_runner() -> Arc<dyn RecordingRunner> {
+    #[cfg(debug_assertions)]
+    {
+        if std::env::var("VOCO_FORCE_MOCK_BACKEND").ok().as_deref() == Some("1") {
+            warn!("VOCO_FORCE_MOCK_BACKEND=1 active; using debug mock recording runner");
+            return Arc::new(DebugMockRecordingRunner);
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        if std::env::var("VOCO_FORCE_MOCK_BACKEND").is_ok() {
+            warn!("VOCO_FORCE_MOCK_BACKEND is ignored in release builds");
+        }
+    }
+    Arc::new(RealRecordingRunner)
+}
+
 #[async_trait]
 impl RecordingRunner for RealRecordingRunner {
     async fn run_once(
@@ -131,6 +148,56 @@ impl RecordingRunner for RealRecordingRunner {
         });
         result_rx.await.map_err(|_| SessionError::WorkerStopped)?
     }
+}
+
+#[cfg(debug_assertions)]
+struct DebugMockRecordingRunner;
+
+#[cfg(debug_assertions)]
+#[async_trait]
+impl RecordingRunner for DebugMockRecordingRunner {
+    async fn run_once(
+        &self,
+        _config: Config,
+        duration_ms: u32,
+        include_partials: bool,
+        _stop_rx: oneshot::Receiver<()>,
+    ) -> Result<RecordingPayload, SessionError> {
+        if let Some(delay) = mock_recording_delay() {
+            tokio::time::sleep(delay).await;
+        }
+        let partials = if include_partials {
+            vec![voco_ipc::protocol::PartialSnapshot {
+                at_ms: 120,
+                text: "mock".into(),
+                stable_prefix_len: 4,
+            }]
+        } else {
+            vec![]
+        };
+        Ok(RecordingPayload {
+            text: "mock final".into(),
+            segments: vec![voco_ipc::protocol::Segment {
+                text: "mock final".into(),
+                start_ms: 0,
+                end_ms: duration_ms,
+                definite: true,
+            }],
+            partials,
+            logid: Some("mock-logid".into()),
+            first_partial_ms: Some(120),
+            total_latency_ms: 240,
+        })
+    }
+}
+
+#[cfg(debug_assertions)]
+fn mock_recording_delay() -> Option<std::time::Duration> {
+    let delay_ms: u64 = std::env::var("VOCO_MOCK_RECORDING_DELAY_MS")
+        .ok()?
+        .parse()
+        .ok()?;
+    Some(std::time::Duration::from_millis(delay_ms))
 }
 
 fn payload_to_response(payload: RecordingPayload) -> Response {
