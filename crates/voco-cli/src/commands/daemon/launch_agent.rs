@@ -346,6 +346,149 @@ mod tests {
         }
     }
 
+    fn write_bundle_plist(path: &Path, identifier: &str, executable: &str) -> anyhow::Result<()> {
+        let contents = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>{identifier}</string>
+  <key>CFBundleExecutable</key>
+  <string>{executable}</string>
+</dict>
+</plist>
+"#
+        );
+        std::fs::write(path, contents)?;
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn make_executable(path: &Path) -> anyhow::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(path)?.permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions)?;
+        Ok(())
+    }
+
+    fn create_test_bundle(
+        tmp: &tempfile::TempDir,
+        identifier: &str,
+        executable: &str,
+    ) -> anyhow::Result<PathBuf> {
+        let bundle = tmp.path().join("target/Voco.app");
+        let macos = bundle.join("Contents/MacOS");
+        std::fs::create_dir_all(&macos)?;
+        write_bundle_plist(&bundle.join("Contents/Info.plist"), identifier, executable)?;
+        let daemon = macos.join("voco-daemon");
+        std::fs::write(&daemon, b"#!/bin/sh\n")?;
+        make_executable(&daemon)?;
+        Ok(bundle)
+    }
+
+    #[test]
+    fn app_bundle_resolution_derives_expected_paths() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = create_test_bundle(&tmp, "com.voco.app", "voco-daemon")?;
+
+        let app = AppBundle::discover(&bundle)?;
+
+        assert_eq!(app.bundle_path, bundle.canonicalize()?);
+        assert_eq!(
+            app.info_plist_path,
+            app.bundle_path.join("Contents/Info.plist")
+        );
+        assert_eq!(app.working_dir, app.bundle_path.join("Contents/MacOS"));
+        assert_eq!(app.daemon_path, app.working_dir.join("voco-daemon"));
+        Ok(())
+    }
+
+    #[test]
+    fn app_bundle_missing_directory_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = AppBundle::discover(tmp.path().join("missing.app")).unwrap_err();
+        assert!(err.to_string().contains("app bundle not found"));
+    }
+
+    #[test]
+    fn app_bundle_missing_info_plist_fails() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = tmp.path().join("target/Voco.app");
+        std::fs::create_dir_all(bundle.join("Contents/MacOS"))?;
+
+        let err = AppBundle::discover(&bundle).unwrap_err();
+
+        assert!(err.to_string().contains("missing app bundle Info.plist"));
+        Ok(())
+    }
+
+    #[test]
+    fn app_bundle_missing_daemon_fails() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = tmp.path().join("target/Voco.app");
+        std::fs::create_dir_all(bundle.join("Contents/MacOS"))?;
+        write_bundle_plist(
+            &bundle.join("Contents/Info.plist"),
+            "com.voco.app",
+            "voco-daemon",
+        )?;
+
+        let err = AppBundle::discover(&bundle).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("missing executable in app bundle"));
+        Ok(())
+    }
+
+    #[test]
+    fn app_bundle_non_executable_daemon_fails() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = tmp.path().join("target/Voco.app");
+        let macos = bundle.join("Contents/MacOS");
+        std::fs::create_dir_all(&macos)?;
+        write_bundle_plist(
+            &bundle.join("Contents/Info.plist"),
+            "com.voco.app",
+            "voco-daemon",
+        )?;
+        std::fs::write(macos.join("voco-daemon"), b"#!/bin/sh\n")?;
+
+        let err = AppBundle::discover(&bundle).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("missing executable in app bundle"));
+        Ok(())
+    }
+
+    #[test]
+    fn app_bundle_wrong_identifier_fails() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = create_test_bundle(&tmp, "com.example.Other", "voco-daemon")?;
+
+        let err = AppBundle::discover(&bundle).unwrap_err();
+
+        assert!(err.to_string().contains("unexpected CFBundleIdentifier"));
+        assert!(err.to_string().contains("com.example.Other"));
+        Ok(())
+    }
+
+    #[test]
+    fn app_bundle_wrong_executable_fails() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = create_test_bundle(&tmp, "com.voco.app", "OtherDaemon")?;
+
+        let err = AppBundle::discover(&bundle).unwrap_err();
+
+        assert!(err.to_string().contains("unexpected CFBundleExecutable"));
+        assert!(err.to_string().contains("OtherDaemon"));
+        Ok(())
+    }
+
     #[test]
     fn install_plist_creates_file_and_parent_dir() -> anyhow::Result<()> {
         let tmp = tempfile::tempdir()?;
