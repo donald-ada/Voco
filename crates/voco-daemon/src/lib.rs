@@ -1,6 +1,7 @@
 pub mod orchestrator;
 pub mod paths;
 pub mod reload;
+pub mod session;
 pub mod state;
 
 pub use orchestrator::Orchestrator;

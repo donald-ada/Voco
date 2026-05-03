@@ -383,7 +383,7 @@ add `last_logid` to the printer (one line: "  last logid: ...").
 - [x] **Step 2:** Move `voco_asr::Segment` to a serde-friendly mirror in
   voco-ipc (or re-export). Decision: **mirror** — we don't want
   voco-ipc to depend on voco-asr.
-- [ ] **Step 3:** Add `voco-daemon/src/session.rs` with `RecordingSession`
+- [x] **Step 3:** Add `voco-daemon/src/session.rs` with `RecordingSession`
   unit tests using a `MockBackend` (impl AsrBackend, returns canned
   partials/final).
 - [ ] **Step 4:** Add `voco-daemon/src/stats.rs` + Stats unit tests.

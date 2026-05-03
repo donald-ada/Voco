@@ -2329,6 +2329,8 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "voco-asr",
+ "voco-audio",
  "voco-config",
  "voco-ipc",
 ]
