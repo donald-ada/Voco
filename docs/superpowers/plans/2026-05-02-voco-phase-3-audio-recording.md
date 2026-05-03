@@ -524,7 +524,7 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - `recording_busy_response_when_concurrent`
   - `status_reports_stats_after_mock_recording`
   - `recording_duration_is_capped_by_config_max`
-- [ ] **Step 2:** Manual demo against real Doubao backend:
+- [x] **Step 2:** Manual demo against real Doubao backend:
   ```sh
   # Set creds
   # New console:
@@ -547,6 +547,21 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - 2026-05-03 follow-up: validation and doctor now accept new-console
     `doubao.api_key` as an alternative to old-console `app_id` +
     `access_token`.
+  - 2026-05-03 live demo passed with old-console `app_id` + `access_token`.
+    Endpoint was switched to
+    `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel` because the current
+    client implements the simple streaming binary protocol, not the async
+    event-session protocol. Output:
+    ```text
+    recording for 3s ...
+    transcribing ...
+    partial[1] (stable=0): "Can."
+    partial[2] (stable=3): "Can you."
+    final: "can you？他就在那。"
+    logid: 202605031209247505F5523C973B3A3A8E
+    warning: max duration reached
+    timing: first partial 1964ms, total 3338ms
+    ```
 - [ ] **Step 3:** Phase verification gates: fmt + clippy + test + release
   build all green. Run `voco doctor` end-to-end (with creds), verify
   "Doubao handshake" still ✓ and a fresh "Last session" line shows the
@@ -560,13 +575,16 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - 2026-05-03 live `voco doctor` blocked: local run exits non-zero with
     missing `[doubao]` credentials plus Accessibility/Input Monitoring not
     granted (`Summary: 2 ok / 2 warn / 4 fail / 4 skip`).
-- [ ] **Step 4:** Commit:
+  - 2026-05-03 after credentials: `voco doctor` shows
+    `Doubao handshake (handshake ok (191ms, empty final))`; full doctor still
+    exits non-zero because Accessibility/Input Monitoring are not granted.
+- [x] **Step 4:** Commit:
   ```
-  test(cli): end-to-end recording smoke + Phase 3 verification
+  fix(asr): stabilize live Doubao verification
 
-  Mock-backend smoke tests cover: full session, partial ordering,
-  busy rejection, status stats, and max-duration capping. Manual demo with
-  real creds attached below.
+  Select rustls ring crypto provider, support event-flagged Doubao frames,
+  default to the simple-streaming bigmodel endpoint, bound doctor probes, and
+  attach the real-credential Phase 3 demo output above.
   ```
 
 ---
@@ -574,7 +592,7 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
 ## Phase 3 — Verification (must pass before Phase 4 starts)
 
 - [x] All Phase 1 + Phase 2 gates still green
-- [ ] `voco _internal_record --duration 3` against a running daemon with
+- [x] `voco _internal_record --duration 3` against a running daemon with
   real Doubao creds returns a Chinese transcription within 5s
 - [x] `voco _internal_record --show-partials` prints ≥ 1 partial before
   the final

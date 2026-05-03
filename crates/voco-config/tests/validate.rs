@@ -11,6 +11,14 @@ fn cfg_with_backend(backend: BackendChoice) -> Config {
 }
 
 #[test]
+fn default_doubao_endpoint_uses_simple_streaming_protocol() {
+    assert_eq!(
+        DoubaoCreds::default().endpoint,
+        "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+    );
+}
+
+#[test]
 fn default_is_invalid_in_strict_mode() {
     // Default has backend=Doubao but no creds. Strict mode rejects.
     let cfg = Config::default();

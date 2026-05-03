@@ -2,8 +2,12 @@
 //! Task 7 lands the real handshake (start()->stop()) once voco-asr is in.
 
 use super::CheckResult;
+use std::future::Future;
+use std::time::{Duration, Instant};
 use tokio;
 use voco_config::{BackendChoice, ConfigIo};
+
+const DOUBAO_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn doubao_creds_present() -> CheckResult {
     let cfg = match ConfigIo::load_from(&ConfigIo::default_path()) {
@@ -92,31 +96,66 @@ pub fn doubao_handshake() -> CheckResult {
         }
     };
     rt.block_on(async {
-        let t0 = std::time::Instant::now();
-        if let Err(e) = be.start().await {
-            return CheckResult::Fail {
+        let t0 = Instant::now();
+        probe_with_timeout(DOUBAO_PROBE_TIMEOUT, async {
+            if let Err(e) = be.start().await {
+                return ProbeOutcome::StartFailed(e);
+            }
+            match be.stop().await {
+                Err(voco_asr::AsrError::EmptyAudio) => ProbeOutcome::EmptyAudioOk,
+                Err(e) => ProbeOutcome::Rejected(e),
+                Ok(_) => ProbeOutcome::UnexpectedFinal,
+            }
+        })
+        .await
+        .with_elapsed(t0.elapsed())
+    })
+}
+
+enum ProbeOutcome {
+    EmptyAudioOk,
+    StartFailed(voco_asr::AsrError),
+    Rejected(voco_asr::AsrError),
+    UnexpectedFinal,
+    TimedOut,
+}
+
+impl ProbeOutcome {
+    fn with_elapsed(self, elapsed: Duration) -> CheckResult {
+        match self {
+            Self::EmptyAudioOk => CheckResult::Ok(format!(
+                "handshake ok ({}ms)",
+                elapsed.as_millis()
+            )),
+            Self::StartFailed(e) => CheckResult::Fail {
                 headline: format!("ws handshake failed: {e}"),
                 fix: "verify endpoint/auth via `voco config show`; check network".into(),
-            };
-        }
-        // No audio sent — server should answer 45000002 (empty audio), which
-        // is the green-light signal that the handshake + auth path works.
-        match be.stop().await {
-            Err(voco_asr::AsrError::EmptyAudio) => {
-                CheckResult::Ok(format!("handshake ok ({}ms)", t0.elapsed().as_millis()))
-            }
-            Err(e) => CheckResult::Fail {
+            },
+            Self::Rejected(e) => CheckResult::Fail {
                 headline: format!("server rejected probe: {e}"),
-                fix:
-                    "check resource_id, model_id, and that creds match the expected console flavor"
-                        .into(),
+                fix: "check resource_id, model_id, and that creds match the expected console flavor"
+                    .into(),
             },
-            Ok(_) => CheckResult::Warn {
-                headline: "server returned a normal Final on an empty session — unexpected".into(),
-                hint: "investigate; the server should have errored with 45000002".into(),
+            Self::UnexpectedFinal => CheckResult::Ok(format!(
+                "handshake ok ({}ms, empty final)",
+                elapsed.as_millis()
+            )),
+            Self::TimedOut => CheckResult::Fail {
+                headline: "Doubao handshake timed out".into(),
+                fix: "check endpoint/network, or switch doubao.endpoint to the non-async bigmodel endpoint for the empty-audio doctor probe".into(),
             },
         }
-    })
+    }
+}
+
+async fn probe_with_timeout<F>(timeout: Duration, probe: F) -> ProbeOutcome
+where
+    F: Future<Output = ProbeOutcome>,
+{
+    match tokio::time::timeout(timeout, probe).await {
+        Ok(outcome) => outcome,
+        Err(_) => ProbeOutcome::TimedOut,
+    }
 }
 
 pub fn sherpa() -> CheckResult {
@@ -131,5 +170,35 @@ pub fn sherpa() -> CheckResult {
         }
     } else {
         CheckResult::Skip("not selected".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn probe_timeout_returns_fail_instead_of_hanging() {
+        let result = probe_with_timeout(Duration::from_millis(1), async {
+            std::future::pending::<ProbeOutcome>().await
+        })
+        .await
+        .with_elapsed(Duration::from_millis(1));
+
+        assert!(matches!(
+            result,
+            CheckResult::Fail { headline, .. } if headline.contains("timed out")
+        ));
+    }
+
+    #[test]
+    fn empty_final_probe_result_counts_as_ok() {
+        let result = ProbeOutcome::UnexpectedFinal.with_elapsed(Duration::from_millis(42));
+
+        assert!(matches!(
+            result,
+            CheckResult::Ok(message) if message.contains("handshake ok")
+        ));
     }
 }

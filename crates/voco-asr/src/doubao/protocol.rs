@@ -73,8 +73,8 @@ impl Compression {
     }
 }
 
-/// Message-type-specific flags. We encode the four documented combinations
-/// rather than expose a raw nibble — fewer footguns, smaller test matrix.
+/// Message-type-specific flags. Bits 0/1 carry sequence and last-packet
+/// semantics; bit 2 marks an optional 4-byte event before the payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgFlags {
     /// Client: no sequence; Server: no sequence (rare).
@@ -85,6 +85,8 @@ pub enum MsgFlags {
     LastNoSequence = 0b0010,
     /// Server last packet, with sequence (typically negative).
     LastWithSequence = 0b0011,
+    /// Server event frame: header followed by int32 event, then payload size.
+    WithEvent = 0b0100,
 }
 
 impl MsgFlags {
@@ -94,6 +96,7 @@ impl MsgFlags {
             0b0001 => Some(MsgFlags::PositiveSequence),
             0b0010 => Some(MsgFlags::LastNoSequence),
             0b0011 => Some(MsgFlags::LastWithSequence),
+            0b0100 => Some(MsgFlags::WithEvent),
             _ => None,
         }
     }
@@ -107,6 +110,10 @@ impl MsgFlags {
 
     pub fn is_last(self) -> bool {
         matches!(self, MsgFlags::LastNoSequence | MsgFlags::LastWithSequence)
+    }
+
+    pub fn carries_event(self) -> bool {
+        matches!(self, MsgFlags::WithEvent)
     }
 }
 
@@ -233,6 +240,9 @@ pub fn parse_server_frame(buf: &[u8]) -> Result<ServerFrame, AsrError> {
             } else {
                 None
             };
+            if header.flags.carries_event() {
+                skip_event_fields(&mut rest)?;
+            }
             if rest.len() < 4 {
                 return Err(AsrError::Decode("missing payload size".into()));
             }
@@ -276,6 +286,35 @@ pub fn parse_server_frame(buf: &[u8]) -> Result<ServerFrame, AsrError> {
             "unexpected server message type {other:?}"
         ))),
     }
+}
+
+fn skip_event_fields(rest: &mut &[u8]) -> Result<(), AsrError> {
+    if rest.len() < 4 {
+        return Err(AsrError::Decode("missing event".into()));
+    }
+    let event = rest.get_i32();
+    if !matches!(event, 1 | 2 | 50..=52) {
+        skip_len_prefixed_string(rest, "session id")?;
+    }
+    if matches!(event, 50..=52) {
+        skip_len_prefixed_string(rest, "connect id")?;
+    }
+    Ok(())
+}
+
+fn skip_len_prefixed_string(rest: &mut &[u8], label: &str) -> Result<(), AsrError> {
+    if rest.len() < 4 {
+        return Err(AsrError::Decode(format!("missing {label} size")));
+    }
+    let size = rest.get_u32() as usize;
+    if rest.len() < size {
+        return Err(AsrError::Decode(format!(
+            "{label} truncated: have {}, want {size}",
+            rest.len()
+        )));
+    }
+    *rest = &rest[size..];
+    Ok(())
 }
 
 #[cfg(test)]
@@ -394,6 +433,38 @@ mod tests {
             } => {
                 assert_eq!(flags, MsgFlags::PositiveSequence);
                 assert_eq!(sequence, Some(7));
+                assert_eq!(payload, json);
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_response_with_event_and_gzip() {
+        let json = br#"{"result":{"text":"event","utterances":[]}}"#.as_slice();
+        let payload = codec::gzip(json).unwrap();
+        let header = Header {
+            message_type: MessageType::FullServerResponse,
+            flags: MsgFlags::WithEvent,
+            serialization: Serialization::Json,
+            compression: Compression::Gzip,
+        };
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&header.encode());
+        frame.extend_from_slice(&451i32.to_be_bytes());
+        frame.extend_from_slice(&8u32.to_be_bytes());
+        frame.extend_from_slice(b"session1");
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&payload);
+
+        match parse_server_frame(&frame).unwrap() {
+            ServerFrame::Response {
+                flags,
+                sequence,
+                payload,
+            } => {
+                assert_eq!(flags, MsgFlags::WithEvent);
+                assert_eq!(sequence, None);
                 assert_eq!(payload, json);
             }
             other => panic!("got {other:?}"),
