@@ -48,4 +48,33 @@ final class HudModelTests: XCTestCase {
         XCTAssertEqual(model.amplitude, 0.0)
         XCTAssertNil(model.message)
     }
+
+    func testVisibleStateIncrementsPresentationEpoch() {
+        let model = HudModel()
+
+        XCTAssertEqual(model.presentationEpoch, 0)
+        model.apply(.state(.recording, message: nil))
+
+        XCTAssertEqual(model.presentationEpoch, 1)
+        XCTAssertTrue(model.isVisible)
+    }
+
+    func testAmplitudeDoesNotChangePresentationEpoch() {
+        let model = HudModel()
+
+        model.apply(.state(.recording, message: nil))
+        model.apply(.amplitude(0.5))
+
+        XCTAssertEqual(model.presentationEpoch, 1)
+    }
+
+    func testRecordingToTranscribingDoesNotRestartEntryAnimation() {
+        let model = HudModel()
+
+        model.apply(.state(.recording, message: nil))
+        model.apply(.state(.transcribing, message: nil))
+
+        XCTAssertEqual(model.presentationEpoch, 1)
+        XCTAssertEqual(model.state, .transcribing)
+    }
 }
