@@ -18,7 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = CapsuleView(model: model)
         let hosting = NSHostingController(rootView: view)
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: HudTheme.Layout.capsuleWidth,
+                height: HudTheme.Layout.capsuleHeight
+            ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -82,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let frame = screen?.visibleFrame else { return }
         let size = panel.frame.size
         let x = frame.midX - size.width / 2
-        let y = frame.minY + 96
+        let y = frame.minY + HudTheme.Layout.panelBottomOffset
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

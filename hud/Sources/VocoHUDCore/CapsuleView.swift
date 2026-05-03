@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 public struct CapsuleView: View {
@@ -8,68 +9,120 @@ public struct CapsuleView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 14) {
-            statusDot
-            Image(systemName: iconName)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(foreground)
-                .frame(width: 24, height: 24)
-            WaveformBars(amplitude: model.amplitude, state: model.state)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let now = timeline.date
+            let entry = model.entryProgress(now: now)
+            HStack(spacing: HudTheme.Layout.contentSpacing) {
+                microphone(at: now)
+                if model.state == .transcribing {
+                    TranscribingSpinner(time: now.timeIntervalSinceReferenceDate)
+                } else {
+                    WaveformBars(
+                        amplitude: model.amplitude,
+                        state: model.state,
+                        time: now.timeIntervalSinceReferenceDate
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(width: HudTheme.Layout.capsuleWidth, height: HudTheme.Layout.capsuleHeight)
+            .background(HudTheme.ColorToken.capsule.color, in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    HudTheme.ColorToken.capsuleBorder.color,
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: Color.black.opacity(0.46), radius: 18, y: 10)
+            .opacity(entry)
+            .scaleEffect(0.94 + (0.06 * entry))
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .frame(width: 260, height: 56)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
-        .shadow(color: Color.black.opacity(0.18), radius: 24, y: 12)
     }
 
-    private var foreground: Color {
-        model.state == .error ? .red : Color(red: 0.16, green: 0.18, blue: 0.22)
+    private func microphone(at date: Date) -> some View {
+        let time = date.timeIntervalSinceReferenceDate
+        let recordingPulse = model.state == .recording
+            ? 1.0 + (0.08 * normalizedSine(time, speed: 0.85, offset: 0))
+            : 1.0
+        let color: Color = model.state == .error
+            ? HudTheme.ColorToken.error.color
+            : HudTheme.ColorToken.recordingMic.color
+
+        return Image(systemName: iconName)
+            .font(.system(size: HudTheme.Layout.micGlyphSize, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(
+                width: HudTheme.Layout.micGlyphSize,
+                height: HudTheme.Layout.micGlyphSize
+            )
+            .scaleEffect(recordingPulse)
+            .shadow(
+                color: color.opacity(model.state == .recording ? 0.55 : 0.28),
+                radius: model.state == .recording ? 9 : 5
+            )
     }
 
     private var iconName: String {
         switch model.state {
         case .hidden, .recording: return "mic.fill"
-        case .transcribing: return "waveform"
+        case .transcribing: return "mic.fill"
         case .error: return "exclamationmark.triangle.fill"
         }
-    }
-
-    private var statusDot: some View {
-        Circle()
-            .fill(model.state == .error ? Color.red : Color.yellow)
-            .frame(width: 10, height: 10)
-            .opacity(model.state == .transcribing ? 0.45 : 1.0)
     }
 }
 
 private struct WaveformBars: View {
     let amplitude: Double
     let state: HudState
+    let time: TimeInterval
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<7, id: \.self) { idx in
+        HStack(spacing: 3.5) {
+            ForEach(0..<HudTheme.Layout.waveformBarCount, id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 3)
                     .fill(color)
                     .frame(width: 5, height: barHeight(idx))
-                    .animation(.easeOut(duration: 0.12), value: amplitude)
             }
         }
-        .frame(width: 70, height: 32)
+        .frame(width: HudTheme.Layout.waveformWidth, height: HudTheme.Layout.waveformHeight)
     }
 
     private var color: Color {
-        state == .error ? .red : Color(red: 0.16, green: 0.18, blue: 0.22)
+        state == .error ? HudTheme.ColorToken.error.color : HudTheme.ColorToken.waveform.color
     }
 
     private func barHeight(_ index: Int) -> CGFloat {
-        if state == .transcribing {
-            return [10, 18, 26, 18, 10, 14, 20][index]
+        let pattern = [0.42, 0.76, 1.0, 0.82, 0.52, 0.68, 0.46][index]
+        if state == .hidden {
+            return 8
         }
-        let pattern = [0.45, 0.72, 1.0, 0.82, 0.55, 0.68, 0.5][index]
-        let scaled = 8.0 + max(amplitude, 0.06) * pattern * 24.0
-        return CGFloat(min(max(scaled, 8.0), 32.0))
+        if state == .transcribing {
+            let moving = normalizedSine(time, speed: 0.7, offset: Double(index) * 0.55)
+            return CGFloat(10.0 + moving * 18.0 * pattern)
+        }
+        let baseline = 4.0 + normalizedSine(time, speed: 0.72, offset: Double(index) * 0.65) * 7.0
+        let boosted = max(amplitude, 0.08) * pattern * 18.0
+        return CGFloat(min(max(8.0 + baseline + boosted, 8.0), 32.0))
     }
+}
+
+private struct TranscribingSpinner: View {
+    let time: TimeInterval
+
+    var body: some View {
+        Circle()
+            .trim(from: 0.18, to: 0.82)
+            .stroke(
+                HudTheme.ColorToken.waveform.color,
+                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+            )
+            .frame(width: 24, height: 24)
+            .rotationEffect(.degrees((time * 360.0).truncatingRemainder(dividingBy: 360.0)))
+            .shadow(color: HudTheme.ColorToken.waveform.color.opacity(0.35), radius: 6)
+    }
+}
+
+private func normalizedSine(_ time: TimeInterval, speed: Double, offset: Double) -> Double {
+    let phase = (time / speed + offset) * Double.pi * 2.0
+    return (sin(phase) + 1.0) / 2.0
 }
