@@ -1,8 +1,7 @@
 //! `voco daemon` — Phase 1 lifecycle: spawn, signal-stop, restart, tail logs.
 //! Phase 6 will replace this with launchctl-managed registration.
 
-mod launch_agent;
-
+use super::launch_agent;
 use crate::DaemonAction;
 use anyhow::{anyhow, bail, Result};
 use std::os::unix::net::UnixStream;
@@ -26,30 +25,7 @@ pub fn run(action: DaemonAction) -> Result<()> {
 
 fn install(app_bundle: Option<PathBuf>) -> Result<()> {
     let agent = discover_launch_agent(app_bundle.as_deref())?;
-    match agent.install()? {
-        launch_agent::InstallOutcome::Created => {
-            println!(
-                "✓ installed LaunchAgent: {}",
-                agent.paths.plist_path.display()
-            );
-        }
-        launch_agent::InstallOutcome::Updated => {
-            println!(
-                "✓ updated LaunchAgent: {}",
-                agent.paths.plist_path.display()
-            );
-        }
-        launch_agent::InstallOutcome::Unchanged => {
-            println!(
-                "✓ LaunchAgent already installed: {}",
-                agent.paths.plist_path.display()
-            );
-        }
-    }
-    println!("  daemon: {}", agent.paths.daemon_path.display());
-    println!("  working directory: {}", agent.paths.working_dir.display());
-    println!("  start it with: voco daemon start");
-    Ok(())
+    launch_agent::install_and_print(&agent)
 }
 
 fn uninstall() -> Result<()> {

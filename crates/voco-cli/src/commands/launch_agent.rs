@@ -188,6 +188,33 @@ impl LaunchAgent {
     }
 }
 
+pub fn install_and_print(agent: &LaunchAgent) -> Result<()> {
+    match agent.install()? {
+        InstallOutcome::Created => {
+            println!(
+                "✓ installed LaunchAgent: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+        InstallOutcome::Updated => {
+            println!(
+                "✓ updated LaunchAgent: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+        InstallOutcome::Unchanged => {
+            println!(
+                "✓ LaunchAgent already installed: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+    }
+    println!("  daemon: {}", agent.paths.daemon_path.display());
+    println!("  working directory: {}", agent.paths.working_dir.display());
+    println!("  start it with: voco daemon start");
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LaunchctlOutput {
     pub status_code: Option<i32>,
