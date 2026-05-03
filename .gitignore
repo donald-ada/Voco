@@ -7,6 +7,7 @@ Cargo.lock.bak
 *.swp
 /tmp
 /build
+.superpowers/
 *.log
 .env
 .env.local
