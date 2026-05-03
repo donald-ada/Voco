@@ -1114,7 +1114,7 @@ target/debug/voco status
 launchctl print gui/$(id -u)/com.voco.daemon
 pgrep -x voco-daemon
 pkill -9 voco-daemon
-sleep 2
+sleep 12
 target/debug/voco status
 pgrep -x voco-daemon
 target/debug/voco daemon stop
@@ -1127,7 +1127,7 @@ Expected:
 - install creates `~/Library/LaunchAgents/com.voco.daemon.plist`;
 - start makes `voco status` report daemon running and state idle;
 - `launchctl print gui/$(id -u)/com.voco.daemon` exits 0;
-- after `pkill -9 voco-daemon`, `KeepAlive=true` relaunches the daemon and `voco status` works again;
+- after `pkill -9 voco-daemon`, `KeepAlive=true` relaunches the daemon after launchd's default throttle interval and `voco status` works again;
 - stop unloads the service;
 - uninstall removes the plist;
 - config and logs remain in place.
@@ -1146,6 +1146,15 @@ Task 6 note (2026-05-03):
 - `git diff --check` passed.
 - Manual LaunchAgent smoke passed or was blocked by a named environment condition. Details include the exact failing command or the successful smoke summary.
 ```
+
+Task 6 note (2026-05-03):
+- `cd hud && swift test && swift build && cd ..` passed: Swift HUD executed 7 tests with 0 failures, then `swift build` completed successfully.
+- `cargo fmt --all --check` passed.
+- `cargo test --workspace` passed: Rust workspace tests passed; live Doubao network and microphone tests remained ignored as designed.
+- `cargo clippy --workspace --all-targets -- -D warnings` passed.
+- `cargo build --workspace --release` passed.
+- `git diff --check` passed.
+- Manual LaunchAgent smoke passed after adjusting the crash-recovery wait to 12 seconds to account for launchd's default `minimum runtime = 10` throttle. The smoke created `~/Library/LaunchAgents/com.voco.daemon.plist`, started `gui/501/com.voco.daemon`, confirmed `voco status` idle, confirmed `launchctl print` and `pgrep -x voco-daemon`, killed `voco-daemon`, confirmed launchd relaunched it with a new pid, then stopped and uninstalled the service. Cleanup was verified: plist absent, no `voco-daemon` process, and `launchctl print gui/501/com.voco.daemon` reported the service missing.
 
 - [ ] **Step 4: Commit verification update**
 
