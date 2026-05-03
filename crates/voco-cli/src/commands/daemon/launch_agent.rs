@@ -18,6 +18,45 @@ pub enum InstallOutcome {
     Unchanged,
 }
 
+#[derive(Clone, Debug)]
+pub struct LaunchAgent {
+    pub label: &'static str,
+    pub paths: LaunchAgentPaths,
+}
+
+impl LaunchAgent {
+    pub fn discover(daemon_path: PathBuf) -> Result<Self> {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow::anyhow!("HOME is not set; cannot resolve LaunchAgent path"))?;
+        let current_dir = std::env::current_dir()?;
+        let working_dir = choose_working_dir(&current_dir, &daemon_path);
+        let plist_path = home.join("Library/LaunchAgents/com.voco.daemon.plist");
+
+        Ok(Self {
+            label: LABEL,
+            paths: LaunchAgentPaths {
+                plist_path,
+                daemon_path,
+                working_dir,
+                home,
+            },
+        })
+    }
+
+    pub fn is_installed(&self) -> bool {
+        self.paths.plist_path.is_file()
+    }
+
+    pub fn install(&self) -> Result<InstallOutcome> {
+        install_plist(&self.paths.plist_path, &render_plist(&self.paths))
+    }
+
+    pub fn uninstall_plist(&self) -> Result<bool> {
+        remove_plist(&self.paths.plist_path)
+    }
+}
+
 pub fn render_plist(paths: &LaunchAgentPaths) -> String {
     render_plist_from_template(plist_template(), paths)
 }

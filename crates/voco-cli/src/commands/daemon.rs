@@ -15,6 +15,8 @@ use voco_ipc::protocol::{Request, Response};
 
 pub fn run(action: DaemonAction) -> Result<()> {
     match action {
+        DaemonAction::Install => install(),
+        DaemonAction::Uninstall => uninstall(),
         DaemonAction::Start => start(),
         DaemonAction::Stop => stop(),
         DaemonAction::Restart => {
@@ -24,6 +26,44 @@ pub fn run(action: DaemonAction) -> Result<()> {
         }
         DaemonAction::Logs { follow, lines } => logs(follow, lines),
     }
+}
+
+fn install() -> Result<()> {
+    let daemon_path = locate_daemon_binary()?;
+    let agent = launch_agent::LaunchAgent::discover(daemon_path)?;
+    match agent.install()? {
+        launch_agent::InstallOutcome::Created => {
+            println!(
+                "✓ installed LaunchAgent: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+        launch_agent::InstallOutcome::Updated => {
+            println!(
+                "✓ updated LaunchAgent: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+        launch_agent::InstallOutcome::Unchanged => {
+            println!(
+                "✓ LaunchAgent already installed: {}",
+                agent.paths.plist_path.display()
+            );
+        }
+    }
+    println!("  start it with: voco daemon start");
+    Ok(())
+}
+
+fn uninstall() -> Result<()> {
+    let daemon_path = locate_daemon_binary()?;
+    let agent = launch_agent::LaunchAgent::discover(daemon_path)?;
+    if agent.uninstall_plist()? {
+        println!("✓ removed LaunchAgent: {}", agent.paths.plist_path.display());
+    } else {
+        println!("✓ LaunchAgent already uninstalled");
+    }
+    Ok(())
 }
 
 fn start() -> Result<()> {

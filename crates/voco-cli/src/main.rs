@@ -48,6 +48,10 @@ enum Cmd {
 
 #[derive(Subcommand)]
 pub enum DaemonAction {
+    /// Install the user LaunchAgent plist without starting the daemon.
+    Install,
+    /// Stop and remove the user LaunchAgent plist. Config and logs are preserved.
+    Uninstall,
     Start,
     Stop,
     Restart,
@@ -107,4 +111,29 @@ fn init_log() {
         .with_target(false)
         .compact()
         .try_init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parses_daemon_install_uninstall_actions() {
+        let install = Cli::try_parse_from(["voco", "daemon", "install"]).unwrap();
+        assert!(matches!(
+            install.command,
+            Cmd::Daemon {
+                action: DaemonAction::Install
+            }
+        ));
+
+        let uninstall = Cli::try_parse_from(["voco", "daemon", "uninstall"]).unwrap();
+        assert!(matches!(
+            uninstall.command,
+            Cmd::Daemon {
+                action: DaemonAction::Uninstall
+            }
+        ));
+    }
 }
