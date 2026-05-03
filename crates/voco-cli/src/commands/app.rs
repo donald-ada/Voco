@@ -1,12 +1,151 @@
+use crate::commands::launch_agent::AppBundle;
 use crate::AppAction;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 pub fn run(action: AppAction) -> Result<()> {
     match action {
-        AppAction::Install { .. } => {
-            bail!("voco app install is parsed but install implementation is not wired yet")
-        }
+        AppAction::Install { app_bundle } => install(app_bundle),
     }
+}
+
+fn install(app_bundle: PathBuf) -> Result<()> {
+    let home = home_dir()?;
+    let installed = install_app_bundle(&app_bundle, &home)?;
+    println!(
+        "✓ installed app bundle: {}",
+        installed.bundle_path.display()
+    );
+    bail!("app bundle copied but LaunchAgent install is not wired yet");
+}
+
+fn home_dir() -> Result<PathBuf> {
+    home_dir_from(std::env::var_os("HOME"))
+}
+
+fn home_dir_from(home: Option<OsString>) -> Result<PathBuf> {
+    home.map(PathBuf::from)
+        .ok_or_else(|| anyhow!("HOME is not set; cannot resolve app install path"))
+}
+
+fn install_destination(home: &Path) -> PathBuf {
+    home.join("Applications/Voco.app")
+}
+
+fn install_app_bundle(source_bundle: &Path, home: &Path) -> Result<AppBundle> {
+    let source = AppBundle::discover(source_bundle)?;
+    let destination = install_destination(home);
+    let applications = destination.parent().ok_or_else(|| {
+        anyhow!(
+            "cannot resolve Applications directory for {}",
+            destination.display()
+        )
+    })?;
+
+    if applications.exists() && !applications.is_dir() {
+        bail!(
+            "Applications path is not a directory: {}",
+            applications.display()
+        );
+    }
+    std::fs::create_dir_all(applications)
+        .with_context(|| format!("create Applications directory {}", applications.display()))?;
+
+    if destination.exists() && !destination.is_dir() {
+        bail!(
+            "installed app path exists but is not a directory: {}",
+            destination.display()
+        );
+    }
+
+    let pid = std::process::id();
+    let tmp = applications.join(format!(".Voco.app.tmp-{pid}"));
+    let backup = applications.join(format!(".Voco.app.backup-{pid}"));
+    remove_dir_if_exists(&tmp)?;
+    remove_dir_if_exists(&backup)?;
+
+    copy_dir_recursive(&source.bundle_path, &tmp).with_context(|| {
+        format!(
+            "copy app bundle from {} to {} failed",
+            source.bundle_path.display(),
+            tmp.display()
+        )
+    })?;
+    AppBundle::discover(&tmp)?;
+
+    let mut backup_created = false;
+    if destination.exists() {
+        std::fs::rename(&destination, &backup).with_context(|| {
+            format!(
+                "replace installed app bundle at {} failed",
+                destination.display()
+            )
+        })?;
+        backup_created = true;
+    }
+
+    if let Err(err) = std::fs::rename(&tmp, &destination) {
+        if backup_created {
+            let _ = std::fs::rename(&backup, &destination);
+        }
+        return Err(anyhow!(
+            "replace installed app bundle at {} failed: {}",
+            destination.display(),
+            err
+        ));
+    }
+
+    let installed = AppBundle::discover(&destination)?;
+    if backup_created {
+        remove_dir_if_exists(&backup)?;
+    }
+    Ok(installed)
+}
+
+fn remove_dir_if_exists(path: &Path) -> Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err).with_context(|| format!("remove {}", path.display())),
+    }
+}
+
+fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<()> {
+    let metadata = std::fs::symlink_metadata(source)
+        .with_context(|| format!("inspect {}", source.display()))?;
+    if metadata.file_type().is_symlink() {
+        bail!(
+            "symlink in app bundle is not supported: {}",
+            source.display()
+        );
+    }
+    if metadata.is_dir() {
+        std::fs::create_dir(destination)
+            .with_context(|| format!("create directory {}", destination.display()))?;
+        std::fs::set_permissions(destination, metadata.permissions())
+            .with_context(|| format!("copy permissions to directory {}", destination.display()))?;
+        for entry in std::fs::read_dir(source)
+            .with_context(|| format!("read directory {}", source.display()))?
+        {
+            let entry = entry?;
+            copy_dir_recursive(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+    if metadata.is_file() {
+        std::fs::copy(source, destination).with_context(|| {
+            format!(
+                "copy file {} to {}",
+                source.display(),
+                destination.display()
+            )
+        })?;
+        std::fs::set_permissions(destination, metadata.permissions())
+            .with_context(|| format!("copy permissions to file {}", destination.display()))?;
+        return Ok(());
+    }
+    bail!("unsupported file in app bundle: {}", source.display())
 }
 
 #[cfg(test)]
@@ -42,10 +181,7 @@ mod tests {
         Ok(())
     }
 
-    fn create_test_bundle(
-        tmp: &tempfile::TempDir,
-        name: &str,
-    ) -> anyhow::Result<PathBuf> {
+    fn create_test_bundle(tmp: &tempfile::TempDir, name: &str) -> anyhow::Result<PathBuf> {
         let bundle = tmp.path().join(name);
         let macos = bundle.join("Contents/MacOS");
         std::fs::create_dir_all(&macos)?;

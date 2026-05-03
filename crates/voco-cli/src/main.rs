@@ -178,21 +178,13 @@ mod tests {
 
     #[test]
     fn parses_app_install_action() {
-        let install = Cli::try_parse_from([
-            "voco",
-            "app",
-            "install",
-            "--app-bundle",
-            "target/Voco.app",
-        ])
-        .unwrap();
+        let install =
+            Cli::try_parse_from(["voco", "app", "install", "--app-bundle", "target/Voco.app"])
+                .unwrap();
 
         match install.command {
             Cmd::App {
-                action:
-                    AppAction::Install {
-                        app_bundle: path,
-                    },
+                action: AppAction::Install { app_bundle: path },
             } => assert_eq!(path, std::path::PathBuf::from("target/Voco.app")),
             _ => panic!("unexpected command"),
         }
