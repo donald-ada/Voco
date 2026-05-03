@@ -13,7 +13,7 @@
 ## File Structure
 
 - Create `hud/Package.swift` — Swift package manifest for executable `voco-hud` and tests.
-- Create `hud/Sources/VocoHUD/main.swift` — AppKit application entry point, stdin event loop, panel setup.
+- Create `hud/Sources/VocoHUD/main.swift` — minimal executable bootstrap in Task 1, then AppKit application entry point, stdin event loop, and panel setup in Task 2.
 - Create `hud/Sources/VocoHUDCore/HudEvent.swift` — JSON event parser and `HudState`.
 - Create `hud/Sources/VocoHUDCore/HudModel.swift` — `ObservableObject` state/amplitude model.
 - Create `hud/Sources/VocoHUDCore/CapsuleView.swift` — SwiftUI Capsule Glass UI.
@@ -32,6 +32,7 @@
 
 **Files:**
 - Create: `hud/Package.swift`
+- Create: `hud/Sources/VocoHUD/main.swift`
 - Create: `hud/Sources/VocoHUDCore/HudEvent.swift`
 - Create: `hud/Tests/VocoHUDTests/HudEventTests.swift`
 
@@ -66,6 +67,12 @@ let package = Package(
         )
     ]
 )
+```
+
+Create `hud/Sources/VocoHUD/main.swift` with a minimal executable source file so SwiftPM can load the executable target while Task 1 focuses on parser tests:
+
+```swift
+import VocoHUDCore
 ```
 
 - [ ] **Step 2: Write failing parser tests**
@@ -176,7 +183,7 @@ Expected: PASS, 4 tests.
 Run:
 
 ```bash
-git add hud/Package.swift hud/Sources/VocoHUDCore/HudEvent.swift hud/Tests/VocoHUDTests/HudEventTests.swift
+git add .gitignore hud/Package.swift hud/Sources/VocoHUD/main.swift hud/Sources/VocoHUDCore/HudEvent.swift hud/Tests/VocoHUDTests/HudEventTests.swift docs/superpowers/plans/2026-05-03-voco-phase-5-hud.md
 git commit -m "feat(hud): add Swift HUD event parser"
 ```
 
@@ -187,7 +194,7 @@ git commit -m "feat(hud): add Swift HUD event parser"
 **Files:**
 - Create: `hud/Sources/VocoHUDCore/HudModel.swift`
 - Create: `hud/Sources/VocoHUDCore/CapsuleView.swift`
-- Create: `hud/Sources/VocoHUD/main.swift`
+- Modify: `hud/Sources/VocoHUD/main.swift`
 - Modify: `hud/Tests/VocoHUDTests/HudEventTests.swift`
 
 - [ ] **Step 1: Add model tests for clamping and state transitions**
