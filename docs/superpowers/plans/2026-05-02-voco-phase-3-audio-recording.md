@@ -387,9 +387,11 @@ add `last_logid` to the printer (one line: "  last logid: ...").
   unit tests using a `MockBackend` (impl AsrBackend, returns canned
   partials/final).
 - [x] **Step 4:** Add `voco-daemon/src/stats.rs` + Stats unit tests.
-- [ ] **Step 5:** Wire orchestrator to handle `RecordingOnce`:
+- [x] **Step 5:** Wire orchestrator to handle `RecordingOnce`:
   - state guard: only Idle accepts; other states return Error.
-  - build_backend once at daemon start; reuse across sessions
+  - recording runner is built once at daemon start; real audio/backend
+    session runs inside a dedicated current-thread runtime because
+    `cpal::Stream` is not `Send`.
   - `tokio::time::timeout` enforces `recording_max_duration_secs` from config
 - [ ] **Step 6:** Update `voco status` renderer for `last_logid`.
 - [ ] **Step 7:** Commit:

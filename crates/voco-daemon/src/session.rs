@@ -5,6 +5,7 @@ use voco_asr::{AsrBackend, AsrError};
 use voco_config::Config;
 use voco_ipc::protocol::{PartialSnapshot, Segment};
 
+#[derive(Debug, Clone)]
 pub struct RecordingPayload {
     pub text: String,
     pub segments: Vec<Segment>,
@@ -133,6 +134,12 @@ pub enum SessionError {
 
     #[error("audio: {0}")]
     Audio(#[from] voco_audio::AudioError),
+
+    #[error("recording runtime: {0}")]
+    Runtime(String),
+
+    #[error("recording worker stopped before returning a result")]
+    WorkerStopped,
 }
 
 #[cfg(test)]
