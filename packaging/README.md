@@ -49,17 +49,30 @@ Contents/MacOS/voco-daemon
 Contents/MacOS/voco-hud
 ```
 
-Install the user LaunchAgent from the generated bundle:
+Install the generated bundle for the current user:
 
 ```bash
-target/debug/voco daemon install --app-bundle target/Voco.app
+target/debug/voco app install --app-bundle target/Voco.app
 ```
 
-This renders `~/Library/LaunchAgents/com.voco.daemon.plist` so
+The command copies the bundle to:
+
+```text
+~/Applications/Voco.app
+```
+
+and renders `~/Library/LaunchAgents/com.voco.daemon.plist` so
 `ProgramArguments:0` points at:
 
 ```text
-target/Voco.app/Contents/MacOS/voco-daemon
+~/Applications/Voco.app/Contents/MacOS/voco-daemon
+```
+
+For development-only plist rendering without copying the app, this lower-level
+command remains available:
+
+```bash
+target/debug/voco daemon install --app-bundle target/Voco.app
 ```
 
 Run the bundle smoke test:

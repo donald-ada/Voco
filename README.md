@@ -6,7 +6,7 @@ See `docs/superpowers/specs/2026-05-01-voco-design.md` for the full design.
 
 ## Status
 
-Phase 6-A development: Phase 5 hotkey recording, text injection, and hidden Swift HUD helper are implemented. Phase 6-A adds a user-level LaunchAgent so the daemon can be installed under `~/Library/LaunchAgents` and managed by `launchctl`.
+Phase 7 development: Phase 5 hotkey recording, text injection, and hidden Swift HUD helper are implemented. The daemon can be installed as a user-level LaunchAgent, and a generated `Voco.app` can be copied to `~/Applications/Voco.app` for per-user local installs.
 
 ## Build
 
@@ -35,7 +35,7 @@ target/debug/voco daemon start
 target/debug/voco status
 ```
 
-Install the LaunchAgent from a development `Voco.app` bundle:
+Render the LaunchAgent from a development `Voco.app` bundle without copying the app:
 
 ```bash
 packaging/build_app_bundle.sh --profile debug
@@ -45,8 +45,8 @@ target/debug/voco status
 ```
 
 Without `--app-bundle`, `daemon install` keeps the source-tree/direct binary
-install path. `--app-bundle` does not sign, notarize, copy, or install the app
-under `/Applications`.
+install path. `--app-bundle` is the lower-level plist render path and does not
+copy the app bundle.
 
 The plist is written to:
 
@@ -63,20 +63,30 @@ target/debug/voco daemon uninstall
 
 ## Development App Bundle
 
-Build a local unsigned development bundle:
+Build and install a local per-user app bundle:
 
 ```bash
-packaging/build_app_bundle.sh --profile debug
+packaging/build_app_bundle.sh --profile release
+target/release/voco app install --app-bundle target/Voco.app
+target/release/voco daemon start
+target/release/voco status
 ```
 
-The bundle is written to:
+`app install` copies the generated bundle to:
 
 ```text
-target/Voco.app
+~/Applications/Voco.app
 ```
 
-This bundle contains `voco`, `voco-daemon`, and `voco-hud` under `Contents/MacOS`.
-It is not signed, notarized, copied, or installed under `/Applications`.
+It also installs or updates `~/Library/LaunchAgents/com.voco.daemon.plist`
+so launchd runs:
+
+```text
+~/Applications/Voco.app/Contents/MacOS/voco-daemon
+```
+
+No `sudo` is required. This local install flow does not sign, notarize,
+create a DMG/pkg, or install under `/Applications`.
 
 ## Phase 5 HUD Development
 
