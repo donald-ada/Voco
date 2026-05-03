@@ -49,11 +49,24 @@ Contents/MacOS/voco-daemon
 Contents/MacOS/voco-hud
 ```
 
+Install the user LaunchAgent from the generated bundle:
+
+```bash
+target/debug/voco daemon install --app-bundle target/Voco.app
+```
+
+This renders `~/Library/LaunchAgents/com.voco.daemon.plist` so
+`ProgramArguments:0` points at:
+
+```text
+target/Voco.app/Contents/MacOS/voco-daemon
+```
+
 Run the bundle smoke test:
 
 ```bash
 packaging/tests/app_bundle_smoke.sh
 ```
 
-Signing, notarization, DMG/pkg creation, `/Applications` installation, and
-LaunchAgent integration with the app bundle are deferred.
+Signing, notarization, DMG/pkg creation, and `/Applications` installation are
+deferred.

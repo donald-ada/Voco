@@ -35,6 +35,19 @@ target/debug/voco daemon start
 target/debug/voco status
 ```
 
+Install the LaunchAgent from a development `Voco.app` bundle:
+
+```bash
+packaging/build_app_bundle.sh --profile debug
+target/debug/voco daemon install --app-bundle target/Voco.app
+target/debug/voco daemon start
+target/debug/voco status
+```
+
+Without `--app-bundle`, `daemon install` keeps the source-tree/direct binary
+install path. `--app-bundle` does not sign, notarize, copy, or install the app
+under `/Applications`.
+
 The plist is written to:
 
 ```text
@@ -63,8 +76,7 @@ target/Voco.app
 ```
 
 This bundle contains `voco`, `voco-daemon`, and `voco-hud` under `Contents/MacOS`.
-It is not signed, notarized, installed under `/Applications`, or used by the
-LaunchAgent installer yet.
+It is not signed, notarized, copied, or installed under `/Applications`.
 
 ## Phase 5 HUD Development
 
