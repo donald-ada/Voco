@@ -89,3 +89,17 @@ fn stop_without_start_is_idempotent() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("already stopped"));
     Ok(())
 }
+
+#[test]
+#[serial_test::serial]
+fn install_with_missing_app_bundle_fails_loudly() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+
+    voco_with_home(&tmp)
+        .args(["daemon", "install", "--app-bundle", "target/Missing.app"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("app bundle not found"));
+
+    Ok(())
+}

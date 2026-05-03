@@ -46,6 +46,8 @@ fn install(app_bundle: Option<PathBuf>) -> Result<()> {
             );
         }
     }
+    println!("  daemon: {}", agent.paths.daemon_path.display());
+    println!("  working directory: {}", agent.paths.working_dir.display());
     println!("  start it with: voco daemon start");
     Ok(())
 }
@@ -70,9 +72,18 @@ fn uninstall() -> Result<()> {
 fn discover_launch_agent(
     app_bundle: Option<&std::path::Path>,
 ) -> Result<launch_agent::LaunchAgent> {
-    if app_bundle.is_some() {
-        bail!("--app-bundle is parsed but bundle discovery is not wired yet");
+    if let Some(bundle_path) = app_bundle {
+        let bundle = launch_agent::AppBundle::discover(bundle_path)?;
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow!("HOME is not set; cannot resolve LaunchAgent path"))?;
+        return Ok(launch_agent::LaunchAgent::from_parts(
+            home,
+            bundle.daemon_path,
+            bundle.working_dir,
+        ));
     }
+
     let daemon_path = locate_daemon_binary()?;
     launch_agent::LaunchAgent::discover(daemon_path)
 }
