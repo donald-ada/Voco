@@ -27,14 +27,24 @@ pub struct RecordingSession {
 
 enum PcmSource {
     Audio(voco_audio::Session),
-    Receiver(mpsc::Receiver<Vec<i16>>),
+    Receiver {
+        pcm_rx: mpsc::Receiver<Vec<i16>>,
+        amplitude_rx: Option<tokio::sync::watch::Receiver<f32>>,
+    },
 }
 
 impl PcmSource {
     async fn recv(&mut self) -> Option<Vec<i16>> {
         match self {
             PcmSource::Audio(session) => session.pcm_rx.recv().await,
-            PcmSource::Receiver(rx) => rx.recv().await,
+            PcmSource::Receiver { pcm_rx, .. } => pcm_rx.recv().await,
+        }
+    }
+
+    fn amplitude_rx(&self) -> Option<tokio::sync::watch::Receiver<f32>> {
+        match self {
+            PcmSource::Audio(session) => Some(session.amplitude_rx.clone()),
+            PcmSource::Receiver { amplitude_rx, .. } => amplitude_rx.clone(),
         }
     }
 }
@@ -55,7 +65,28 @@ impl RecordingSession {
 
     pub fn from_parts(pcm_rx: mpsc::Receiver<Vec<i16>>, backend: Box<dyn AsrBackend>) -> Self {
         Self {
-            pcm: PcmSource::Receiver(pcm_rx),
+            pcm: PcmSource::Receiver {
+                pcm_rx,
+                amplitude_rx: None,
+            },
+            backend,
+            started_at: Instant::now(),
+            first_partial_at: None,
+            last_partial_text: None,
+            partials: Vec::new(),
+        }
+    }
+
+    pub fn from_parts_with_amplitude(
+        pcm_rx: mpsc::Receiver<Vec<i16>>,
+        backend: Box<dyn AsrBackend>,
+        amplitude_rx: Option<tokio::sync::watch::Receiver<f32>>,
+    ) -> Self {
+        Self {
+            pcm: PcmSource::Receiver {
+                pcm_rx,
+                amplitude_rx,
+            },
             backend,
             started_at: Instant::now(),
             first_partial_at: None,
@@ -65,6 +96,36 @@ impl RecordingSession {
     }
 
     pub async fn run(
+        self,
+        duration_ms: u32,
+        include_partials: bool,
+        stop_rx: oneshot::Receiver<()>,
+    ) -> Result<RecordingPayload, SessionError> {
+        self.run_with_hud(duration_ms, include_partials, stop_rx, None)
+            .await
+    }
+
+    pub async fn run_with_hud(
+        self,
+        duration_ms: u32,
+        include_partials: bool,
+        stop_rx: oneshot::Receiver<()>,
+        hud: Option<crate::hud::SharedHudSink>,
+    ) -> Result<RecordingPayload, SessionError> {
+        let amplitude_task = self
+            .pcm
+            .amplitude_rx()
+            .zip(hud)
+            .map(|(rx, hud)| spawn_amplitude_forwarder(rx, hud));
+
+        let result = self.run_loop(duration_ms, include_partials, stop_rx).await;
+        if let Some(task) = amplitude_task {
+            task.abort();
+        }
+        result
+    }
+
+    async fn run_loop(
         mut self,
         duration_ms: u32,
         include_partials: bool,
@@ -194,6 +255,30 @@ fn elapsed_ms(start: Instant, end: Instant) -> u64 {
     end.saturating_duration_since(start).as_millis() as u64
 }
 
+fn spawn_amplitude_forwarder(
+    mut rx: tokio::sync::watch::Receiver<f32>,
+    hud: crate::hud::SharedHudSink,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_millis(16));
+        loop {
+            tokio::select! {
+                changed = rx.changed() => {
+                    if changed.is_err() {
+                        break;
+                    }
+                    let value = crate::hud::clamp_amplitude(*rx.borrow_and_update());
+                    let _ = hud.send(crate::hud::HudEvent::amplitude(value));
+                }
+                _ = ticker.tick() => {
+                    let value = crate::hud::clamp_amplitude(*rx.borrow_and_update());
+                    let _ = hud.send(crate::hud::HudEvent::amplitude(value));
+                }
+            }
+        }
+    })
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
     #[error("backend: {0}")]
@@ -229,6 +314,18 @@ mod tests {
         failure: MockFailure,
     }
 
+    #[derive(Default)]
+    struct FakeHudSink {
+        events: std::sync::Mutex<Vec<crate::hud::HudEvent>>,
+    }
+
+    impl crate::hud::HudSink for FakeHudSink {
+        fn send(&self, event: crate::hud::HudEvent) -> Result<(), crate::hud::HudError> {
+            self.events.lock().unwrap().push(event);
+            Ok(())
+        }
+    }
+
     #[async_trait]
     impl AsrBackend for MockBackend {
         async fn start(&mut self) -> Result<(), AsrError> {
@@ -262,6 +359,35 @@ mod tests {
         fn name(&self) -> &'static str {
             "mock"
         }
+    }
+
+    #[tokio::test]
+    async fn forwards_clamped_amplitude_to_hud() {
+        let (pcm_tx, pcm_rx) = mpsc::channel(4);
+        let (amp_tx, amp_rx) = tokio::sync::watch::channel(0.0_f32);
+        let hud = std::sync::Arc::new(FakeHudSink::default());
+        pcm_tx.send(vec![1, 2, 3]).await.unwrap();
+        let (_stop_tx, stop_rx) = oneshot::channel();
+        let session = RecordingSession::from_parts_with_amplitude(
+            pcm_rx,
+            Box::new(MockBackend {
+                feed_calls: 0,
+                failure: MockFailure::None,
+            }),
+            Some(amp_rx),
+        );
+
+        amp_tx.send(1.4).unwrap();
+        let _ = session
+            .run_with_hud(30, true, stop_rx, Some(hud.clone()))
+            .await
+            .unwrap();
+
+        assert!(hud
+            .events
+            .lock()
+            .unwrap()
+            .contains(&crate::hud::HudEvent::amplitude(1.0)));
     }
 
     #[tokio::test]

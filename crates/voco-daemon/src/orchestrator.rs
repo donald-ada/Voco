@@ -132,7 +132,7 @@ impl Orchestrator {
         let (_stop_tx, stop_rx) = oneshot::channel();
         let result = self
             .recording_runner
-            .run_once(cfg, duration_ms, include_partials, stop_rx)
+            .run_once(cfg, duration_ms, include_partials, stop_rx, None)
             .await;
 
         match result {
@@ -190,9 +190,12 @@ impl Orchestrator {
         let injector = self.text_injector.clone();
         let active_slot = self.active_recording.clone();
         let hud = self.hud.clone();
+        let recording_hud = Some(hud.clone());
 
         tokio::spawn(async move {
-            let result = runner.run_once(cfg, duration_ms, false, stop_rx).await;
+            let result = runner
+                .run_once(cfg, duration_ms, false, stop_rx, recording_hud)
+                .await;
             let response =
                 finalize_recording_result(result, state, stats, config, injector, true, hud, true)
                     .await;
@@ -288,6 +291,7 @@ trait RecordingRunner: Send + Sync {
         duration_ms: u32,
         include_partials: bool,
         stop_rx: oneshot::Receiver<()>,
+        hud: Option<crate::hud::SharedHudSink>,
     ) -> Result<RecordingPayload, SessionError>;
 }
 
@@ -369,6 +373,7 @@ impl RecordingRunner for RealRecordingRunner {
         duration_ms: u32,
         include_partials: bool,
         stop_rx: oneshot::Receiver<()>,
+        hud: Option<crate::hud::SharedHudSink>,
     ) -> Result<RecordingPayload, SessionError> {
         let (result_tx, result_rx) = oneshot::channel();
         std::thread::spawn(move || {
@@ -379,7 +384,7 @@ impl RecordingRunner for RealRecordingRunner {
                 .and_then(|runtime| {
                     runtime.block_on(async move {
                         RecordingSession::start_from_config(&config)?
-                            .run(duration_ms, include_partials, stop_rx)
+                            .run_with_hud(duration_ms, include_partials, stop_rx, hud)
                             .await
                     })
                 });
@@ -401,6 +406,7 @@ impl RecordingRunner for DebugMockRecordingRunner {
         duration_ms: u32,
         include_partials: bool,
         _stop_rx: oneshot::Receiver<()>,
+        _hud: Option<crate::hud::SharedHudSink>,
     ) -> Result<RecordingPayload, SessionError> {
         if let Some(delay) = mock_recording_delay() {
             tokio::time::sleep(delay).await;
@@ -664,6 +670,7 @@ mod recording_tests {
             duration_ms: u32,
             _include_partials: bool,
             _stop_rx: oneshot::Receiver<()>,
+            _hud: Option<crate::hud::SharedHudSink>,
         ) -> Result<RecordingPayload, SessionError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.durations.lock().await.push(duration_ms);
@@ -711,6 +718,7 @@ mod recording_tests {
             _duration_ms: u32,
             _include_partials: bool,
             stop_rx: oneshot::Receiver<()>,
+            _hud: Option<crate::hud::SharedHudSink>,
         ) -> Result<RecordingPayload, SessionError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let _ = stop_rx.await;
@@ -731,6 +739,7 @@ mod recording_tests {
             _duration_ms: u32,
             _include_partials: bool,
             stop_rx: oneshot::Receiver<()>,
+            _hud: Option<crate::hud::SharedHudSink>,
         ) -> Result<RecordingPayload, SessionError> {
             let _ = stop_rx.await;
             panic!("recording task panic after stop");
