@@ -1457,7 +1457,7 @@ cargo build --workspace
 
 Expected: Swift helper builds and Rust workspace builds.
 
-- [ ] **Step 3: Run automated checks**
+- [x] **Step 3: Run automated checks**
 
 Run:
 
@@ -1472,7 +1472,7 @@ Expected: all pass.
 
 Task 7 note (2026-05-03):
 - `cd hud && swift build && cd .. && cargo build --workspace` passed.
-- `cd hud && swift test` is environment-blocked on this machine with CommandLineTools XCTest unavailable: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`. I did not run `sudo`, change global `xcode-select`, or accept the Xcode license.
+- `cd hud && swift test` was initially environment-blocked with CommandLineTools XCTest unavailable. After the Xcode developer directory/license setup was corrected, `cd hud && swift test` passed: 7 tests, 0 failures.
 - Rust checks passed separately: `cargo fmt --all --check`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`.
 - Initial lifecycle smoke across separate tool invocations produced a false negative because the tool runner cleaned up the detached child process after the command exited. A reliable same-shell lifecycle smoke passed: `daemon start` returned pid `38019`, `status` reported idle, `pgrep -x voco-daemon` returned `38019`, `pgrep -x voco-hud` returned `38020`, `daemon stop` succeeded, and a final `pgrep -x` check found no daemon or HUD helper remaining.
 - The lifecycle smoke verified process lifecycle only. I did not visually verify that no HUD window is visible while idle.
@@ -1557,8 +1557,7 @@ git diff --check
 Expected: all commands exit 0.
 
 Task 8 note (2026-05-03):
-- `cd hud && swift test && swift build && cd ..` did not complete because `swift test` is environment-blocked: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`.
-- `cd hud && swift build` passed when run separately.
+- `cd hud && swift test && swift build && cd ..` passed: Swift HUD tests executed 7 tests with 0 failures, then the Swift helper build completed.
 - `cargo fmt --all --check` passed.
 - `cargo test --workspace` passed: all Rust workspace tests passed; live network/microphone tests remained ignored as designed.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
