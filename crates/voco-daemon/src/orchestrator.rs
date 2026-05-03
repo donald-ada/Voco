@@ -52,6 +52,7 @@ impl RequestHandler for Orchestrator {
                     sessions_failed: 0,
                     last_session_latency_ms: None,
                     last_first_partial_ms: None,
+                    last_session_logid: None,
                     recent_errors: vec![],
                 })
             }
@@ -91,7 +92,7 @@ impl RequestHandler for Orchestrator {
                     },
                 }
             }
-            Request::RecordingStart | Request::RecordingStop => {
+            Request::RecordingStart | Request::RecordingStop | Request::RecordingOnce { .. } => {
                 warn!("recording requested before Phase 3 lands");
                 Response::Error {
                     message: "recording: not yet implemented (Phase 3)".into(),

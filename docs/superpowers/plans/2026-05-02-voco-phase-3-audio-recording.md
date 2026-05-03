@@ -376,11 +376,11 @@ add `last_logid` to the printer (one line: "  last logid: ...").
 
 ### 2.6 Steps
 
-- [ ] **Step 1:** Bump PROTOCOL_VERSION to 3, add `RecordingOnce` request +
+- [x] **Step 1:** Bump PROTOCOL_VERSION to 3, add `RecordingOnce` request +
   `RecordingResult` response. Update Phase 2 e2e tests that hardcode
   "protocol_version": 2 in raw JSON (they exist in `tests/reload.rs` and
   `voco-ipc/tests/e2e.rs`).
-- [ ] **Step 2:** Move `voco_asr::Segment` to a serde-friendly mirror in
+- [x] **Step 2:** Move `voco_asr::Segment` to a serde-friendly mirror in
   voco-ipc (or re-export). Decision: **mirror** — we don't want
   voco-ipc to depend on voco-asr.
 - [ ] **Step 3:** Add `voco-daemon/src/session.rs` with `RecordingSession`
