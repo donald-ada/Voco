@@ -562,7 +562,7 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
     warning: max duration reached
     timing: first partial 1964ms, total 3338ms
     ```
-- [ ] **Step 3:** Phase verification gates: fmt + clippy + test + release
+- [x] **Step 3:** Phase verification gates: fmt + clippy + test + release
   build all green. Run `voco doctor` end-to-end (with creds), verify
   "Doubao handshake" still ✓ and a fresh "Last session" line shows the
   most recent latency.
@@ -578,6 +578,11 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - 2026-05-03 after credentials: `voco doctor` shows
     `Doubao handshake (handshake ok (191ms, empty final))`; full doctor still
     exits non-zero because Accessibility/Input Monitoring are not granted.
+  - 2026-05-03 after granting Ghostty as the responsible app, full
+    `voco doctor` from the user shell passed:
+    `Summary: 9 ok / 0 warn / 0 fail / 3 skip`; Doubao handshake remained ok
+    with an empty-final probe. Codex-shell doctor still reports local TCC
+    failures because Codex itself is not granted those permissions.
 - [x] **Step 4:** Commit:
   ```
   fix(asr): stabilize live Doubao verification
