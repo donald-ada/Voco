@@ -25,6 +25,11 @@ enum Cmd {
         #[command(subcommand)]
         action: DaemonAction,
     },
+    /// App bundle install and local app lifecycle.
+    App {
+        #[command(subcommand)]
+        action: AppAction,
+    },
     /// Configuration: wizard | show | set | edit | reset | validate
     Config {
         #[command(subcommand)]
@@ -70,6 +75,16 @@ pub enum DaemonAction {
 }
 
 #[derive(Subcommand)]
+pub enum AppAction {
+    /// Copy a generated Voco.app to ~/Applications and install its LaunchAgent.
+    Install {
+        /// Generated Voco.app bundle to install.
+        #[arg(long, value_name = "PATH")]
+        app_bundle: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum ConfigAction {
     /// Print the current config (access_token masked).
     Show {
@@ -97,6 +112,7 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Cmd::Status => commands::status::run(),
         Cmd::Daemon { action } => commands::daemon::run(action),
+        Cmd::App { action } => commands::app::run(action),
         Cmd::Config { action } => commands::config::run(action),
         Cmd::Doctor => commands::doctor::run(),
         Cmd::InternalRecord {
