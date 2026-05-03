@@ -1,6 +1,8 @@
 //! `voco daemon` — Phase 1 lifecycle: spawn, signal-stop, restart, tail logs.
 //! Phase 6 will replace this with launchctl-managed registration.
 
+mod launch_agent;
+
 use crate::DaemonAction;
 use anyhow::{anyhow, bail, Result};
 use std::os::unix::net::UnixStream;
