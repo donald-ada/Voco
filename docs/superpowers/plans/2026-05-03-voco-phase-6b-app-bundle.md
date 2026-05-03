@@ -597,9 +597,6 @@ Expected: no output.
 
 - [ ] **Step 8: Mark verification in this plan**
 
-Update this plan with a dated verification note under this task:
-
-```markdown
 Verification note (2026-05-03):
 
 - `cd hud && swift test && swift build && cd ..` passed.
@@ -609,7 +606,6 @@ Verification note (2026-05-03):
 - `packaging/tests/app_bundle_smoke.sh` passed.
 - `plutil -lint target/Voco.app/Contents/Info.plist` passed.
 - `git diff --check` passed.
-```
 
 - [ ] **Step 9: Commit verification update**
 
