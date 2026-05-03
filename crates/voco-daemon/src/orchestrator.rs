@@ -232,6 +232,7 @@ impl Orchestrator {
         };
         let state = self.state.clone();
         let stats = self.stats.clone();
+        let hud = self.hud.clone();
         tokio::spawn(async move {
             match active.response_rx.await {
                 Ok(Response::Error { message }) => {
@@ -245,6 +246,8 @@ impl Orchestrator {
                         .await
                         .record_failure("recording task stopped", now_unix_secs());
                     *state.write().await = DaemonState::Idle;
+                    let _ = hud.send(crate::hud::HudEvent::error("recording task stopped"));
+                    spawn_delayed_hud_hide(hud.clone());
                 }
             }
         });
@@ -265,6 +268,10 @@ impl Orchestrator {
                     .await
                     .record_failure("recording task stopped", now_unix_secs());
                 *self.state.write().await = DaemonState::Idle;
+                let _ = self
+                    .hud
+                    .send(crate::hud::HudEvent::error("recording task stopped"));
+                spawn_delayed_hud_hide(self.hud.clone());
                 Response::Error {
                     message: "recording task stopped".into(),
                 }
@@ -714,6 +721,22 @@ mod recording_tests {
         }
     }
 
+    struct PanicAfterStopRunner;
+
+    #[async_trait]
+    impl RecordingRunner for PanicAfterStopRunner {
+        async fn run_once(
+            &self,
+            _config: Config,
+            _duration_ms: u32,
+            _include_partials: bool,
+            stop_rx: oneshot::Receiver<()>,
+        ) -> Result<RecordingPayload, SessionError> {
+            let _ = stop_rx.await;
+            panic!("recording task panic after stop");
+        }
+    }
+
     #[derive(Default)]
     struct FakeInjector {
         inserted: StdMutex<Vec<String>>,
@@ -763,6 +786,34 @@ mod recording_tests {
                 crate::hud::HudEvent::state(crate::hud::HudState::Recording),
                 crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
                 crate::hud::HudEvent::state(crate::hud::HudState::Hidden),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn recording_stop_task_drop_sends_hud_error_after_transcribing() {
+        let runner = Arc::new(PanicAfterStopRunner);
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner,
+            injector,
+            hud.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        match orch.handle(Request::RecordingStop).await {
+            Response::Error { message } => assert_eq!(message, "recording task stopped"),
+            other => panic!("expected stopped Error, got {other:?}"),
+        }
+
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![
+                crate::hud::HudEvent::state(crate::hud::HudState::Recording),
+                crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
+                crate::hud::HudEvent::error("recording task stopped"),
             ]
         );
     }
