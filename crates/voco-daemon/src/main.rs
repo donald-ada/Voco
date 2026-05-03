@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use voco_config::ConfigIo;
-use voco_daemon::{default_socket_path, logs_dir, Orchestrator};
+use voco_daemon::{default_socket_path, hud, logs_dir, Orchestrator};
 use voco_hotkey::{HotkeyEvent, HotkeyManager};
 use voco_ipc::server::IpcServer;
 
@@ -23,7 +23,8 @@ async fn main() -> anyhow::Result<()> {
     let socket_path = default_socket_path();
     let server = IpcServer::bind(&socket_path)?;
 
-    let orch = Arc::new(Orchestrator::new(cfg));
+    let hud_sink = hud::default_hud_sink();
+    let orch = Arc::new(Orchestrator::new_with_hud(cfg, hud_sink.clone()));
     let shutdown = orch.shutdown_signal();
     let (hotkey_tx, mut hotkey_rx) = tokio::sync::mpsc::channel(8);
 
@@ -69,6 +70,8 @@ async fn main() -> anyhow::Result<()> {
     serve_handle.abort();
     hotkey_handle.abort();
     drop(hotkey_manager);
+    let _ = hud_sink.send(hud::HudEvent::state(hud::HudState::Hidden));
+    drop(hud_sink);
     info!("voco-daemon stopped");
     Ok(())
 }

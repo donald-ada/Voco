@@ -25,6 +25,7 @@ pub struct Orchestrator {
     recording_runner: Arc<dyn RecordingRunner>,
     text_injector: Arc<dyn TextInjector>,
     active_recording: Arc<Mutex<Option<ActiveRecording>>>,
+    hud: crate::hud::SharedHudSink,
 }
 
 impl Orchestrator {
@@ -32,14 +33,29 @@ impl Orchestrator {
         Self::with_runner(config, default_recording_runner())
     }
 
+    pub fn new_with_hud(config: Config, hud: crate::hud::SharedHudSink) -> Self {
+        Self::with_parts(
+            config,
+            default_recording_runner(),
+            default_text_injector(),
+            hud,
+        )
+    }
+
     fn with_runner(config: Config, recording_runner: Arc<dyn RecordingRunner>) -> Self {
-        Self::with_parts(config, recording_runner, default_text_injector())
+        Self::with_parts(
+            config,
+            recording_runner,
+            default_text_injector(),
+            crate::hud::noop_hud_sink(),
+        )
     }
 
     fn with_parts(
         config: Config,
         recording_runner: Arc<dyn RecordingRunner>,
         text_injector: Arc<dyn TextInjector>,
+        hud: crate::hud::SharedHudSink,
     ) -> Self {
         let backend = backend_label(&config);
         Self {
@@ -51,6 +67,7 @@ impl Orchestrator {
             recording_runner,
             text_injector,
             active_recording: Arc::new(Mutex::new(None)),
+            hud,
         }
     }
 
@@ -65,7 +82,22 @@ impl Orchestrator {
         recording_runner: Arc<dyn RecordingRunner>,
         text_injector: Arc<dyn TextInjector>,
     ) -> Self {
-        Self::with_parts(config, recording_runner, text_injector)
+        Self::with_parts(
+            config,
+            recording_runner,
+            text_injector,
+            crate::hud::noop_hud_sink(),
+        )
+    }
+
+    #[cfg(test)]
+    fn with_runner_injector_and_hud(
+        config: Config,
+        recording_runner: Arc<dyn RecordingRunner>,
+        text_injector: Arc<dyn TextInjector>,
+        hud: crate::hud::SharedHudSink,
+    ) -> Self {
+        Self::with_parts(config, recording_runner, text_injector, hud)
     }
 
     pub fn shutdown_signal(&self) -> Arc<Notify> {
@@ -112,6 +144,8 @@ impl Orchestrator {
                     self.config.clone(),
                     self.text_injector.clone(),
                     false,
+                    crate::hud::noop_hud_sink(),
+                    false,
                 )
                 .await
             }
@@ -122,6 +156,8 @@ impl Orchestrator {
                     self.stats.clone(),
                     self.config.clone(),
                     self.text_injector.clone(),
+                    false,
+                    crate::hud::noop_hud_sink(),
                     false,
                 )
                 .await
@@ -139,6 +175,9 @@ impl Orchestrator {
             }
             *state = DaemonState::Recording;
         }
+        let _ = self
+            .hud
+            .send(crate::hud::HudEvent::state(crate::hud::HudState::Recording));
 
         let cfg = self.config.read().await.clone();
         let duration_ms = cfg.recording_max_duration_secs.saturating_mul(1_000);
@@ -150,11 +189,13 @@ impl Orchestrator {
         let config = self.config.clone();
         let injector = self.text_injector.clone();
         let active_slot = self.active_recording.clone();
+        let hud = self.hud.clone();
 
         tokio::spawn(async move {
             let result = runner.run_once(cfg, duration_ms, false, stop_rx).await;
             let response =
-                finalize_recording_result(result, state, stats, config, injector, true).await;
+                finalize_recording_result(result, state, stats, config, injector, true, hud, true)
+                    .await;
             let mut active = active_slot.lock().await;
             active.take();
             drop(active);
@@ -178,6 +219,9 @@ impl Orchestrator {
             let _ = stop_tx.send(());
         }
         *self.state.write().await = DaemonState::Transcribing;
+        let _ = self.hud.send(crate::hud::HudEvent::state(
+            crate::hud::HudState::Transcribing,
+        ));
         Ok(active)
     }
 
@@ -408,6 +452,7 @@ fn payload_to_response(payload: RecordingPayload) -> Response {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn finalize_recording_result(
     result: Result<RecordingPayload, SessionError>,
     state: Arc<RwLock<DaemonState>>,
@@ -415,6 +460,8 @@ async fn finalize_recording_result(
     config: Arc<RwLock<Config>>,
     injector: Arc<dyn TextInjector>,
     inject: bool,
+    hud: crate::hud::SharedHudSink,
+    show_hud: bool,
 ) -> Response {
     match result {
         Ok(payload) => {
@@ -437,6 +484,11 @@ async fn finalize_recording_result(
                             .await
                             .record_failure(format!("injection: {err}"), now_unix_secs());
                         *state.write().await = DaemonState::Idle;
+                        if show_hud {
+                            let _ =
+                                hud.send(crate::hud::HudEvent::error(format!("injection: {err}")));
+                            spawn_delayed_hud_hide(hud.clone());
+                        }
                         return Response::Error {
                             message: format!("injection: {err}"),
                         };
@@ -445,6 +497,9 @@ async fn finalize_recording_result(
             }
             stats.write().await.record_success(&payload);
             *state.write().await = DaemonState::Idle;
+            if show_hud {
+                let _ = hud.send(crate::hud::HudEvent::state(crate::hud::HudState::Hidden));
+            }
             payload_to_response(payload)
         }
         Err(err) => {
@@ -454,11 +509,22 @@ async fn finalize_recording_result(
                 .await
                 .record_failure(err.to_string(), now_unix_secs());
             *state.write().await = DaemonState::Idle;
+            if show_hud {
+                let _ = hud.send(crate::hud::HudEvent::error(err.to_string()));
+                spawn_delayed_hud_hide(hud.clone());
+            }
             Response::Error {
                 message: format!("recording: {err}"),
             }
         }
     }
+}
+
+fn spawn_delayed_hud_hide(hud: crate::hud::SharedHudSink) {
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let _ = hud.send(crate::hud::HudEvent::state(crate::hud::HudState::Hidden));
+    });
 }
 
 fn backend_label(cfg: &Config) -> String {
@@ -662,6 +728,64 @@ mod recording_tests {
             self.inserted.lock().unwrap().push(text.to_string());
             Ok(InjectionOutcome::Injected)
         }
+    }
+
+    #[derive(Default)]
+    struct FakeHudSink {
+        events: StdMutex<Vec<crate::hud::HudEvent>>,
+    }
+
+    impl crate::hud::HudSink for FakeHudSink {
+        fn send(&self, event: crate::hud::HudEvent) -> Result<(), crate::hud::HudError> {
+            self.events.lock().unwrap().push(event);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn recording_start_stop_sends_hud_state_sequence() {
+        let runner = Arc::new(StopAwareRunner::new());
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner,
+            injector,
+            hud.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        let _ = orch.handle(Request::RecordingStop).await;
+
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![
+                crate::hud::HudEvent::state(crate::hud::HudState::Recording),
+                crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
+                crate::hud::HudEvent::state(crate::hud::HudState::Hidden),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn recording_once_does_not_show_hud() {
+        let runner = Arc::new(FakeRecordingRunner::new(std::time::Duration::ZERO));
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner,
+            injector,
+            hud.clone(),
+        );
+
+        let _ = orch
+            .handle(Request::RecordingOnce {
+                duration_ms: 100,
+                include_partials: false,
+            })
+            .await;
+        assert!(hud.events.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
