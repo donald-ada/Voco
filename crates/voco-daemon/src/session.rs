@@ -261,17 +261,17 @@ fn spawn_amplitude_forwarder(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(std::time::Duration::from_millis(16));
+        let mut latest = *rx.borrow_and_update();
         loop {
             tokio::select! {
                 changed = rx.changed() => {
                     if changed.is_err() {
                         break;
                     }
-                    let value = crate::hud::clamp_amplitude(*rx.borrow_and_update());
-                    let _ = hud.send(crate::hud::HudEvent::amplitude(value));
+                    latest = *rx.borrow_and_update();
                 }
                 _ = ticker.tick() => {
-                    let value = crate::hud::clamp_amplitude(*rx.borrow_and_update());
+                    let value = crate::hud::clamp_amplitude(latest);
                     let _ = hud.send(crate::hud::HudEvent::amplitude(value));
                 }
             }
@@ -388,6 +388,34 @@ mod tests {
             .lock()
             .unwrap()
             .contains(&crate::hud::HudEvent::amplitude(1.0)));
+    }
+
+    #[tokio::test]
+    async fn amplitude_forwarder_is_capped_to_ticker() {
+        let (amp_tx, amp_rx) = tokio::sync::watch::channel(0.0_f32);
+        let hud = std::sync::Arc::new(FakeHudSink::default());
+        let started_at = std::time::Instant::now();
+        let task = spawn_amplitude_forwarder(amp_rx, hud.clone());
+
+        let updater = tokio::spawn(async move {
+            for i in 0..80 {
+                amp_tx.send((i as f32) / 80.0).unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        });
+        updater.await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        task.abort();
+
+        let event_count = hud.events.lock().unwrap().len();
+        let expected_tick_ceiling = (started_at.elapsed().as_millis()
+            / std::time::Duration::from_millis(16).as_millis())
+            + 4;
+        assert!(
+            event_count as u128 <= expected_tick_ceiling,
+            "expected ticker-capped HUD events, got {event_count} after {:?}",
+            started_at.elapsed()
+        );
     }
 
     #[tokio::test]

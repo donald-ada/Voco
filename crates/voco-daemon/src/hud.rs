@@ -294,7 +294,11 @@ pub fn event_to_json_line(event: &HudEvent) -> Result<String, HudError> {
 }
 
 pub fn clamp_amplitude(value: f32) -> f32 {
-    value.clamp(0.0, 1.0)
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -320,6 +324,13 @@ mod tests {
     fn amplitude_event_is_clamped_before_serializing() {
         let line = event_to_json_line(&HudEvent::amplitude(1.4)).unwrap();
         assert_eq!(line, "{\"type\":\"amplitude\",\"value\":1.0}\n");
+    }
+
+    #[test]
+    fn amplitude_clamp_rejects_non_finite_values() {
+        assert_eq!(clamp_amplitude(f32::NAN), 0.0);
+        assert_eq!(clamp_amplitude(f32::INFINITY), 0.0);
+        assert_eq!(clamp_amplitude(f32::NEG_INFINITY), 0.0);
     }
 
     #[test]
