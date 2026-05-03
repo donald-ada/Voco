@@ -386,7 +386,7 @@ add `last_logid` to the printer (one line: "  last logid: ...").
 - [x] **Step 3:** Add `voco-daemon/src/session.rs` with `RecordingSession`
   unit tests using a `MockBackend` (impl AsrBackend, returns canned
   partials/final).
-- [ ] **Step 4:** Add `voco-daemon/src/stats.rs` + Stats unit tests.
+- [x] **Step 4:** Add `voco-daemon/src/stats.rs` + Stats unit tests.
 - [ ] **Step 5:** Wire orchestrator to handle `RecordingOnce`:
   - state guard: only Idle accepts; other states return Error.
   - build_backend once at daemon start; reuse across sessions
