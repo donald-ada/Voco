@@ -1,13 +1,23 @@
 # packaging/
 
-LaunchAgent template + bundle assets.
+LaunchAgent template and future bundle assets.
 
 ## com.voco.daemon.plist.tmpl
 
-Templated LaunchAgent. Phase 6 will:
-1. Substitute `{{VOCO_DAEMON_PATH}}` and `{{HOME}}`
-2. Write to `~/Library/LaunchAgents/com.voco.daemon.plist`
-3. `launchctl load -w ~/Library/LaunchAgents/com.voco.daemon.plist`
+`voco daemon install` renders this template to:
 
-For now (Phase 1) the daemon is started with `voco daemon start`,
-which spawns the process directly.
+```text
+~/Library/LaunchAgents/com.voco.daemon.plist
+```
+
+Template variables:
+
+```text
+{{VOCO_DAEMON_PATH}} absolute path to voco-daemon
+{{HOME}}             user home directory
+{{WORKING_DIR}}      daemon working directory
+```
+
+Phase 6-A uses a user-level LaunchAgent and does not require `sudo`.
+
+`Voco.app`, signing, notarization, and installer packaging are deferred.
