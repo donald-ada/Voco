@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 pub const LABEL: &str = "com.voco.daemon";
@@ -10,8 +11,46 @@ pub struct LaunchAgentPaths {
     pub home: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallOutcome {
+    Created,
+    Updated,
+    Unchanged,
+}
+
 pub fn render_plist(paths: &LaunchAgentPaths) -> String {
     render_plist_from_template(plist_template(), paths)
+}
+
+pub fn install_plist(path: &Path, rendered: &str) -> Result<InstallOutcome> {
+    let existed = path.exists();
+    if let Ok(existing) = std::fs::read_to_string(path) {
+        if existing == rendered {
+            return Ok(InstallOutcome::Unchanged);
+        }
+    }
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let tmp_path = path.with_extension("plist.tmp");
+    std::fs::write(&tmp_path, rendered)?;
+    std::fs::rename(&tmp_path, path)?;
+
+    Ok(if existed {
+        InstallOutcome::Updated
+    } else {
+        InstallOutcome::Created
+    })
+}
+
+pub fn remove_plist(path: &Path) -> Result<bool> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err.into()),
+    }
 }
 
 fn render_plist_from_template(template: &str, paths: &LaunchAgentPaths) -> String {
@@ -136,6 +175,82 @@ mod tests {
         let daemon = bin_dir.join("voco-daemon");
 
         assert_eq!(choose_working_dir(tmp.path(), &daemon), bin_dir);
+        Ok(())
+    }
+
+    fn temp_paths(tmp: &tempfile::TempDir) -> LaunchAgentPaths {
+        LaunchAgentPaths {
+            plist_path: tmp
+                .path()
+                .join("home/Library/LaunchAgents/com.voco.daemon.plist"),
+            daemon_path: tmp.path().join("bin/voco-daemon"),
+            working_dir: tmp.path().join("bin"),
+            home: tmp.path().join("home"),
+        }
+    }
+
+    #[test]
+    fn install_plist_creates_file_and_parent_dir() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let paths = temp_paths(&tmp);
+        let rendered =
+            "<plist><dict><key>Label</key><string>com.voco.daemon</string></dict></plist>";
+
+        assert_eq!(
+            install_plist(&paths.plist_path, rendered)?,
+            InstallOutcome::Created
+        );
+        assert_eq!(std::fs::read_to_string(&paths.plist_path)?, rendered);
+        Ok(())
+    }
+
+    #[test]
+    fn install_plist_reports_unchanged_for_identical_content() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let paths = temp_paths(&tmp);
+        let rendered = "<plist>same</plist>";
+
+        assert_eq!(
+            install_plist(&paths.plist_path, rendered)?,
+            InstallOutcome::Created
+        );
+        assert_eq!(
+            install_plist(&paths.plist_path, rendered)?,
+            InstallOutcome::Unchanged
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn install_plist_reports_updated_for_different_content() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let paths = temp_paths(&tmp);
+
+        assert_eq!(
+            install_plist(&paths.plist_path, "<plist>old</plist>")?,
+            InstallOutcome::Created
+        );
+        assert_eq!(
+            install_plist(&paths.plist_path, "<plist>new</plist>")?,
+            InstallOutcome::Updated
+        );
+        assert_eq!(
+            std::fs::read_to_string(&paths.plist_path)?,
+            "<plist>new</plist>"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn remove_plist_is_idempotent() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let paths = temp_paths(&tmp);
+
+        assert!(!remove_plist(&paths.plist_path)?);
+        install_plist(&paths.plist_path, "<plist/>")?;
+        assert!(remove_plist(&paths.plist_path)?);
+        assert!(!paths.plist_path.exists());
+        assert!(!remove_plist(&paths.plist_path)?);
         Ok(())
     }
 }
