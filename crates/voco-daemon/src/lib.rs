@@ -1,3 +1,4 @@
+pub mod hud;
 pub mod orchestrator;
 pub mod paths;
 pub mod reload;
