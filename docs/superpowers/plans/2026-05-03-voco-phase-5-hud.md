@@ -1541,7 +1541,7 @@ git commit -m "docs: document Phase 5 HUD development workflow"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-03-voco-phase-5-hud.md`
 
-- [ ] **Step 1: Run final gates**
+- [x] **Step 1: Run final gates**
 
 Run:
 
@@ -1556,7 +1556,17 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 2: Mark verification checkboxes complete**
+Task 8 note (2026-05-03):
+- `cd hud && swift test && swift build && cd ..` did not complete because `swift test` is environment-blocked: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`.
+- `cd hud && swift build` passed when run separately.
+- `cargo fmt --all --check` passed.
+- `cargo test --workspace` passed: all Rust workspace tests passed; live network/microphone tests remained ignored as designed.
+- `cargo clippy --workspace --all-targets -- -D warnings` passed.
+- `cargo build --workspace --release` passed.
+- `git diff --check` passed.
+- Manual hotkey HUD visual smoke and idle HUD visual smoke remain unchecked.
+
+- [x] **Step 2: Mark verification checkboxes complete**
 
 Edit this plan's verification rows for the commands that passed. Leave manual rows unchecked until verified on the machine.
 
