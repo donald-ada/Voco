@@ -148,7 +148,7 @@ Responsibilities:
 
 - Resolve the repository root from the script path.
 - Parse `--profile debug` and `--profile release`.
-- Run `cargo build --workspace --profile <profile>` for Rust.
+- Run `cargo build --workspace` for debug Rust builds and `cargo build --workspace --release` for release Rust builds.
 - Run `swift build -c <configuration>` inside `hud/`.
 - Remove any previous `target/Voco.app` before recreating it.
 - Create `Contents/MacOS`.
