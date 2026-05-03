@@ -1427,7 +1427,7 @@ git commit -m "feat(daemon): forward recording amplitude to HUD"
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-05-03-voco-phase-5-hud.md`
 
-- [ ] **Step 1: Add developer run notes**
+- [x] **Step 1: Add developer run notes**
 
 Append to `README.md`:
 
@@ -1446,7 +1446,7 @@ cargo build --workspace
 During development, `voco-daemon` resolves `hud/.build/debug/voco-hud` and starts it hidden. The HUD window remains hidden while idle and appears only while recording, transcribing, or showing an error.
 ```
 
-- [ ] **Step 2: Build all artifacts**
+- [x] **Step 2: Build all artifacts**
 
 Run:
 
@@ -1469,6 +1469,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 Expected: all pass.
+
+Task 7 note (2026-05-03):
+- `cd hud && swift build && cd .. && cargo build --workspace` passed.
+- `cd hud && swift test` is environment-blocked on this machine with CommandLineTools XCTest unavailable: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`. I did not run `sudo`, change global `xcode-select`, or accept the Xcode license.
+- Rust checks passed separately: `cargo fmt --all --check`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`.
+- Lifecycle smoke did not pass: pre-check `target/debug/voco status` reported daemon not running; `target/debug/voco daemon start` returned `daemon started (pid 36992)`, but immediate `target/debug/voco status` reported daemon not running and `pgrep -x voco-hud` found no helper. `target/debug/voco daemon stop` then reported daemon already stopped.
+- Manual hotkey HUD smoke was not visually verified.
 
 - [ ] **Step 4: Manual lifecycle smoke**
 
@@ -1502,7 +1509,7 @@ Manual steps:
 8. Run `target/debug/voco status` and confirm one successful session was recorded.
 ```
 
-- [ ] **Step 6: Stop daemon and verify helper exits**
+- [x] **Step 6: Stop daemon and verify helper exits**
 
 Run:
 
@@ -1513,7 +1520,7 @@ pgrep -af voco-hud || true
 
 Expected: no `voco-hud` helper remains.
 
-- [ ] **Step 7: Commit docs**
+- [x] **Step 7: Commit docs**
 
 Run:
 

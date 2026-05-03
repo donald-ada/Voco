@@ -14,6 +14,19 @@ Phase 1 (scaffold) in progress. Not yet usable as a voice-input tool.
 cargo build --release
 ```
 
+## Phase 5 HUD Development
+
+Build the Swift HUD helper before running the daemon from source:
+
+```bash
+cd hud
+swift build
+cd ..
+cargo build --workspace
+```
+
+During development, `voco-daemon` resolves `hud/.build/debug/voco-hud` and starts it hidden. The HUD window remains hidden while idle and appears only while recording, transcribing, or showing an error.
+
 ## License
 
 MIT
