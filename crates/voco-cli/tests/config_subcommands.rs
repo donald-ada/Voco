@@ -127,6 +127,26 @@ fn set_token_message_is_masked() -> anyhow::Result<()> {
 }
 
 #[test]
+fn set_creates_doubao_section_with_seed_asr_2_resource_id() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+
+    voco(&tmp)
+        .args(["config", "set", "doubao.app_id", "APP-2"])
+        .assert()
+        .success();
+
+    voco(&tmp)
+        .args(["config", "show"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "resource_id = \"volc.seedasr.sauc.duration\"",
+        ));
+
+    Ok(())
+}
+
+#[test]
 fn set_unknown_key_fails() -> anyhow::Result<()> {
     let tmp = tempfile::tempdir()?;
     voco(&tmp)

@@ -729,6 +729,47 @@ mod recording_tests {
         }
     }
 
+    struct DurationCapturingRunner {
+        payload: RecordingPayload,
+        durations: Mutex<Vec<u32>>,
+        calls: AtomicUsize,
+    }
+
+    impl DurationCapturingRunner {
+        fn new() -> Self {
+            Self {
+                payload: RecordingPayload {
+                    text: "duration final".into(),
+                    segments: vec![],
+                    partials: vec![],
+                    logid: Some("duration-log".into()),
+                    first_partial_ms: Some(90),
+                    total_latency_ms: 510,
+                    error_hint: None,
+                },
+                durations: Mutex::new(Vec::new()),
+                calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl RecordingRunner for DurationCapturingRunner {
+        async fn run_once(
+            &self,
+            _config: Config,
+            duration_ms: u32,
+            _include_partials: bool,
+            stop_rx: oneshot::Receiver<()>,
+            _hud: Option<crate::hud::SharedHudSink>,
+        ) -> Result<RecordingPayload, SessionError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.durations.lock().await.push(duration_ms);
+            let _ = stop_rx.await;
+            Ok(self.payload.clone())
+        }
+    }
+
     struct PanicAfterStopRunner;
 
     #[async_trait]
@@ -797,6 +838,56 @@ mod recording_tests {
                 crate::hud::HudEvent::state(crate::hud::HudState::Hidden),
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn recording_start_uses_long_default_and_hud_stays_visible_until_stop() {
+        let runner = Arc::new(DurationCapturingRunner::new());
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner.clone(),
+            injector,
+            hud.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+
+        for _ in 0..10 {
+            if !runner.durations.lock().await.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        assert_eq!(*runner.durations.lock().await, vec![300_000]);
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "recording"),
+            other => panic!("expected recording Status, got {other:?}"),
+        }
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![crate::hud::HudEvent::state(crate::hud::HudState::Recording)]
+        );
+
+        match orch.handle(Request::RecordingStop).await {
+            Response::RecordingResult { text, logid, .. } => {
+                assert_eq!(text, "duration final");
+                assert_eq!(logid.as_deref(), Some("duration-log"));
+            }
+            other => panic!("expected RecordingResult, got {other:?}"),
+        }
+
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![
+                crate::hud::HudEvent::state(crate::hud::HudState::Recording),
+                crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
+                crate::hud::HudEvent::state(crate::hud::HudState::Hidden),
+            ]
+        );
+        assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

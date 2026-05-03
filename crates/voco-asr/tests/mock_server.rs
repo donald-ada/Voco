@@ -141,7 +141,7 @@ async fn handshake_audio_final_roundtrip() {
     assert!(
         headers
             .iter()
-            .any(|h| h.starts_with("x-api-resource-id=volc.bigasr.sauc.duration")),
+            .any(|h| h.starts_with("x-api-resource-id=volc.seedasr.sauc.duration")),
         "missing resource-id: {headers:?}"
     );
 }

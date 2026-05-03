@@ -19,6 +19,19 @@ fn default_doubao_endpoint_uses_simple_streaming_protocol() {
 }
 
 #[test]
+fn default_recording_duration_supports_long_dictation() {
+    assert_eq!(Config::default().recording_max_duration_secs, 300);
+}
+
+#[test]
+fn default_doubao_resource_id_uses_seed_asr_2_hourly() {
+    assert_eq!(
+        DoubaoCreds::default().resource_id,
+        "volc.seedasr.sauc.duration"
+    );
+}
+
+#[test]
 fn default_is_invalid_in_strict_mode() {
     // Default has backend=Doubao but no creds. Strict mode rejects.
     let cfg = Config::default();
