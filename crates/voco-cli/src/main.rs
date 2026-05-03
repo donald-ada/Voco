@@ -133,9 +133,14 @@ mod tests {
             }
         ));
 
-        let install_bundle =
-            Cli::try_parse_from(["voco", "daemon", "install", "--app-bundle", "target/Voco.app"])
-                .unwrap();
+        let install_bundle = Cli::try_parse_from([
+            "voco",
+            "daemon",
+            "install",
+            "--app-bundle",
+            "target/Voco.app",
+        ])
+        .unwrap();
         match install_bundle.command {
             Cmd::Daemon {
                 action:

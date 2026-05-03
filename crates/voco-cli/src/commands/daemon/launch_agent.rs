@@ -3,6 +3,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 pub const LABEL: &str = "com.voco.daemon";
+const EXPECTED_BUNDLE_ID: &str = "com.voco.app";
+const EXPECTED_BUNDLE_EXECUTABLE: &str = "voco-daemon";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LaunchAgentPaths {
@@ -23,6 +25,69 @@ pub enum InstallOutcome {
 pub struct LaunchAgent {
     pub label: &'static str,
     pub paths: LaunchAgentPaths,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppBundle {
+    pub bundle_path: PathBuf,
+    pub info_plist_path: PathBuf,
+    pub daemon_path: PathBuf,
+    pub working_dir: PathBuf,
+}
+
+impl AppBundle {
+    pub fn discover(path: impl AsRef<Path>) -> Result<Self> {
+        let supplied = path.as_ref();
+        if !supplied.is_dir() {
+            return Err(anyhow::anyhow!(
+                "app bundle not found: {}",
+                supplied.display()
+            ));
+        }
+
+        let bundle_path = supplied.canonicalize()?;
+        let info_plist_path = bundle_path.join("Contents/Info.plist");
+        if !info_plist_path.is_file() {
+            return Err(anyhow::anyhow!(
+                "missing app bundle Info.plist: {}",
+                info_plist_path.display()
+            ));
+        }
+
+        let working_dir = bundle_path.join("Contents/MacOS");
+        let daemon_path = working_dir.join(EXPECTED_BUNDLE_EXECUTABLE);
+        if !is_executable_file(&daemon_path) {
+            return Err(anyhow::anyhow!(
+                "missing executable in app bundle: {}",
+                daemon_path.display()
+            ));
+        }
+
+        let bundle_id = read_plist_key(&info_plist_path, "CFBundleIdentifier")?;
+        if bundle_id != EXPECTED_BUNDLE_ID {
+            return Err(anyhow::anyhow!(
+                "unexpected CFBundleIdentifier in {}: {}",
+                info_plist_path.display(),
+                bundle_id
+            ));
+        }
+
+        let executable = read_plist_key(&info_plist_path, "CFBundleExecutable")?;
+        if executable != EXPECTED_BUNDLE_EXECUTABLE {
+            return Err(anyhow::anyhow!(
+                "unexpected CFBundleExecutable in {}: {}",
+                info_plist_path.display(),
+                executable
+            ));
+        }
+
+        Ok(Self {
+            bundle_path,
+            info_plist_path,
+            daemon_path,
+            working_dir,
+        })
+    }
 }
 
 impl LaunchAgent {
@@ -154,6 +219,44 @@ pub fn launchctl_error(action: &str, target: &str, output: &LaunchctlOutput) -> 
         },
         output.stdout.trim()
     )
+}
+
+fn read_plist_key(plist_path: &Path, key: &str) -> Result<String> {
+    let output = std::process::Command::new("/usr/libexec/PlistBuddy")
+        .arg("-c")
+        .arg(format!("Print :{key}"))
+        .arg(plist_path)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "read {key} from {} failed: {}",
+            plist_path.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    is_executable_file_platform(path)
+}
+
+#[cfg(unix)]
+fn is_executable_file_platform(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file_platform(path: &Path) -> bool {
+    path.is_file()
 }
 
 fn run_launchctl<I, S>(args: I) -> Result<LaunchctlOutput>
@@ -438,9 +541,7 @@ mod tests {
 
         let err = AppBundle::discover(&bundle).unwrap_err();
 
-        assert!(err
-            .to_string()
-            .contains("missing executable in app bundle"));
+        assert!(err.to_string().contains("missing executable in app bundle"));
         Ok(())
     }
 
@@ -459,9 +560,7 @@ mod tests {
 
         let err = AppBundle::discover(&bundle).unwrap_err();
 
-        assert!(err
-            .to_string()
-            .contains("missing executable in app bundle"));
+        assert!(err.to_string().contains("missing executable in app bundle"));
         Ok(())
     }
 

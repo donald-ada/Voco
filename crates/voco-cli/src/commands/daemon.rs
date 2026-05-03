@@ -67,7 +67,9 @@ fn uninstall() -> Result<()> {
     Ok(())
 }
 
-fn discover_launch_agent(app_bundle: Option<&std::path::Path>) -> Result<launch_agent::LaunchAgent> {
+fn discover_launch_agent(
+    app_bundle: Option<&std::path::Path>,
+) -> Result<launch_agent::LaunchAgent> {
     if app_bundle.is_some() {
         bail!("--app-bundle is parsed but bundle discovery is not wired yet");
     }
