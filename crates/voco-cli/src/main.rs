@@ -124,9 +124,22 @@ mod tests {
         assert!(matches!(
             install.command,
             Cmd::Daemon {
-                action: DaemonAction::Install
+                action: DaemonAction::Install { app_bundle: None }
             }
         ));
+
+        let install_bundle =
+            Cli::try_parse_from(["voco", "daemon", "install", "--app-bundle", "target/Voco.app"])
+                .unwrap();
+        match install_bundle.command {
+            Cmd::Daemon {
+                action:
+                    DaemonAction::Install {
+                        app_bundle: Some(path),
+                    },
+            } => assert_eq!(path, std::path::PathBuf::from("target/Voco.app")),
+            _ => panic!("unexpected command"),
+        }
 
         let uninstall = Cli::try_parse_from(["voco", "daemon", "uninstall"]).unwrap();
         assert!(matches!(
