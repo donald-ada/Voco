@@ -495,14 +495,14 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
 
 ### 4.1 Steps
 
-- [ ] **Step 1:** Add the timeout via `tokio::select!` in
+- [x] **Step 1:** Add the timeout via `tokio::select!` in
   `RecordingSession::run`.
-- [ ] **Step 2:** Tests in `voco-daemon/src/session.rs`:
+- [x] **Step 2:** Tests in `voco-daemon/src/session.rs`:
   - `timeout_fires_returns_final_with_partials_so_far`
   - `pcm_channel_close_treats_as_eof`
   - `backend_error_propagates_with_partials_stitched`
   - `daemon_shutdown_aborts_session`
-- [ ] **Step 3:** Commit:
+- [x] **Step 3:** Commit:
   ```
   feat(daemon): recording timeout + error paths per spec §4.6
 

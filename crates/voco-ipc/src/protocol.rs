@@ -60,6 +60,7 @@ pub enum Response {
         logid: Option<String>,
         first_partial_ms: Option<u64>,
         total_latency_ms: u64,
+        error_hint: Option<String>,
     },
     Error {
         message: String,

@@ -187,6 +187,7 @@ impl RecordingRunner for DebugMockRecordingRunner {
             logid: Some("mock-logid".into()),
             first_partial_ms: Some(120),
             total_latency_ms: 240,
+            error_hint: None,
         })
     }
 }
@@ -208,6 +209,7 @@ fn payload_to_response(payload: RecordingPayload) -> Response {
         logid: payload.logid,
         first_partial_ms: payload.first_partial_ms,
         total_latency_ms: payload.total_latency_ms,
+        error_hint: payload.error_hint,
     }
 }
 
@@ -325,6 +327,7 @@ mod recording_tests {
                     logid: Some("log-xyz".into()),
                     first_partial_ms: Some(120),
                     total_latency_ms: 640,
+                    error_hint: None,
                 },
                 delay,
                 calls: AtomicUsize::new(0),

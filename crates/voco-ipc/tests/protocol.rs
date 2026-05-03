@@ -43,6 +43,7 @@ fn recording_result_roundtrips_segments_partials_and_timings() {
         logid: Some("log-1".into()),
         first_partial_ms: Some(120),
         total_latency_ms: 640,
+        error_hint: None,
     };
 
     let value = serde_json::to_value(&resp).unwrap();

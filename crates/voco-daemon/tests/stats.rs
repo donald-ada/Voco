@@ -20,6 +20,7 @@ fn payload(
         logid: logid.map(str::to_string),
         first_partial_ms,
         total_latency_ms,
+        error_hint: None,
     }
 }
 

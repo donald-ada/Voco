@@ -25,6 +25,7 @@ pub fn run(duration: String, show_partials: bool, debug_amp: bool) -> Result<()>
             logid,
             first_partial_ms,
             total_latency_ms,
+            error_hint,
             ..
         } => {
             if show_partials {
@@ -40,6 +41,9 @@ pub fn run(duration: String, show_partials: bool, debug_amp: bool) -> Result<()>
             println!("final: \"{text}\"");
             if let Some(logid) = logid {
                 println!("logid: {logid}");
+            }
+            if let Some(hint) = error_hint {
+                println!("warning: {hint}");
             }
             match first_partial_ms {
                 Some(ms) => println!("timing: first partial {ms}ms, total {total_latency_ms}ms"),
