@@ -142,9 +142,9 @@ Rust files:
 
 Doubao endpoint:
 
-- Keep `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel` in this refresh.
+- Use `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream` with Seed ASR 2.0 in this refresh.
 - The user-provided `volc.seedasr.sauc.duration` is a resource ID, not a WebSocket URL.
-- Do not switch to `bigmodel_async` in this plan. That endpoint can be evaluated separately because previous live verification stabilized on the simple streaming endpoint.
+- Do not switch to `bigmodel_async` in this plan. Live doctor probes showed `bigmodel_async` times out for the empty-audio doctor check, while `bigmodel_nostream` succeeds with `volc.seedasr.sauc.duration`.
 
 Tests:
 

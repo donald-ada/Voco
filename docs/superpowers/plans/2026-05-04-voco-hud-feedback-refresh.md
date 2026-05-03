@@ -4,7 +4,7 @@
 
 **Goal:** Refresh the HUD into the selected compact black/yellow/green design, make recording feedback animate immediately, reduce long-dictation cutoff, and default Doubao streaming ASR to Seed ASR 2.0 hourly.
 
-**Architecture:** Keep the existing Rust daemon -> JSONL stdin -> Swift HUD helper architecture. Swift owns visual state/rendering and uses `HudModel` plus theme constants; Rust config owns recording duration and Doubao resource defaults. Do not change the WebSocket endpoint in this plan; `volc.seedasr.sauc.duration` is a `resource_id`, not a URL.
+**Architecture:** Keep the existing Rust daemon -> JSONL stdin -> Swift HUD helper architecture. Swift owns visual state/rendering and uses `HudModel` plus theme constants; Rust config owns recording duration and Doubao resource defaults. Use `volc.seedasr.sauc.duration` as the Seed ASR 2.0 `resource_id`, and use the `bigmodel_nostream` WebSocket endpoint because live doctor probes showed `bigmodel` returns HTTP 400 with that resource and `bigmodel_async` times out for the empty-audio doctor check.
 
 **Tech Stack:** SwiftUI, XCTest, Rust 2021, cargo tests, existing `voco-config`, `voco-cli`, `voco-asr`, and `voco-daemon` crates.
 
@@ -17,10 +17,10 @@
 - Modify: `hud/Sources/VocoHUDCore/CapsuleView.swift` — implement black capsule, yellow mic, green waveform, immediate animation, and remove the yellow dot.
 - Modify: `hud/Sources/VocoHUD/main.swift` — size the panel to the compact HUD dimensions.
 - Modify: `hud/Tests/VocoHUDTests/HudEventTests.swift` — add model and theme tests.
-- Modify: `crates/voco-config/src/schema.rs` — default recording duration 300 seconds and default Doubao 2.0 `resource_id`.
+- Modify: `crates/voco-config/src/schema.rs` — default recording duration 300 seconds, default Doubao 2.0 `resource_id`, and default `bigmodel_nostream` endpoint.
 - Modify: `crates/voco-config/tests/validate.rs` — assert new config defaults.
-- Modify: `crates/voco-cli/src/commands/config/wizard.rs` — use Seed ASR 2.0 `resource_id` fallback for new Doubao config.
-- Modify: `crates/voco-cli/src/commands/config/set.rs` — use Seed ASR 2.0 `resource_id` fallback when `config set` creates a Doubao section.
+- Modify: `crates/voco-cli/src/commands/config/wizard.rs` — use Seed ASR 2.0 endpoint and `resource_id` fallbacks for new Doubao config.
+- Modify: `crates/voco-cli/src/commands/config/set.rs` — use Seed ASR 2.0 endpoint and `resource_id` fallbacks when `config set` creates a Doubao section.
 - Modify: `crates/voco-cli/tests/config_subcommands.rs` — assert CLI fallback writes Seed ASR 2.0 `resource_id`.
 - Modify: `crates/voco-asr/tests/mock_server.rs` — assert outgoing header uses Seed ASR 2.0 `resource_id`.
 - Modify: `crates/voco-daemon/src/orchestrator.rs` — add a regression guard that hotkey recording stays active and HUD stays visible until explicit stop, with the 300-second default cap.
@@ -522,7 +522,7 @@ git commit -m "feat(hud): refresh recording HUD visuals"
 
 - [ ] **Step 1: Add failing config default tests**
 
-In `crates/voco-config/tests/validate.rs`, add these tests after `default_doubao_endpoint_uses_simple_streaming_protocol`:
+In `crates/voco-config/tests/validate.rs`, add these tests after `default_doubao_endpoint_uses_seed_asr_2_streaming_input_protocol`:
 
 ```rust
 #[test]
@@ -571,6 +571,9 @@ fn set_creates_doubao_section_with_seed_asr_2_resource_id() -> anyhow::Result<()
         .args(["config", "show"])
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "endpoint = \"wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream\"",
+        ))
         .stdout(predicate::str::contains(
             "resource_id = \"volc.seedasr.sauc.duration\"",
         ));
@@ -709,7 +712,7 @@ git commit -m "test(config): cover long recording and Seed ASR defaults"
 - Modify: `crates/voco-cli/src/commands/config/wizard.rs`
 - Modify: `crates/voco-cli/src/commands/config/set.rs`
 
-- [ ] **Step 1: Update default resource ID and recording duration**
+- [ ] **Step 1: Update default resource ID, endpoint, and recording duration**
 
 In `crates/voco-config/src/schema.rs`, replace:
 
@@ -730,6 +733,18 @@ fn default_resource_id() -> String {
 In the same file, replace:
 
 ```rust
+endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
+```
+
+with:
+
+```rust
+endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream".to_string(),
+```
+
+In the same file, replace:
+
+```rust
 recording_max_duration_secs: 60,
 ```
 
@@ -739,7 +754,21 @@ with:
 recording_max_duration_secs: 300,
 ```
 
-- [ ] **Step 2: Update config wizard fallback**
+- [ ] **Step 2: Update config wizard fallbacks**
+
+In `crates/voco-cli/src/commands/config/wizard.rs`, replace:
+
+```rust
+        .unwrap_or_else(|| "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string());
+```
+
+with:
+
+```rust
+        .unwrap_or_else(|| {
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream".to_string()
+        });
+```
 
 In `crates/voco-cli/src/commands/config/wizard.rs`, replace:
 
@@ -753,7 +782,19 @@ with:
             .unwrap_or_else(|| "volc.seedasr.sauc.duration".to_string()),
 ```
 
-- [ ] **Step 3: Update config set fallback**
+- [ ] **Step 3: Update config set fallbacks**
+
+In `crates/voco-cli/src/commands/config/set.rs`, replace:
+
+```rust
+        endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
+```
+
+with:
+
+```rust
+        endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream".to_string(),
+```
 
 In `crates/voco-cli/src/commands/config/set.rs`, replace:
 
@@ -834,7 +875,21 @@ Expected: exit 0 and stdout contains:
 doubao.resource_id = volc.seedasr.sauc.duration
 ```
 
-- [ ] **Step 3: Verify local config**
+- [ ] **Step 3: Set local Doubao endpoint to Seed ASR 2.0 streaming input**
+
+Run:
+
+```bash
+target/debug/voco config set doubao.endpoint wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream
+```
+
+Expected: exit 0 and stdout contains:
+
+```text
+doubao.endpoint = wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream
+```
+
+- [ ] **Step 4: Verify local config after endpoint update**
 
 Run:
 
@@ -847,10 +902,8 @@ Expected: output includes:
 ```text
 recording_max_duration_secs = 300
 resource_id = "volc.seedasr.sauc.duration"
-endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
 ```
-
-Do not change `doubao.endpoint` in this task.
 
 ## Task 9: Final Verification
 
@@ -962,10 +1015,28 @@ Verification note (2026-05-04):
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - Local config was updated to `recording_max_duration_secs = 300`.
 - Local config was updated to `doubao.resource_id = "volc.seedasr.sauc.duration"`.
-- `target/debug/voco doctor` passed Doubao credentials and handshake with Seed ASR 2.0 resource ID.
+- Local config was updated to `doubao.endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"` after live probes showed `bigmodel` returned HTTP 400 and `bigmodel_async` timed out for the doctor empty-audio check.
+- `target/debug/voco doctor` passed Doubao credentials and handshake with Seed ASR 2.0 resource ID and `bigmodel_nostream`.
 - Manual HUD smoke passed: the HUD appeared on first press, stayed visible during at least 75 seconds of continuous speech, switched to transcribing only after manual stop, and hid only after completion; or it was blocked by a named environment condition.
 - `git diff --check` passed.
 ```
+
+Actual verification note (2026-05-04):
+
+- `cd hud && swift test && swift build && cd ..` passed.
+- `cargo fmt --all --check` passed.
+- `cargo test --workspace` passed; live network/microphone tests remained ignored as designed.
+- `cargo clippy --workspace --all-targets -- -D warnings` passed.
+- `packaging/build_app_bundle.sh --profile release` passed and produced `target/Voco.app`.
+- `target/release/voco app install --app-bundle target/Voco.app` passed and installed `/Users/zhangxiaolong/Applications/Voco.app`.
+- Local config was updated to `recording_max_duration_secs = 300`.
+- Local config was updated to `doubao.resource_id = "volc.seedasr.sauc.duration"`.
+- Local config was updated to `doubao.endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"` after live probes showed `bigmodel` returned HTTP 400 and `bigmodel_async` timed out for the doctor empty-audio check.
+- `target/release/voco doctor` passed with `10 ok / 0 warn / 0 fail / 2 skip`.
+- Live long-recording bug test passed: IPC `RecordingStart` held daemon status at `recording` at 15, 30, 45, 60, and 75 seconds, then `RecordingStop` returned `recording_result` with `total_latency_ms = 72034`.
+- Log scan found no `max duration reached`, `recording task stopped`, `server timeout`, `HTTP error`, or `Bad Request` during the long-recording test.
+- Visual HUD styling was verified by Swift code/tests/build, not by an interactive screen capture in this terminal session.
+- `git diff --check` passed.
 
 - [ ] **Step 9: Commit verification update**
 
@@ -984,6 +1055,6 @@ Expected: present merge/PR/keep/discard options after all automated gates pass a
 
 ## Self-Review
 
-- Spec coverage: black/yellow/green HUD, B2 196x48 sizing, immediate first-press animation, no recording hide without explicit hidden, daemon long-recording regression coverage, 300-second default recording duration, Seed ASR 2.0 `resource_id`, local config update, and final verification are covered.
+- Spec coverage: black/yellow/green HUD, B2 196x48 sizing, immediate first-press animation, no recording hide without explicit hidden, daemon long-recording regression coverage, 300-second default recording duration, Seed ASR 2.0 `resource_id`, Seed ASR 2.0 `bigmodel_nostream` endpoint, local config update, and final verification are covered.
 - Scope control: no menu bar UI, settings UI, transcript display, new IPC channel, signing/notarization, automatic silence stop, or `bigmodel_async` endpoint switch is included.
 - Type consistency: `HudModel.presentationEpoch`, `HudTheme.Layout`, `HudTheme.ColorToken`, `recording_max_duration_secs`, and `doubao.resource_id` names match existing code or are introduced in earlier tasks before use.

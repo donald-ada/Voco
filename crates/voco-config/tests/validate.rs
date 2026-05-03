@@ -11,10 +11,10 @@ fn cfg_with_backend(backend: BackendChoice) -> Config {
 }
 
 #[test]
-fn default_doubao_endpoint_uses_simple_streaming_protocol() {
+fn default_doubao_endpoint_uses_seed_asr_2_streaming_input_protocol() {
     assert_eq!(
         DoubaoCreds::default().endpoint,
-        "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+        "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
     );
 }
 

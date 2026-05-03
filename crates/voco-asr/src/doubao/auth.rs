@@ -120,7 +120,7 @@ mod tests {
         let a = DoubaoAuth::from_creds(&new_console_creds()).unwrap();
         assert_eq!(
             header_value(&a, "X-Api-Resource-Id"),
-            Some("volc.bigasr.sauc.duration")
+            Some("volc.seedasr.sauc.duration")
         );
     }
 

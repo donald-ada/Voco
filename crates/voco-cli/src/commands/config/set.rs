@@ -143,7 +143,7 @@ fn doubao_mut(cfg: &mut Config) -> &mut DoubaoCreds {
         app_id: String::new(),
         access_token: String::new(),
         api_key: None,
-        endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
+        endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream".to_string(),
         model_id: "bigmodel".to_string(),
         resource_id: "volc.seedasr.sauc.duration".to_string(),
     })
