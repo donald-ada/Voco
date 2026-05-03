@@ -24,7 +24,7 @@ tracing-subscriber = { workspace = true }
 toml = "0.8"
 inquire = "0.9"
 crossterm = "0.29"
-cpal = "0.15"
+cpal = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2"

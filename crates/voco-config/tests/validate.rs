@@ -11,6 +11,14 @@ fn cfg_with_backend(backend: BackendChoice) -> Config {
 }
 
 #[test]
+fn default_doubao_endpoint_uses_simple_streaming_protocol() {
+    assert_eq!(
+        DoubaoCreds::default().endpoint,
+        "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+    );
+}
+
+#[test]
 fn default_is_invalid_in_strict_mode() {
     // Default has backend=Doubao but no creds. Strict mode rejects.
     let cfg = Config::default();
@@ -25,6 +33,18 @@ fn doubao_with_creds_is_valid() {
     cfg.doubao = Some(DoubaoCreds {
         app_id: "x".into(),
         access_token: "y".into(),
+        endpoint: "wss://example.invalid/asr".into(),
+        model_id: "bigmodel-streaming".into(),
+        ..Default::default()
+    });
+    assert!(cfg.validate().is_empty());
+}
+
+#[test]
+fn doubao_with_api_key_is_valid_without_app_id_or_access_token() {
+    let mut cfg = cfg_with_backend(BackendChoice::Doubao);
+    cfg.doubao = Some(DoubaoCreds {
+        api_key: Some("key-new-console".into()),
         endpoint: "wss://example.invalid/asr".into(),
         model_id: "bigmodel-streaming".into(),
         ..Default::default()

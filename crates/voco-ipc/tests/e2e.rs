@@ -23,6 +23,7 @@ impl RequestHandler for EchoHandler {
                 sessions_failed: 0,
                 last_session_latency_ms: None,
                 last_first_partial_ms: None,
+                last_session_logid: None,
                 recent_errors: vec![],
             }),
             _ => Response::Ok,

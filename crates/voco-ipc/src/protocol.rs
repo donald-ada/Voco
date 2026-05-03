@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const MAX_FRAME_BYTES: u32 = 1024 * 1024; // 1 MiB; status payloads are tiny
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -33,6 +33,10 @@ pub enum Request {
     DaemonShutdown,
     RecordingStart,
     RecordingStop,
+    RecordingOnce {
+        duration_ms: u32,
+        include_partials: bool,
+    },
     /// Returns the daemon's current effective config as JSON. Phase 2:
     /// readers verify reload took effect; later phases can introspect.
     DumpConfig,
@@ -49,9 +53,33 @@ pub enum Response {
     },
     Status(StatusInfo),
     Config(serde_json::Value),
+    RecordingResult {
+        text: String,
+        segments: Vec<Segment>,
+        partials: Vec<PartialSnapshot>,
+        logid: Option<String>,
+        first_partial_ms: Option<u64>,
+        total_latency_ms: u64,
+        error_hint: Option<String>,
+    },
     Error {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PartialSnapshot {
+    pub at_ms: u64,
+    pub text: String,
+    pub stable_prefix_len: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Segment {
+    pub text: String,
+    pub start_ms: u32,
+    pub end_ms: u32,
+    pub definite: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -65,6 +93,7 @@ pub struct StatusInfo {
     pub sessions_failed: u64,
     pub last_session_latency_ms: Option<u64>,
     pub last_first_partial_ms: Option<u64>,
+    pub last_session_logid: Option<String>,
     pub recent_errors: Vec<RecentError>,
 }
 

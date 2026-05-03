@@ -47,6 +47,9 @@ fn render(s: &StatusInfo) {
     if let Some(ms) = s.last_session_latency_ms {
         println!("  last total latency: {}ms", ms);
     }
+    if let Some(logid) = &s.last_session_logid {
+        println!("  last logid:        {}", logid);
+    }
     if !s.recent_errors.is_empty() {
         println!("  recent errors:");
         for e in &s.recent_errors {

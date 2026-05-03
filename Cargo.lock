@@ -1537,6 +1537,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b"
 dependencies = [
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -2253,6 +2254,7 @@ dependencies = [
  "bytes",
  "flate2",
  "futures-util",
+ "rustls",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2262,6 +2264,16 @@ dependencies = [
  "url",
  "uuid",
  "voco-config",
+]
+
+[[package]]
+name = "voco-audio"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2319,6 +2331,8 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "voco-asr",
+ "voco-audio",
  "voco-config",
  "voco-ipc",
 ]

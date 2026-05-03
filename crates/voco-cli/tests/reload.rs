@@ -33,7 +33,7 @@ fn dump_config(tmp: &TempDir) -> String {
     use std::os::unix::net::UnixStream;
     let sock = tmp.path().join("data").join("voco.sock");
     let env = serde_json::json!({
-        "protocol_version": 2,
+        "protocol_version": 3,
         "kind": "request",
         "id": uuid::Uuid::new_v4(),
         "payload": { "method": "dump_config" }
