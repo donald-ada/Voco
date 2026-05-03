@@ -1,4 +1,4 @@
-use crate::commands::launch_agent::AppBundle;
+use crate::commands::launch_agent::{self, AppBundle, LaunchAgent};
 use crate::AppAction;
 use anyhow::{anyhow, bail, Context, Result};
 use std::ffi::OsString;
@@ -17,7 +17,18 @@ fn install(app_bundle: PathBuf) -> Result<()> {
         "✓ installed app bundle: {}",
         installed.bundle_path.display()
     );
-    bail!("app bundle copied but LaunchAgent install is not wired yet");
+    let agent = LaunchAgent::from_parts(
+        home,
+        installed.daemon_path.clone(),
+        installed.working_dir.clone(),
+    );
+    launch_agent::install_and_print(&agent).map_err(|err| {
+        anyhow!(
+            "installed app bundle at {} but LaunchAgent install failed: {}",
+            installed.bundle_path.display(),
+            err
+        )
+    })
 }
 
 fn home_dir() -> Result<PathBuf> {
