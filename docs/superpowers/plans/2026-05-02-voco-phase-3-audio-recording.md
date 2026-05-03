@@ -527,6 +527,10 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
 - [ ] **Step 2:** Manual demo against real Doubao backend:
   ```sh
   # Set creds
+  # New console:
+  voco config set doubao.api_key ...
+
+  # Old console:
   voco config set doubao.app_id ...
   voco config set doubao.access_token ...
 
@@ -540,6 +544,9 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   - 2026-05-03: blocked locally. `voco config show` reports
     `backend = "doubao"` but no `[doubao]` credentials section. Do not paste
     secrets into this plan; rerun after credentials are set locally.
+  - 2026-05-03 follow-up: validation and doctor now accept new-console
+    `doubao.api_key` as an alternative to old-console `app_id` +
+    `access_token`.
 - [ ] **Step 3:** Phase verification gates: fmt + clippy + test + release
   build all green. Run `voco doctor` end-to-end (with creds), verify
   "Doubao handshake" still ✓ and a fresh "Last session" line shows the

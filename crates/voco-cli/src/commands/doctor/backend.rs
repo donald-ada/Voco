@@ -22,11 +22,13 @@ pub fn doubao_creds_present() -> CheckResult {
         }
         Some(d) => d,
     };
+    let api_key_present = d.api_key.as_ref().is_some_and(|s| !s.is_empty());
+    let old_console_present = !d.app_id.is_empty() && !d.access_token.is_empty();
     let mut missing = Vec::new();
-    if d.app_id.is_empty() {
+    if !api_key_present && d.app_id.is_empty() {
         missing.push("app_id");
     }
-    if d.access_token.is_empty() {
+    if !api_key_present && d.access_token.is_empty() {
         missing.push("access_token");
     }
     if d.endpoint.is_empty() {
@@ -36,7 +38,14 @@ pub fn doubao_creds_present() -> CheckResult {
         missing.push("model_id");
     }
     if missing.is_empty() {
-        CheckResult::Ok(format!("app_id={}, model={}", d.app_id, d.model_id))
+        let auth = if api_key_present {
+            "api_key".to_string()
+        } else if old_console_present {
+            format!("app_id={}", d.app_id)
+        } else {
+            "unknown".to_string()
+        };
+        CheckResult::Ok(format!("auth={}, model={}", auth, d.model_id))
     } else {
         CheckResult::Fail {
             headline: format!("missing field(s): {}", missing.join(", ")),

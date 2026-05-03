@@ -73,3 +73,46 @@ fn doctor_reports_missing_doubao_creds_as_fail() -> anyhow::Result<()> {
         .stdout(predicate::str::contains("[doubao] section missing"));
     Ok(())
 }
+
+#[test]
+fn doctor_accepts_new_console_api_key_creds() -> anyhow::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    std::fs::write(
+        tmp.path().join("config.toml"),
+        r#"
+backend = "doubao"
+log_level = "info"
+recording_max_duration_secs = 60
+
+[hotkey]
+keycode = 54
+modifiers = 0
+display_name = "Right Command"
+
+[output]
+mode = "inject_then_clipboard"
+trim_trailing_punct = false
+auto_capitalize = false
+
+[hud]
+style = "capsule"
+
+[doubao]
+app_id = ""
+access_token = ""
+api_key = "NEW-CONSOLE-KEY"
+endpoint = "wss://example.invalid/asr"
+model_id = "bigmodel"
+resource_id = "volc.bigasr.sauc.duration"
+"#,
+    )?;
+
+    voco(&tmp)
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Doubao credentials"))
+        .stdout(predicate::str::contains("auth=api_key"))
+        .stdout(predicate::str::contains("NEW-CONSOLE-KEY").not());
+    Ok(())
+}

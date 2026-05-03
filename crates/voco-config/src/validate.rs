@@ -45,17 +45,23 @@ impl Config {
                     message: "backend=doubao requires [doubao] section".into(),
                 }),
                 Some(c) => {
-                    if c.app_id.is_empty() {
-                        errors.push(ValidationError {
-                            kind: ValidationKind::DoubaoCredsEmpty("app_id"),
-                            message: "doubao.app_id must not be empty".into(),
-                        });
-                    }
-                    if c.access_token.is_empty() {
-                        errors.push(ValidationError {
-                            kind: ValidationKind::DoubaoCredsEmpty("access_token"),
-                            message: "doubao.access_token must not be empty".into(),
-                        });
+                    if c.api_key.as_ref().map_or(true, |s| s.is_empty()) {
+                        if c.app_id.is_empty() {
+                            errors.push(ValidationError {
+                                kind: ValidationKind::DoubaoCredsEmpty("app_id"),
+                                message:
+                                    "doubao.app_id must not be empty unless doubao.api_key is set"
+                                        .into(),
+                            });
+                        }
+                        if c.access_token.is_empty() {
+                            errors.push(ValidationError {
+                                kind: ValidationKind::DoubaoCredsEmpty("access_token"),
+                                message:
+                                    "doubao.access_token must not be empty unless doubao.api_key is set"
+                                        .into(),
+                            });
+                        }
                     }
                     if c.endpoint.is_empty() {
                         errors.push(ValidationError {

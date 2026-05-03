@@ -33,6 +33,18 @@ fn doubao_with_creds_is_valid() {
 }
 
 #[test]
+fn doubao_with_api_key_is_valid_without_app_id_or_access_token() {
+    let mut cfg = cfg_with_backend(BackendChoice::Doubao);
+    cfg.doubao = Some(DoubaoCreds {
+        api_key: Some("key-new-console".into()),
+        endpoint: "wss://example.invalid/asr".into(),
+        model_id: "bigmodel-streaming".into(),
+        ..Default::default()
+    });
+    assert!(cfg.validate().is_empty());
+}
+
+#[test]
 fn sherpa_without_paths_fails() {
     let cfg = cfg_with_backend(BackendChoice::Sherpa);
     let errors = cfg.validate();
