@@ -1474,10 +1474,10 @@ Task 7 note (2026-05-03):
 - `cd hud && swift build && cd .. && cargo build --workspace` passed.
 - `cd hud && swift test` is environment-blocked on this machine with CommandLineTools XCTest unavailable: `error: no such module 'XCTest'` in `hud/Tests/VocoHUDTests/HudEventTests.swift:1:8`. I did not run `sudo`, change global `xcode-select`, or accept the Xcode license.
 - Rust checks passed separately: `cargo fmt --all --check`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`.
-- Lifecycle smoke did not pass: pre-check `target/debug/voco status` reported daemon not running; `target/debug/voco daemon start` returned `daemon started (pid 36992)`, but immediate `target/debug/voco status` reported daemon not running and `pgrep -x voco-hud` found no helper. `target/debug/voco daemon stop` then reported daemon already stopped.
+- Initial lifecycle smoke across separate tool invocations produced a false negative because the tool runner cleaned up the detached child process after the command exited. A reliable same-shell lifecycle smoke passed: `daemon start` returned pid `38019`, `status` reported idle, `pgrep -x voco-daemon` returned `38019`, `pgrep -x voco-hud` returned `38020`, `daemon stop` succeeded, and a final `pgrep -x` check found no daemon or HUD helper remaining.
 - Manual hotkey HUD smoke was not visually verified.
 
-- [ ] **Step 4: Manual lifecycle smoke**
+- [x] **Step 4: Manual lifecycle smoke**
 
 Run:
 
