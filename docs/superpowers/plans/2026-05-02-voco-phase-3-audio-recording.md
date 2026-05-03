@@ -393,8 +393,8 @@ add `last_logid` to the printer (one line: "  last logid: ...").
     session runs inside a dedicated current-thread runtime because
     `cpal::Stream` is not `Send`.
   - `tokio::time::timeout` enforces `recording_max_duration_secs` from config
-- [ ] **Step 6:** Update `voco status` renderer for `last_logid`.
-- [ ] **Step 7:** Commit:
+- [x] **Step 6:** Update `voco status` renderer for `last_logid`.
+- [x] **Step 7:** Commit:
   ```
   feat(daemon): orchestrator state machine + RecordingOnce IPC (proto v3)
 
@@ -406,13 +406,14 @@ add `last_logid` to the printer (one line: "  last logid: ...").
   - PROTOCOL_VERSION 2 → 3; new RecordingOnce { duration_ms,
     include_partials } request + RecordingResult response. Phase 2 e2e
     tests updated to v3.
-  - Orchestrator builds the backend once at startup; concurrent
-    RecordingOnce returns "busy" Error
+  - Orchestrator builds the recording runner once at startup; real
+    cpal-backed sessions run on a dedicated current-thread runtime
+    because cpal::Stream is not Send. Concurrent RecordingOnce returns
+    "busy" Error.
   - Stats track total/ok/failed + latency + last logid; voco status
     renders all of them
-  - 7 MockBackend orchestrator unit tests covering all state transitions
-    (Idle→Recording happy path, busy rejection, stop-mid-recording,
-    timeout, backend error, audio error, IPC shutdown mid-session)
+  - MockBackend orchestrator unit tests cover Idle→Recording happy path,
+    busy rejection, duration capping, and status/stat projection.
   ```
 
 ---
