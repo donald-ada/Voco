@@ -15,7 +15,7 @@ use voco_ipc::protocol::{Request, Response};
 
 pub fn run(action: DaemonAction) -> Result<()> {
     match action {
-        DaemonAction::Install => install(),
+        DaemonAction::Install { app_bundle } => install(app_bundle),
         DaemonAction::Uninstall => uninstall(),
         DaemonAction::Start => start(),
         DaemonAction::Stop => stop(),
@@ -24,8 +24,8 @@ pub fn run(action: DaemonAction) -> Result<()> {
     }
 }
 
-fn install() -> Result<()> {
-    let agent = discover_launch_agent()?;
+fn install(app_bundle: Option<PathBuf>) -> Result<()> {
+    let agent = discover_launch_agent(app_bundle.as_deref())?;
     match agent.install()? {
         launch_agent::InstallOutcome::Created => {
             println!(
@@ -51,7 +51,7 @@ fn install() -> Result<()> {
 }
 
 fn uninstall() -> Result<()> {
-    let agent = discover_launch_agent()?;
+    let agent = discover_launch_agent(None)?;
     if agent.is_installed() {
         agent.stop()?;
         let _ = wait_for_socket_to_disappear(Duration::from_secs(3));
@@ -67,7 +67,10 @@ fn uninstall() -> Result<()> {
     Ok(())
 }
 
-fn discover_launch_agent() -> Result<launch_agent::LaunchAgent> {
+fn discover_launch_agent(app_bundle: Option<&std::path::Path>) -> Result<launch_agent::LaunchAgent> {
+    if app_bundle.is_some() {
+        bail!("--app-bundle is parsed but bundle discovery is not wired yet");
+    }
     let daemon_path = locate_daemon_binary()?;
     launch_agent::LaunchAgent::discover(daemon_path)
 }
@@ -78,7 +81,7 @@ fn start() -> Result<()> {
         return Ok(());
     }
 
-    let agent = discover_launch_agent()?;
+    let agent = discover_launch_agent(None)?;
     if agent.is_installed() {
         agent.start()?;
         wait_for_socket(Duration::from_secs(3))?;
@@ -126,7 +129,7 @@ fn start_direct_spawn() -> Result<()> {
 }
 
 fn stop() -> Result<()> {
-    let agent = discover_launch_agent()?;
+    let agent = discover_launch_agent(None)?;
     if agent.is_installed() {
         agent.stop()?;
         wait_for_socket_to_disappear(Duration::from_secs(3))?;
@@ -164,7 +167,7 @@ fn stop_via_ipc() -> Result<()> {
 }
 
 fn restart() -> Result<()> {
-    let agent = discover_launch_agent()?;
+    let agent = discover_launch_agent(None)?;
     if agent.is_installed() {
         agent.restart()?;
         wait_for_socket(Duration::from_secs(3))?;

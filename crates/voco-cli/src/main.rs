@@ -1,6 +1,7 @@
 //! voco — terminal entry point.
 
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 mod commands;
 
@@ -49,7 +50,11 @@ enum Cmd {
 #[derive(Subcommand)]
 pub enum DaemonAction {
     /// Install the user LaunchAgent plist without starting the daemon.
-    Install,
+    Install {
+        /// Install a LaunchAgent that runs voco-daemon from this Voco.app bundle.
+        #[arg(long, value_name = "PATH")]
+        app_bundle: Option<PathBuf>,
+    },
     /// Stop and remove the user LaunchAgent plist. Config and logs are preserved.
     Uninstall,
     Start,
