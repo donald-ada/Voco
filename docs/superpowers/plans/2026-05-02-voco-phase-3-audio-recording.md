@@ -518,7 +518,7 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
 
 ## Task 5: end-to-end smoke + final verification
 
-- [ ] **Step 1:** Add `crates/voco-cli/tests/recording_e2e.rs`:
+- [x] **Step 1:** Add `crates/voco-cli/tests/recording_e2e.rs`:
   - `mock_backend_full_session_returns_final`
   - `mock_backend_partials_arrive_in_order`
   - `recording_busy_response_when_concurrent`
@@ -535,10 +535,20 @@ Spec §4.6 lists the boundary scenarios. Phase 3 handles:
   voco _internal_record --duration 3 --show-partials
   ```
   Paste output into the commit body.
+  - 2026-05-03: blocked locally. `voco config show` reports
+    `backend = "doubao"` but no `[doubao]` credentials section. Do not paste
+    secrets into this plan; rerun after credentials are set locally.
 - [ ] **Step 3:** Phase verification gates: fmt + clippy + test + release
   build all green. Run `voco doctor` end-to-end (with creds), verify
   "Doubao handshake" still ✓ and a fresh "Last session" line shows the
   most recent latency.
+  - 2026-05-03 local gates passed: `cargo fmt --all --check`,
+    `cargo build --workspace`, `cargo test --workspace`,
+    `cargo clippy --workspace --all-targets -- -D warnings`, and
+    `cargo build --workspace --release`.
+  - 2026-05-03 live `voco doctor` blocked: local run exits non-zero with
+    missing `[doubao]` credentials plus Accessibility/Input Monitoring not
+    granted (`Summary: 2 ok / 2 warn / 4 fail / 4 skip`).
 - [ ] **Step 4:** Commit:
   ```
   test(cli): end-to-end recording smoke + Phase 3 verification

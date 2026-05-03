@@ -167,11 +167,18 @@ impl RecordingRunner for DebugMockRecordingRunner {
             tokio::time::sleep(delay).await;
         }
         let partials = if include_partials {
-            vec![voco_ipc::protocol::PartialSnapshot {
-                at_ms: 120,
-                text: "mock".into(),
-                stable_prefix_len: 4,
-            }]
+            vec![
+                voco_ipc::protocol::PartialSnapshot {
+                    at_ms: 120,
+                    text: "mock".into(),
+                    stable_prefix_len: 4,
+                },
+                voco_ipc::protocol::PartialSnapshot {
+                    at_ms: 180,
+                    text: "mock final".into(),
+                    stable_prefix_len: 10,
+                },
+            ]
         } else {
             vec![]
         };
