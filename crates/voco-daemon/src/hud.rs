@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread::JoinHandle;
 use thiserror::Error;
 use tracing::warn;
 
@@ -110,8 +112,9 @@ pub struct HudProcess {
 }
 
 struct HudProcessInner {
-    child: Child,
-    stdin: Option<ChildStdin>,
+    child: Option<Child>,
+    tx: Option<SyncSender<String>>,
+    writer: Option<JoinHandle<()>>,
     enabled: bool,
     warned: bool,
 }
@@ -127,11 +130,26 @@ impl HudProcess {
             .stderr(Stdio::null())
             .spawn()
             .map_err(HudError::Spawn)?;
-        let stdin = child.stdin.take();
+        let Some(stdin) = child.stdin.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(HudError::Write(std::io::ErrorKind::BrokenPipe.into()));
+        };
+        let (tx, rx) = sync_channel::<String>(64);
+        let writer = std::thread::spawn(move || {
+            let mut stdin = stdin;
+            for line in rx {
+                if let Err(err) = stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()) {
+                    warn!(error = %err, "HUD helper write failed; disabling HUD");
+                    return;
+                }
+            }
+        });
         let process = Self {
             inner: Mutex::new(HudProcessInner {
-                child,
-                stdin,
+                child: Some(child),
+                tx: Some(tx),
+                writer: Some(writer),
                 enabled: true,
                 warned: false,
             }),
@@ -144,39 +162,83 @@ impl HudProcess {
 impl HudSink for HudProcess {
     fn send(&self, event: HudEvent) -> Result<(), HudError> {
         let line = event_to_json_line(&event)?;
-        let mut inner = self.inner.lock().unwrap();
-        if !inner.enabled {
-            return Ok(());
-        }
-        let Some(stdin) = inner.stdin.as_mut() else {
-            inner.enabled = false;
-            return Ok(());
-        };
-        if let Err(err) = stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()) {
-            inner.enabled = false;
-            if !inner.warned {
-                inner.warned = true;
-                warn!(error = %err, "HUD helper write failed; disabling HUD");
+        let tx = {
+            let mut inner = self.lock_inner();
+            if !inner.enabled {
+                return Ok(());
             }
-            return Err(HudError::Write(err));
+            let Some(tx) = inner.tx.as_ref() else {
+                inner.enabled = false;
+                return Ok(());
+            };
+            tx.clone()
+        };
+
+        match tx.try_send(line) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(_)) => {
+                Err(self.disable_with_write_error(std::io::ErrorKind::WouldBlock.into()))
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                Err(self.disable_with_write_error(std::io::ErrorKind::BrokenPipe.into()))
+            }
         }
-        Ok(())
     }
 }
 
 impl Drop for HudProcess {
     fn drop(&mut self) {
-        let mut inner = self.inner.lock().unwrap();
-        let _ = inner.stdin.take();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(300);
-        while std::time::Instant::now() < deadline {
-            if matches!(inner.child.try_wait(), Ok(Some(_))) {
-                return;
+        let (mut child, writer) = {
+            let mut inner = match self.inner.lock() {
+                Ok(inner) => inner,
+                Err(poisoned) => {
+                    warn!("HUD process mutex poisoned during drop; continuing cleanup");
+                    poisoned.into_inner()
+                }
+            };
+            let _ = inner.tx.take();
+            (inner.child.take(), inner.writer.take())
+        };
+
+        if let Some(child) = child.as_mut() {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(300);
+            while std::time::Instant::now() < deadline {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
             }
-            std::thread::sleep(std::time::Duration::from_millis(25));
+            if matches!(child.try_wait(), Ok(None)) {
+                let _ = child.kill();
+            }
+            let _ = child.wait();
         }
-        let _ = inner.child.kill();
-        let _ = inner.child.wait();
+
+        if let Some(writer) = writer {
+            let _ = writer.join();
+        }
+    }
+}
+
+impl HudProcess {
+    fn lock_inner(&self) -> MutexGuard<'_, HudProcessInner> {
+        match self.inner.lock() {
+            Ok(inner) => inner,
+            Err(poisoned) => {
+                warn!("HUD process mutex poisoned; continuing with inner state");
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    fn disable_with_write_error(&self, err: std::io::Error) -> HudError {
+        let mut inner = self.lock_inner();
+        inner.enabled = false;
+        if !inner.warned {
+            inner.warned = true;
+            warn!(error = %err, "HUD helper write failed; disabling HUD");
+        }
+        HudError::Write(err)
     }
 }
 
@@ -193,30 +255,32 @@ pub fn default_hud_sink() -> SharedHudSink {
 fn locate_hud_binary() -> Option<PathBuf> {
     let current_exe = std::env::current_exe().ok();
     let exe_dir = current_exe.as_deref().and_then(std::path::Path::parent);
-    let current_dir = std::env::current_dir().ok()?;
+    let current_dir = std::env::current_dir().ok();
     let path = std::env::var_os("PATH");
-    locate_hud_binary_from(exe_dir, &current_dir, path.as_deref())
+    locate_hud_binary_from(exe_dir, current_dir.as_deref(), path.as_deref())
 }
 
 fn locate_hud_binary_from(
     exe_dir: Option<&std::path::Path>,
-    current_dir: &std::path::Path,
+    current_dir: Option<&std::path::Path>,
     path: Option<&std::ffi::OsStr>,
 ) -> Option<PathBuf> {
     if let Some(dir) = exe_dir {
         let candidate = dir.join("voco-hud");
-        if candidate.exists() {
+        if candidate.is_file() {
             return Some(candidate);
         }
     }
-    let dev = current_dir.join("hud/.build/debug/voco-hud");
-    if dev.exists() {
-        return Some(dev);
+    if let Some(current_dir) = current_dir {
+        let dev = current_dir.join("hud/.build/debug/voco-hud");
+        if dev.is_file() {
+            return Some(dev);
+        }
     }
     let path = path?;
     for dir in std::env::split_paths(path) {
         let candidate = dir.join("voco-hud");
-        if candidate.exists() {
+        if candidate.is_file() {
             return Some(candidate);
         }
     }
@@ -275,6 +339,30 @@ mod tests {
     #[test]
     fn missing_helper_resolution_returns_none() {
         let temp = tempfile::tempdir().unwrap();
-        assert_eq!(locate_hud_binary_from(None, temp.path(), None), None);
+        assert_eq!(locate_hud_binary_from(None, Some(temp.path()), None), None);
+    }
+
+    #[test]
+    fn helper_resolution_ignores_directory_candidates() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(temp.path().join("voco-hud")).unwrap();
+
+        assert_eq!(
+            locate_hud_binary_from(Some(temp.path()), Some(temp.path()), None),
+            None
+        );
+    }
+
+    #[test]
+    fn helper_resolution_can_use_path_without_current_dir() {
+        let temp = tempfile::tempdir().unwrap();
+        let helper = temp.path().join("voco-hud");
+        std::fs::write(&helper, b"#!/bin/sh\n").unwrap();
+        let path = std::env::join_paths([temp.path()]).unwrap();
+
+        assert_eq!(
+            locate_hud_binary_from(None, None, Some(&path)),
+            Some(helper)
+        );
     }
 }
