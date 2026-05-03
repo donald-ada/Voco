@@ -78,3 +78,19 @@ final class HudModelTests: XCTestCase {
         XCTAssertEqual(model.state, .transcribing)
     }
 }
+
+final class HudThemeTests: XCTestCase {
+    func testB2CompactLayoutTokens() {
+        XCTAssertEqual(HudTheme.Layout.capsuleWidth, 196)
+        XCTAssertEqual(HudTheme.Layout.capsuleHeight, 48)
+        XCTAssertEqual(HudTheme.Layout.micGlyphSize, 22)
+        XCTAssertEqual(HudTheme.Layout.waveformWidth, 58)
+        XCTAssertEqual(HudTheme.Layout.waveformBarCount, 7)
+    }
+
+    func testBlackYellowGreenColorTokens() {
+        XCTAssertEqual(HudTheme.ColorToken.capsule.hex, "#050607")
+        XCTAssertEqual(HudTheme.ColorToken.recordingMic.hex, "#FFCC4D")
+        XCTAssertEqual(HudTheme.ColorToken.waveform.hex, "#32D67A")
+    }
+}
