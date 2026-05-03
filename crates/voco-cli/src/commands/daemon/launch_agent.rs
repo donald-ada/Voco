@@ -97,9 +97,12 @@ impl LaunchAgent {
             .ok_or_else(|| anyhow::anyhow!("HOME is not set; cannot resolve LaunchAgent path"))?;
         let current_dir = std::env::current_dir()?;
         let working_dir = choose_working_dir(&current_dir, &daemon_path);
-        let plist_path = home.join("Library/LaunchAgents/com.voco.daemon.plist");
+        Ok(Self::from_parts(home, daemon_path, working_dir))
+    }
 
-        Ok(Self {
+    pub fn from_parts(home: PathBuf, daemon_path: PathBuf, working_dir: PathBuf) -> Self {
+        let plist_path = home.join("Library/LaunchAgents/com.voco.daemon.plist");
+        Self {
             label: LABEL,
             paths: LaunchAgentPaths {
                 plist_path,
@@ -107,7 +110,7 @@ impl LaunchAgent {
                 working_dir,
                 home,
             },
-        })
+        }
     }
 
     pub fn is_installed(&self) -> bool {
@@ -585,6 +588,29 @@ mod tests {
 
         assert!(err.to_string().contains("unexpected CFBundleExecutable"));
         assert!(err.to_string().contains("OtherDaemon"));
+        Ok(())
+    }
+
+    #[test]
+    fn launch_agent_from_bundle_paths_renders_daemon_inside_app() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let bundle = create_test_bundle(&tmp, "com.voco.app", "voco-daemon")?;
+        let app = AppBundle::discover(&bundle)?;
+        let home = tmp.path().join("home");
+
+        let agent = LaunchAgent::from_parts(
+            home.clone(),
+            app.daemon_path.clone(),
+            app.working_dir.clone(),
+        );
+        let rendered = render_plist(&agent.paths);
+
+        assert_eq!(
+            agent.paths.plist_path,
+            home.join("Library/LaunchAgents/com.voco.daemon.plist")
+        );
+        assert!(rendered.contains(&format!("<string>{}</string>", app.daemon_path.display())));
+        assert!(rendered.contains(&format!("<string>{}</string>", app.working_dir.display())));
         Ok(())
     }
 
