@@ -25,6 +25,7 @@ Code inspection found one likely non-visual cause for the disappearance: `record
 - Replace the yellow dot + mic pairing with a yellow microphone status icon.
 - Use a black/yellow/green visual system: black capsule, yellow mic, green waveform.
 - Reduce the default chance of long-speaking cutoff by raising the default max recording duration.
+- Switch the default Doubao streaming ASR resource ID to Seed ASR 2.0 hourly: `volc.seedasr.sauc.duration`.
 - Preserve current daemon/HUD architecture: Rust daemon owns state and sends JSONL events; Swift helper renders the HUD.
 
 ## 3. Non-Goals
@@ -128,9 +129,22 @@ Rust files:
 
 - `crates/voco-config/src/schema.rs`
   - Change default `recording_max_duration_secs` from `60` to `300`.
+  - Change default `DoubaoCreds::resource_id` from `volc.bigasr.sauc.duration` to `volc.seedasr.sauc.duration`.
 
 - `crates/voco-config/src/validate.rs`
   - Keep `1..=600` validation.
+
+- `crates/voco-cli/src/commands/config/wizard.rs`
+  - Change the fallback resource ID for newly-created Doubao config to `volc.seedasr.sauc.duration`.
+
+- `crates/voco-cli/src/commands/config/set.rs`
+  - Change the fallback resource ID used when `voco config set doubao.*` creates a missing Doubao section to `volc.seedasr.sauc.duration`.
+
+Doubao endpoint:
+
+- Keep `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel` in this refresh.
+- The user-provided `volc.seedasr.sauc.duration` is a resource ID, not a WebSocket URL.
+- Do not switch to `bigmodel_async` in this plan. That endpoint can be evaluated separately because previous live verification stabilized on the simple streaming endpoint.
 
 Tests:
 
@@ -153,6 +167,7 @@ Manual checks:
 
 ```bash
 target/debug/voco config set recording_max_duration_secs 300
+target/debug/voco config set doubao.resource_id volc.seedasr.sauc.duration
 target/debug/voco daemon restart
 target/debug/voco status
 ```
