@@ -17,7 +17,7 @@ public enum HudTheme {
         public static let waveformBarCount = 7
         public static let contentSpacing: CGFloat = 12
         public static let panelBottomOffset: CGFloat = 96
-        public static let notchCollapsedWidth: CGFloat = 250
+        public static let notchCollapsedWidth: CGFloat = 320
         public static let notchCollapsedHeight: CGFloat = 44
         public static let notchExpandedWidth: CGFloat = 520
         public static let notchExpandedHeight: CGFloat = 86

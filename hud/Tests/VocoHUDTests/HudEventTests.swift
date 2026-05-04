@@ -175,7 +175,7 @@ final class HudThemeTests: XCTestCase {
     }
 
     func testNotchTranscriptIslandLayoutTokens() {
-        XCTAssertEqual(HudTheme.Layout.notchCollapsedWidth, 250)
+        XCTAssertEqual(HudTheme.Layout.notchCollapsedWidth, 320)
         XCTAssertEqual(HudTheme.Layout.notchCollapsedHeight, 44)
         XCTAssertEqual(HudTheme.Layout.notchExpandedWidth, 520)
         XCTAssertEqual(HudTheme.Layout.notchExpandedHeight, 86)
