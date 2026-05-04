@@ -80,11 +80,14 @@ final class HudModelTests: XCTestCase {
 }
 
 final class HudThemeTests: XCTestCase {
-    func testB2CompactLayoutTokens() {
-        XCTAssertEqual(HudTheme.Layout.capsuleWidth, 196)
-        XCTAssertEqual(HudTheme.Layout.capsuleHeight, 48)
-        XCTAssertEqual(HudTheme.Layout.micGlyphSize, 22)
-        XCTAssertEqual(HudTheme.Layout.waveformWidth, 58)
+    func testDynamicIslandLayoutTokens() {
+        XCTAssertEqual(HudTheme.Layout.capsuleWidth, 184)
+        XCTAssertEqual(HudTheme.Layout.capsuleHeight, 44)
+        XCTAssertEqual(HudTheme.Layout.statusLabelText, "语音输入")
+        XCTAssertEqual(HudTheme.Layout.statusLabelFontSize, 14)
+        XCTAssertEqual(HudTheme.Layout.waveformWidth, 48)
+        XCTAssertEqual(HudTheme.Layout.waveformBarWidth, 2.4)
+        XCTAssertEqual(HudTheme.Layout.waveformBarSpacing, 3)
         XCTAssertEqual(HudTheme.Layout.waveformBarCount, 7)
     }
 

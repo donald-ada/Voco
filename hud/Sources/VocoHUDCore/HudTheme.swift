@@ -3,16 +3,20 @@ import SwiftUI
 
 public enum HudTheme {
     public enum Layout {
-        public static let capsuleWidth: CGFloat = 196
-        public static let capsuleHeight: CGFloat = 48
-        public static let shadowPadding: CGFloat = 28
+        public static let capsuleWidth: CGFloat = 184
+        public static let capsuleHeight: CGFloat = 44
+        public static let shadowPadding: CGFloat = 22
         public static let panelWidth: CGFloat = capsuleWidth + shadowPadding * 2
         public static let panelHeight: CGFloat = capsuleHeight + shadowPadding * 2
         public static let micGlyphSize: CGFloat = 22
-        public static let waveformWidth: CGFloat = 58
-        public static let waveformHeight: CGFloat = 34
+        public static let statusLabelText = "语音输入"
+        public static let statusLabelFontSize: CGFloat = 14
+        public static let waveformWidth: CGFloat = 48
+        public static let waveformHeight: CGFloat = 30
+        public static let waveformBarWidth: CGFloat = 2.4
+        public static let waveformBarSpacing: CGFloat = 3
         public static let waveformBarCount = 7
-        public static let contentSpacing: CGFloat = 10
+        public static let contentSpacing: CGFloat = 12
         public static let panelBottomOffset: CGFloat = 96
     }
 
