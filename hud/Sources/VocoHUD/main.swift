@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         makeTransparent(panel.contentView)
-        panel.level = .floating
+        panel.level = .statusBar
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.orderOut(nil)
@@ -134,11 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func positionTopPanel() {
         guard let panel = topPanel else { return }
         let screen = NSScreen.main ?? NSScreen.screens.first
-        guard let frame = screen?.visibleFrame else { return }
+        guard let screen, !screen.frame.isEmpty else { return }
         let size = panel.frame.size
-        let x = frame.midX - size.width / 2
-        let y = frame.maxY - size.height + HudTheme.Layout.notchShadowPadding - HudTheme.Layout.notchTopOffset
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        let origin = HudPanelPositioning.notchOrigin(
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            panelSize: size
+        )
+        panel.setFrameOrigin(origin)
     }
 
     private func makeTransparent(_ view: NSView?) {

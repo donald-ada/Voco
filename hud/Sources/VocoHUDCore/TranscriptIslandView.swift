@@ -19,7 +19,7 @@ public struct TranscriptIslandView: View {
                 : HudTheme.Layout.notchCollapsedHeight
             let cornerRadius = hasTranscript ? 28.0 : HudTheme.Layout.notchCollapsedHeight / 2.0
 
-            ZStack {
+            ZStack(alignment: .top) {
                 islandContent(
                     time: now.timeIntervalSinceReferenceDate,
                     hasTranscript: hasTranscript
@@ -36,8 +36,13 @@ public struct TranscriptIslandView: View {
                         .strokeBorder(HudTheme.ColorToken.capsuleBorder.color, lineWidth: 1)
                 )
                 .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hasTranscript)
+                .padding(.top, HudTheme.Layout.notchShadowPadding)
             }
-            .frame(width: HudTheme.Layout.notchPanelWidth, height: HudTheme.Layout.notchPanelHeight)
+            .frame(
+                width: HudTheme.Layout.notchPanelWidth,
+                height: HudTheme.Layout.notchPanelHeight,
+                alignment: .top
+            )
             .background(Color.clear)
         }
     }

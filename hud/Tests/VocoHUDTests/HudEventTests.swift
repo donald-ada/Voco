@@ -125,6 +125,31 @@ final class HudModelTests: XCTestCase {
 }
 
 final class HudThemeTests: XCTestCase {
+    func testNotchPanelUsesFullScreenFrameInsteadOfVisibleFrame() {
+        let screenFrame = CGRect(x: 0, y: 0, width: 1728, height: 1117)
+        let visibleFrame = CGRect(x: 0, y: 74, width: 1728, height: 1006)
+        let panelSize = CGSize(
+            width: HudTheme.Layout.notchPanelWidth,
+            height: HudTheme.Layout.notchPanelHeight
+        )
+
+        let origin = HudPanelPositioning.notchOrigin(
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            panelSize: panelSize
+        )
+
+        XCTAssertEqual(origin.x, screenFrame.midX - panelSize.width / 2)
+        XCTAssertEqual(
+            origin.y,
+            screenFrame.maxY - panelSize.height + HudTheme.Layout.notchShadowPadding - HudTheme.Layout.notchTopOffset
+        )
+        XCTAssertNotEqual(
+            origin.y,
+            visibleFrame.maxY - panelSize.height + HudTheme.Layout.notchShadowPadding - HudTheme.Layout.notchTopOffset
+        )
+    }
+
     func testDynamicIslandLayoutTokens() {
         XCTAssertEqual(HudTheme.Layout.capsuleWidth, 184)
         XCTAssertEqual(HudTheme.Layout.capsuleHeight, 44)
