@@ -74,11 +74,11 @@ private struct WaveformBars: View {
     let time: TimeInterval
 
     var body: some View {
-        HStack(spacing: 3.5) {
+        HStack(spacing: HudTheme.Layout.waveformBarSpacing) {
             ForEach(0..<HudTheme.Layout.waveformBarCount, id: \.self) { idx in
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: HudTheme.Layout.waveformBarWidth / 2.0)
                     .fill(color)
-                    .frame(width: 5, height: barHeight(idx))
+                    .frame(width: HudTheme.Layout.waveformBarWidth, height: barHeight(idx))
             }
         }
         .frame(width: HudTheme.Layout.waveformWidth, height: HudTheme.Layout.waveformHeight)
@@ -89,17 +89,17 @@ private struct WaveformBars: View {
     }
 
     private func barHeight(_ index: Int) -> CGFloat {
-        let pattern = [0.42, 0.76, 1.0, 0.82, 0.52, 0.68, 0.46][index]
+        let pattern = [0.40, 0.70, 1.0, 0.78, 0.48, 0.62, 0.42][index]
         if state == .hidden {
-            return 8
+            return 6
         }
         if state == .transcribing {
-            let moving = normalizedSine(time, speed: 0.7, offset: Double(index) * 0.55)
-            return CGFloat(10.0 + moving * 18.0 * pattern)
+            let moving = normalizedSine(time, speed: 0.78, offset: Double(index) * 0.55)
+            return CGFloat(7.0 + moving * 15.0 * pattern)
         }
-        let baseline = 4.0 + normalizedSine(time, speed: 0.72, offset: Double(index) * 0.65) * 7.0
-        let boosted = max(amplitude, 0.08) * pattern * 18.0
-        return CGFloat(min(max(8.0 + baseline + boosted, 8.0), 32.0))
+        let baseline = 3.0 + normalizedSine(time, speed: 0.78, offset: Double(index) * 0.65) * 5.0
+        let boosted = max(amplitude, 0.06) * pattern * 12.0
+        return CGFloat(min(max(6.0 + baseline + boosted, 6.0), 26.0))
     }
 }
 
@@ -111,9 +111,9 @@ private struct TranscribingSpinner: View {
             .trim(from: 0.18, to: 0.82)
             .stroke(
                 HudTheme.ColorToken.waveform.color,
-                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                style: StrokeStyle(lineWidth: 2.2, lineCap: .round)
             )
-            .frame(width: 24, height: 24)
+            .frame(width: 22, height: 22)
             .rotationEffect(.degrees((time * 360.0).truncatingRemainder(dividingBy: 360.0)))
             .shadow(color: HudTheme.ColorToken.waveform.color.opacity(0.35), radius: 6)
     }
