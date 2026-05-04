@@ -54,7 +54,7 @@ public struct TranscriptIslandView: View {
                 HStack {
                     statusLabel
                     Spacer(minLength: 12)
-                    TranscriptMiniWaveform(amplitude: model.amplitude, time: time)
+                    TranscriptMiniWaveform(amplitude: model.amplitude, state: model.state, time: time)
                 }
                 transcriptLine
             }
@@ -62,18 +62,29 @@ public struct TranscriptIslandView: View {
             HStack(spacing: HudTheme.Layout.contentSpacing) {
                 statusLabel
                 Spacer(minLength: 6)
-                TranscriptMiniWaveform(amplitude: model.amplitude, time: time)
+                TranscriptMiniWaveform(amplitude: model.amplitude, state: model.state, time: time)
             }
         }
     }
 
     private var statusLabel: some View {
-        Text(HudTheme.Layout.statusLabelText)
+        let color = model.state == .error
+            ? HudTheme.ColorToken.error.color
+            : HudTheme.ColorToken.recordingMic.color
+
+        return Text(statusText)
             .font(.system(size: HudTheme.Layout.transcriptStatusFontSize, weight: .semibold))
-            .foregroundStyle(HudTheme.ColorToken.recordingMic.color)
+            .foregroundStyle(color)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .shadow(color: HudTheme.ColorToken.recordingMic.color.opacity(0.24), radius: 4)
+            .shadow(color: color.opacity(model.state == .error ? 0.34 : 0.24), radius: 4)
+    }
+
+    private var statusText: String {
+        if model.state == .error {
+            return model.message ?? "输入失败"
+        }
+        return HudTheme.Layout.statusLabelText
     }
 
     private var transcriptLine: some View {
@@ -89,6 +100,7 @@ public struct TranscriptIslandView: View {
 
 private struct TranscriptMiniWaveform: View {
     let amplitude: Double
+    let state: HudState
     let time: TimeInterval
 
     var body: some View {
@@ -100,6 +112,10 @@ private struct TranscriptMiniWaveform: View {
             }
         }
         .frame(width: HudTheme.Layout.waveformWidth, height: HudTheme.Layout.waveformHeight)
+    }
+
+    private var color: Color {
+        state == .error ? HudTheme.ColorToken.error.color : HudTheme.ColorToken.waveform.color
     }
 
     private func barHeight(_ index: Int) -> CGFloat {

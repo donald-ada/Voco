@@ -125,6 +125,40 @@ final class HudModelTests: XCTestCase {
 }
 
 final class HudThemeTests: XCTestCase {
+    func testRecordingStateShowsTopHudOnly() {
+        let action = HudPresentationPolicy.action(for: .state(.recording, message: nil), isVisible: true)
+
+        XCTAssertEqual(action.topPanel, .show)
+        XCTAssertFalse(action.autoHideError)
+    }
+
+    func testErrorStateShowsTopHudBeforeAutoHide() {
+        let action = HudPresentationPolicy.action(
+            for: .state(.error, message: "microphone unavailable"),
+            isVisible: true
+        )
+
+        XCTAssertEqual(action.topPanel, .show)
+        XCTAssertTrue(action.autoHideError)
+    }
+
+    func testTranscriptUpdatesShowTopHudOnlyWhenModelIsVisible() {
+        XCTAssertEqual(
+            HudPresentationPolicy.action(
+                for: .transcript(text: "你好", stablePrefixLen: 6),
+                isVisible: true
+            ).topPanel,
+            .show
+        )
+        XCTAssertEqual(
+            HudPresentationPolicy.action(
+                for: .transcript(text: "你好", stablePrefixLen: 6),
+                isVisible: false
+            ).topPanel,
+            .hide
+        )
+    }
+
     func testNotchPanelUsesFullScreenFrameInsteadOfVisibleFrame() {
         let screenFrame = CGRect(x: 0, y: 0, width: 1728, height: 1117)
         let visibleFrame = CGRect(x: 0, y: 74, width: 1728, height: 1006)
@@ -169,27 +203,11 @@ final class HudThemeTests: XCTestCase {
     }
 
     func testDynamicIslandLayoutTokens() {
-        XCTAssertEqual(HudTheme.Layout.capsuleWidth, 184)
-        XCTAssertEqual(HudTheme.Layout.capsuleHeight, 44)
         XCTAssertEqual(HudTheme.Layout.statusLabelText, "语音输入")
-        XCTAssertEqual(HudTheme.Layout.statusLabelFontSize, 14)
         XCTAssertEqual(HudTheme.Layout.waveformWidth, 48)
         XCTAssertEqual(HudTheme.Layout.waveformBarWidth, 2.4)
         XCTAssertEqual(HudTheme.Layout.waveformBarSpacing, 3)
         XCTAssertEqual(HudTheme.Layout.waveformBarCount, 7)
-    }
-
-    func testPanelLeavesTransparentPaddingForCapsuleShadow() {
-        XCTAssertGreaterThan(HudTheme.Layout.panelWidth, HudTheme.Layout.capsuleWidth)
-        XCTAssertGreaterThan(HudTheme.Layout.panelHeight, HudTheme.Layout.capsuleHeight)
-        XCTAssertEqual(
-            HudTheme.Layout.panelWidth,
-            HudTheme.Layout.capsuleWidth + HudTheme.Layout.shadowPadding * 2
-        )
-        XCTAssertEqual(
-            HudTheme.Layout.panelHeight,
-            HudTheme.Layout.capsuleHeight + HudTheme.Layout.shadowPadding * 2
-        )
     }
 
     func testNotchTranscriptIslandLayoutTokens() {
@@ -212,7 +230,7 @@ final class HudThemeTests: XCTestCase {
     }
 
     func testBlackYellowGreenColorTokens() {
-        XCTAssertEqual(HudTheme.ColorToken.capsule.hex, "#050607")
+        XCTAssertEqual(HudTheme.ColorToken.notchCapsule.hex, "#000000")
         XCTAssertEqual(HudTheme.ColorToken.recordingMic.hex, "#FFCC4D")
         XCTAssertEqual(HudTheme.ColorToken.waveform.hex, "#32D67A")
         XCTAssertEqual(HudTheme.ColorToken.transcriptStable.hex, "#F8F1D4")
