@@ -124,10 +124,12 @@ impl RecordingSession {
         let amplitude_task = self
             .pcm
             .amplitude_rx()
-            .zip(hud)
+            .zip(hud.clone())
             .map(|(rx, hud)| spawn_amplitude_forwarder(rx, hud));
 
-        let result = self.run_loop(duration_ms, include_partials, stop_rx).await;
+        let result = self
+            .run_loop(duration_ms, include_partials, stop_rx, hud)
+            .await;
         if let Some(task) = amplitude_task {
             task.abort();
         }
@@ -139,6 +141,7 @@ impl RecordingSession {
         duration_ms: u32,
         include_partials: bool,
         mut stop_rx: oneshot::Receiver<()>,
+        hud: Option<crate::hud::SharedHudSink>,
     ) -> Result<RecordingPayload, SessionError> {
         self.backend.start().await?;
         let timeout = tokio::time::sleep(Duration::from_millis(duration_ms as u64));
@@ -150,7 +153,7 @@ impl RecordingSession {
                         break TerminalReason::AudioEnded;
                     };
                     match self.backend.feed(&frame).await {
-                        Ok(Some(partial)) => self.record_partial(partial, include_partials),
+                        Ok(Some(partial)) => self.record_partial(partial, include_partials, hud.as_ref()),
                         Ok(None) => {}
                         Err(err) => {
                             break TerminalReason::BackendError(err.to_string());
@@ -210,17 +213,35 @@ impl RecordingSession {
         })
     }
 
-    fn record_partial(&mut self, partial: voco_asr::Partial, include_partials: bool) {
+    fn record_partial(
+        &mut self,
+        partial: voco_asr::Partial,
+        include_partials: bool,
+        hud: Option<&crate::hud::SharedHudSink>,
+    ) {
         let at = Instant::now();
         if self.first_partial_at.is_none() {
             self.first_partial_at = Some(at);
         }
-        self.last_partial_text = Some(partial.text.clone());
+
+        let text = partial.text;
+        let stable_prefix_len = partial.stable_prefix_len;
+
+        if let Some(hud) = hud {
+            if let Err(err) = hud.send(crate::hud::HudEvent::transcript(
+                text.clone(),
+                stable_prefix_len,
+            )) {
+                warn!(error = %err, "failed to send HUD transcript event");
+            }
+        }
+
+        self.last_partial_text = Some(text.clone());
         if include_partials {
             self.partials.push(PartialSnapshot {
                 at_ms: elapsed_ms(self.started_at, at),
-                text: partial.text,
-                stable_prefix_len: partial.stable_prefix_len,
+                text,
+                stable_prefix_len,
             });
         }
     }
@@ -371,6 +392,17 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct FailingHudSink;
+
+    impl crate::hud::HudSink for FailingHudSink {
+        fn send(&self, _event: crate::hud::HudEvent) -> Result<(), crate::hud::HudError> {
+            Err(crate::hud::HudError::Write(
+                std::io::ErrorKind::BrokenPipe.into(),
+            ))
+        }
+    }
+
     #[async_trait]
     impl AsrBackend for MockBackend {
         async fn start(&mut self) -> Result<(), AsrError> {
@@ -501,6 +533,46 @@ mod tests {
 
         assert!(payload.partials.is_empty());
         assert!(payload.first_partial_ms.is_some());
+    }
+
+    #[tokio::test]
+    async fn forwards_partials_to_hud_even_when_partial_history_is_disabled() {
+        let (pcm_tx, pcm_rx) = mpsc::channel(4);
+        pcm_tx.send(vec![1, 2, 3]).await.unwrap();
+        drop(pcm_tx);
+        let (_stop_tx, stop_rx) = oneshot::channel();
+        let hud = std::sync::Arc::new(FakeHudSink::default());
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
+
+        let payload = session
+            .run_with_hud(1_000, false, stop_rx, Some(hud.clone()))
+            .await
+            .unwrap();
+
+        assert!(payload.partials.is_empty());
+        assert!(hud
+            .events
+            .lock()
+            .unwrap()
+            .contains(&crate::hud::HudEvent::transcript("partial-1", 1)));
+    }
+
+    #[tokio::test]
+    async fn hud_transcript_send_failure_does_not_fail_recording() {
+        let (pcm_tx, pcm_rx) = mpsc::channel(4);
+        pcm_tx.send(vec![1, 2, 3]).await.unwrap();
+        drop(pcm_tx);
+        let (_stop_tx, stop_rx) = oneshot::channel();
+        let hud = std::sync::Arc::new(FailingHudSink);
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
+
+        let payload = session
+            .run_with_hud(1_000, false, stop_rx, Some(hud))
+            .await
+            .unwrap();
+
+        assert_eq!(payload.text, "final text");
+        assert!(payload.partials.is_empty());
     }
 
     #[tokio::test]
