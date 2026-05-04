@@ -17,6 +17,17 @@ public enum HudTheme {
         public static let waveformBarCount = 7
         public static let contentSpacing: CGFloat = 12
         public static let panelBottomOffset: CGFloat = 96
+        public static let notchCollapsedWidth: CGFloat = 250
+        public static let notchCollapsedHeight: CGFloat = 44
+        public static let notchExpandedWidth: CGFloat = 520
+        public static let notchExpandedHeight: CGFloat = 86
+        public static let notchShadowPadding: CGFloat = 24
+        public static let notchPanelWidth: CGFloat = notchExpandedWidth + notchShadowPadding * 2
+        public static let notchPanelHeight: CGFloat = notchExpandedHeight + notchShadowPadding * 2
+        public static let notchTopOffset: CGFloat = 8
+        public static let transcriptFontSize: CGFloat = 17
+        public static let transcriptStatusFontSize: CGFloat = 13
+        public static let transcriptLineLimit = 2
     }
 
     public struct ColorToken: Equatable, Sendable {
@@ -56,6 +67,20 @@ public enum HudTheme {
             red: 50.0 / 255.0,
             green: 214.0 / 255.0,
             blue: 122.0 / 255.0,
+            opacity: 1.0
+        )
+        public static let transcriptStable = ColorToken(
+            hex: "#F8F1D4",
+            red: 248.0 / 255.0,
+            green: 241.0 / 255.0,
+            blue: 212.0 / 255.0,
+            opacity: 1.0
+        )
+        public static let transcriptLive = ColorToken(
+            hex: "#8DFFB5",
+            red: 141.0 / 255.0,
+            green: 255.0 / 255.0,
+            blue: 181.0 / 255.0,
             opacity: 1.0
         )
         public static let error = ColorToken(

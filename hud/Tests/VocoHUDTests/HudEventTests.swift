@@ -149,9 +149,30 @@ final class HudThemeTests: XCTestCase {
         )
     }
 
+    func testNotchTranscriptIslandLayoutTokens() {
+        XCTAssertEqual(HudTheme.Layout.notchCollapsedWidth, 250)
+        XCTAssertEqual(HudTheme.Layout.notchCollapsedHeight, 44)
+        XCTAssertEqual(HudTheme.Layout.notchExpandedWidth, 520)
+        XCTAssertEqual(HudTheme.Layout.notchExpandedHeight, 86)
+        XCTAssertEqual(HudTheme.Layout.notchShadowPadding, 24)
+        XCTAssertEqual(
+            HudTheme.Layout.notchPanelWidth,
+            HudTheme.Layout.notchExpandedWidth + HudTheme.Layout.notchShadowPadding * 2
+        )
+        XCTAssertEqual(
+            HudTheme.Layout.notchPanelHeight,
+            HudTheme.Layout.notchExpandedHeight + HudTheme.Layout.notchShadowPadding * 2
+        )
+        XCTAssertEqual(HudTheme.Layout.notchTopOffset, 8)
+        XCTAssertEqual(HudTheme.Layout.transcriptFontSize, 17)
+        XCTAssertEqual(HudTheme.Layout.transcriptLineLimit, 2)
+    }
+
     func testBlackYellowGreenColorTokens() {
         XCTAssertEqual(HudTheme.ColorToken.capsule.hex, "#050607")
         XCTAssertEqual(HudTheme.ColorToken.recordingMic.hex, "#FFCC4D")
         XCTAssertEqual(HudTheme.ColorToken.waveform.hex, "#32D67A")
+        XCTAssertEqual(HudTheme.ColorToken.transcriptStable.hex, "#F8F1D4")
+        XCTAssertEqual(HudTheme.ColorToken.transcriptLive.hex, "#8DFFB5")
     }
 }
