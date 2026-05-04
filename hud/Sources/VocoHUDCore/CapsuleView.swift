@@ -14,7 +14,7 @@ public struct CapsuleView: View {
             let entry = model.entryProgress(now: now)
             ZStack {
                 HStack(spacing: HudTheme.Layout.contentSpacing) {
-                    microphone(at: now)
+                    statusLabel(at: now)
                     if model.state == .transcribing {
                         TranscribingSpinner(time: now.timeIntervalSinceReferenceDate)
                     } else {
@@ -25,12 +25,12 @@ public struct CapsuleView: View {
                         )
                     }
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
                 .frame(width: HudTheme.Layout.capsuleWidth, height: HudTheme.Layout.capsuleHeight)
                 .background {
                     Capsule()
                         .fill(HudTheme.ColorToken.capsule.color)
-                        .shadow(color: Color.black.opacity(0.32), radius: 16, y: 8)
+                        .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
                 }
                 .overlay(
                     Capsule().strokeBorder(
@@ -46,35 +46,25 @@ public struct CapsuleView: View {
         }
     }
 
-    private func microphone(at date: Date) -> some View {
+    private func statusLabel(at date: Date) -> some View {
         let time = date.timeIntervalSinceReferenceDate
         let recordingPulse = model.state == .recording
-            ? 1.0 + (0.08 * normalizedSine(time, speed: 0.85, offset: 0))
+            ? 1.0 + (0.025 * normalizedSine(time, speed: 0.95, offset: 0))
             : 1.0
         let color: Color = model.state == .error
             ? HudTheme.ColorToken.error.color
             : HudTheme.ColorToken.recordingMic.color
 
-        return Image(systemName: iconName)
-            .font(.system(size: HudTheme.Layout.micGlyphSize, weight: .semibold))
+        return Text(HudTheme.Layout.statusLabelText)
+            .font(.system(size: HudTheme.Layout.statusLabelFontSize, weight: .semibold))
             .foregroundStyle(color)
-            .frame(
-                width: HudTheme.Layout.micGlyphSize,
-                height: HudTheme.Layout.micGlyphSize
-            )
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .scaleEffect(recordingPulse)
             .shadow(
-                color: color.opacity(model.state == .recording ? 0.55 : 0.28),
-                radius: model.state == .recording ? 9 : 5
+                color: color.opacity(model.state == .recording ? 0.38 : 0.22),
+                radius: model.state == .recording ? 5 : 3
             )
-    }
-
-    private var iconName: String {
-        switch model.state {
-        case .hidden, .recording: return "mic.fill"
-        case .transcribing: return "mic.fill"
-        case .error: return "exclamationmark.triangle.fill"
-        }
     }
 }
 

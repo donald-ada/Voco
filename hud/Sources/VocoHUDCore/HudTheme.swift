@@ -8,7 +8,6 @@ public enum HudTheme {
         public static let shadowPadding: CGFloat = 22
         public static let panelWidth: CGFloat = capsuleWidth + shadowPadding * 2
         public static let panelHeight: CGFloat = capsuleHeight + shadowPadding * 2
-        public static let micGlyphSize: CGFloat = 22
         public static let statusLabelText = "语音输入"
         public static let statusLabelFontSize: CGFloat = 14
         public static let waveformWidth: CGFloat = 48
