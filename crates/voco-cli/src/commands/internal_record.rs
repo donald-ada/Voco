@@ -1,6 +1,7 @@
 //! `voco _internal_record` — Phase 3 dev-only one-shot recording trigger.
 
 use anyhow::{bail, Result};
+use std::time::Duration;
 use voco_daemon::default_socket_path;
 use voco_ipc::client::IpcClient;
 use voco_ipc::protocol::{Request, Response};
@@ -12,6 +13,10 @@ pub fn run(duration: String, show_partials: bool, debug_amp: bool) -> Result<()>
 
     println!("recording for {secs}s ...");
     let mut client = IpcClient::connect(default_socket_path())?;
+    client.set_timeouts(
+        Some(recording_response_timeout(secs)),
+        Some(Duration::from_secs(5)),
+    )?;
     let response = client.call(&Request::RecordingOnce {
         duration_ms,
         include_partials: show_partials,
@@ -68,6 +73,10 @@ fn parse_duration_secs(raw: &str) -> Result<u32> {
     Ok(secs)
 }
 
+fn recording_response_timeout(secs: u32) -> Duration {
+    Duration::from_secs(secs as u64 + 30)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,5 +90,10 @@ mod tests {
     #[test]
     fn parse_duration_rejects_zero() {
         assert!(parse_duration_secs("0").is_err());
+    }
+
+    #[test]
+    fn recording_response_timeout_allows_recording_duration_plus_transcribe_slack() {
+        assert_eq!(recording_response_timeout(25), Duration::from_secs(55));
     }
 }

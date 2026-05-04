@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{oneshot, Mutex, Notify, RwLock};
 use tracing::{info, warn};
 use voco_config::{Config, ConfigIo, OutputConfig};
@@ -15,6 +15,21 @@ use crate::reload::{diff_for_restart, format_validation};
 use crate::session::{RecordingPayload, RecordingSession, SessionError};
 use crate::state::DaemonState;
 use crate::stats::Stats;
+
+const RECORDING_STOP_TIMEOUT_MESSAGE: &str = "recording task timed out after stop";
+const RECORDING_ONCE_TIMEOUT_MESSAGE: &str = "recording task timed out";
+
+#[cfg(not(test))]
+const RECORDING_STOP_RESPONSE_TIMEOUT: Duration = Duration::from_secs(25);
+
+#[cfg(test)]
+const RECORDING_STOP_RESPONSE_TIMEOUT: Duration = Duration::from_millis(50);
+
+#[cfg(not(test))]
+const RECORDING_ONCE_RESPONSE_TIMEOUT_SLACK: Duration = Duration::from_secs(25);
+
+#[cfg(test)]
+const RECORDING_ONCE_RESPONSE_TIMEOUT_SLACK: Duration = Duration::from_millis(50);
 
 pub struct Orchestrator {
     started_at: Instant,
@@ -129,11 +144,28 @@ impl Orchestrator {
 
         let cfg = self.config.read().await.clone();
         let duration_ms = duration_ms.min(cfg.recording_max_duration_secs.saturating_mul(1_000));
-        let (_stop_tx, stop_rx) = oneshot::channel();
-        let result = self
-            .recording_runner
-            .run_once(cfg, duration_ms, include_partials, stop_rx, None)
-            .await;
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let result = match tokio::time::timeout(
+            recording_once_response_timeout(duration_ms),
+            self.recording_runner
+                .run_once(cfg, duration_ms, include_partials, stop_rx, None),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => {
+                let _ = stop_tx.send(());
+                *self.state.write().await = DaemonState::Error;
+                self.stats
+                    .write()
+                    .await
+                    .record_failure(RECORDING_ONCE_TIMEOUT_MESSAGE, now_unix_secs());
+                *self.state.write().await = DaemonState::Idle;
+                return Response::Error {
+                    message: RECORDING_ONCE_TIMEOUT_MESSAGE.into(),
+                };
+            }
+        };
 
         match result {
             Ok(payload) => {
@@ -184,25 +216,13 @@ impl Orchestrator {
         let (stop_tx, stop_rx) = oneshot::channel();
         let (response_tx, response_rx) = oneshot::channel();
         let runner = self.recording_runner.clone();
-        let state = self.state.clone();
-        let stats = self.stats.clone();
-        let config = self.config.clone();
-        let injector = self.text_injector.clone();
-        let active_slot = self.active_recording.clone();
-        let hud = self.hud.clone();
-        let recording_hud = Some(hud.clone());
+        let recording_hud = Some(self.hud.clone());
 
         tokio::spawn(async move {
             let result = runner
                 .run_once(cfg, duration_ms, false, stop_rx, recording_hud)
                 .await;
-            let response =
-                finalize_recording_result(result, state, stats, config, injector, true, hud, true)
-                    .await;
-            let mut active = active_slot.lock().await;
-            active.take();
-            drop(active);
-            let _ = response_tx.send(response);
+            let _ = response_tx.send(result);
         });
 
         *self.active_recording.lock().await = Some(ActiveRecording {
@@ -235,22 +255,22 @@ impl Orchestrator {
         };
         let state = self.state.clone();
         let stats = self.stats.clone();
+        let config = self.config.clone();
+        let injector = self.text_injector.clone();
         let hud = self.hud.clone();
         tokio::spawn(async move {
-            match active.response_rx.await {
-                Ok(Response::Error { message }) => {
-                    warn!(error = %message, "hotkey recording stop finalized with error");
+            match wait_for_active_response(active).await {
+                Ok(result) => {
+                    let response = finalize_recording_result(
+                        result, state, stats, config, injector, true, hud, true,
+                    )
+                    .await;
+                    if let Response::Error { message } = response {
+                        warn!(error = %message, "hotkey recording stop finalized with error");
+                    }
                 }
-                Ok(_) => {}
-                Err(_) => {
-                    *state.write().await = DaemonState::Error;
-                    stats
-                        .write()
-                        .await
-                        .record_failure("recording task stopped", now_unix_secs());
-                    *state.write().await = DaemonState::Idle;
-                    let _ = hud.send(crate::hud::HudEvent::error("recording task stopped"));
-                    spawn_delayed_hud_hide(hud.clone());
+                Err(message) => {
+                    let _ = fail_stopped_recording(state, stats, hud, message).await;
                 }
             }
         });
@@ -262,24 +282,56 @@ impl Orchestrator {
             Ok(active) => active,
             Err(err) => return err,
         };
-        match active.response_rx.await {
-            Ok(response) => response,
-            Err(_) => {
-                *self.state.write().await = DaemonState::Error;
-                self.stats
-                    .write()
-                    .await
-                    .record_failure("recording task stopped", now_unix_secs());
-                *self.state.write().await = DaemonState::Idle;
-                let _ = self
-                    .hud
-                    .send(crate::hud::HudEvent::error("recording task stopped"));
-                spawn_delayed_hud_hide(self.hud.clone());
-                Response::Error {
-                    message: "recording task stopped".into(),
-                }
+        match wait_for_active_response(active).await {
+            Ok(result) => {
+                finalize_recording_result(
+                    result,
+                    self.state.clone(),
+                    self.stats.clone(),
+                    self.config.clone(),
+                    self.text_injector.clone(),
+                    true,
+                    self.hud.clone(),
+                    true,
+                )
+                .await
+            }
+            Err(message) => {
+                fail_stopped_recording(
+                    self.state.clone(),
+                    self.stats.clone(),
+                    self.hud.clone(),
+                    message,
+                )
+                .await
             }
         }
+    }
+}
+
+async fn wait_for_active_response(
+    active: ActiveRecording,
+) -> Result<Result<RecordingPayload, SessionError>, &'static str> {
+    match tokio::time::timeout(RECORDING_STOP_RESPONSE_TIMEOUT, active.response_rx).await {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(_)) => Err("recording task stopped"),
+        Err(_) => Err(RECORDING_STOP_TIMEOUT_MESSAGE),
+    }
+}
+
+async fn fail_stopped_recording(
+    state: Arc<RwLock<DaemonState>>,
+    stats: Arc<RwLock<Stats>>,
+    hud: crate::hud::SharedHudSink,
+    message: &'static str,
+) -> Response {
+    *state.write().await = DaemonState::Error;
+    stats.write().await.record_failure(message, now_unix_secs());
+    *state.write().await = DaemonState::Idle;
+    let _ = hud.send(crate::hud::HudEvent::error(message));
+    spawn_delayed_hud_hide(hud.clone());
+    Response::Error {
+        message: message.into(),
     }
 }
 
@@ -343,7 +395,7 @@ impl TextInjector for DebugMockTextInjector {
 
 struct ActiveRecording {
     stop_tx: Option<oneshot::Sender<()>>,
-    response_rx: oneshot::Receiver<Response>,
+    response_rx: oneshot::Receiver<Result<RecordingPayload, SessionError>>,
 }
 
 struct RealRecordingRunner;
@@ -479,7 +531,7 @@ async fn finalize_recording_result(
     match result {
         Ok(payload) => {
             *state.write().await = DaemonState::Transcribing;
-            if inject {
+            if inject && !payload.text.trim().is_empty() {
                 *state.write().await = DaemonState::Injecting;
                 let output = config.read().await.output.clone();
                 match injector.insert(&payload.text, &output) {
@@ -538,6 +590,10 @@ fn spawn_delayed_hud_hide(hud: crate::hud::SharedHudSink) {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let _ = hud.send(crate::hud::HudEvent::state(crate::hud::HudState::Hidden));
     });
+}
+
+fn recording_once_response_timeout(duration_ms: u32) -> Duration {
+    Duration::from_millis(duration_ms as u64) + RECORDING_ONCE_RESPONSE_TIMEOUT_SLACK
 }
 
 fn backend_label(cfg: &Config) -> String {
@@ -891,6 +947,36 @@ mod recording_tests {
     }
 
     #[tokio::test]
+    async fn recording_start_does_not_hide_hud_when_worker_finishes_before_stop() {
+        let runner = Arc::new(FakeRecordingRunner::new(std::time::Duration::ZERO));
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner,
+            injector,
+            hud.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "recording"),
+            other => panic!("expected recording Status, got {other:?}"),
+        }
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![crate::hud::HudEvent::state(crate::hud::HudState::Recording)]
+        );
+
+        match orch.handle(Request::RecordingStop).await {
+            Response::RecordingResult { text, .. } => assert_eq!(text, "mock final"),
+            other => panic!("expected RecordingResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn recording_stop_task_drop_sends_hud_error_after_transcribing() {
         let runner = Arc::new(PanicAfterStopRunner);
         let injector = Arc::new(FakeInjector::default());
@@ -914,6 +1000,47 @@ mod recording_tests {
                 crate::hud::HudEvent::state(crate::hud::HudState::Recording),
                 crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
                 crate::hud::HudEvent::error("recording task stopped"),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn recording_stop_times_out_stuck_worker_and_returns_idle() {
+        let runner = Arc::new(StopAwareRunner::with_delay(std::time::Duration::from_secs(
+            5,
+        )));
+        let injector = Arc::new(FakeInjector::default());
+        let hud = Arc::new(FakeHudSink::default());
+        let orch = Orchestrator::with_runner_injector_and_hud(
+            Config::default(),
+            runner,
+            injector,
+            hud.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        let response = tokio::time::timeout(std::time::Duration::from_millis(250), async {
+            orch.handle(Request::RecordingStop).await
+        })
+        .await
+        .expect("recording stop should not hang indefinitely");
+
+        match response {
+            Response::Error { message } => {
+                assert_eq!(message, "recording task timed out after stop")
+            }
+            other => panic!("expected timeout Error, got {other:?}"),
+        }
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "idle"),
+            other => panic!("expected idle Status, got {other:?}"),
+        }
+        assert_eq!(
+            *hud.events.lock().unwrap(),
+            vec![
+                crate::hud::HudEvent::state(crate::hud::HudState::Recording),
+                crate::hud::HudEvent::state(crate::hud::HudState::Transcribing),
+                crate::hud::HudEvent::error("recording task timed out after stop"),
             ]
         );
     }
@@ -981,6 +1108,31 @@ mod recording_tests {
             other => panic!("expected Status, got {other:?}"),
         }
         assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn recording_once_times_out_stuck_worker_and_returns_idle() {
+        let runner = Arc::new(FakeRecordingRunner::new(std::time::Duration::from_secs(5)));
+        let orch = Orchestrator::with_recording_runner(Config::default(), runner);
+
+        let response = tokio::time::timeout(std::time::Duration::from_millis(250), async {
+            orch.handle(Request::RecordingOnce {
+                duration_ms: 1,
+                include_partials: false,
+            })
+            .await
+        })
+        .await
+        .expect("recording_once should not hang indefinitely");
+
+        match response {
+            Response::Error { message } => assert_eq!(message, "recording task timed out"),
+            other => panic!("expected timeout Error, got {other:?}"),
+        }
+        match orch.handle(Request::Status).await {
+            Response::Status(status) => assert_eq!(status.state, "idle"),
+            other => panic!("expected idle Status, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -1069,6 +1221,29 @@ mod recording_tests {
     }
 
     #[tokio::test]
+    async fn recording_start_then_stop_with_empty_text_does_not_inject() {
+        let mut runner = StopAwareRunner::new();
+        runner.payload.text.clear();
+        runner.payload.segments.clear();
+        let runner = Arc::new(runner);
+        let injector = Arc::new(FakeInjector::default());
+        let orch = Orchestrator::with_runner_and_injector(
+            Config::default(),
+            runner.clone(),
+            injector.clone(),
+        );
+
+        assert_eq!(orch.handle(Request::RecordingStart).await, Response::Ok);
+        match orch.handle(Request::RecordingStop).await {
+            Response::RecordingResult { text, .. } => assert!(text.is_empty()),
+            other => panic!("expected RecordingResult, got {other:?}"),
+        }
+
+        assert!(injector.inserted.lock().unwrap().is_empty());
+        assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
     async fn recording_start_rejects_when_already_recording() {
         let runner = Arc::new(StopAwareRunner::new());
         let injector = Arc::new(FakeInjector::default());
@@ -1097,7 +1272,7 @@ mod recording_tests {
     #[tokio::test]
     async fn hotkey_stop_does_not_wait_for_finalization_and_ignores_pending_toggle() {
         let runner = Arc::new(StopAwareRunner::with_delay(
-            std::time::Duration::from_millis(100),
+            std::time::Duration::from_millis(20),
         ));
         let injector = Arc::new(FakeInjector::default());
         let orch = Orchestrator::with_runner_and_injector(
@@ -1116,7 +1291,7 @@ mod recording_tests {
         }
 
         assert_eq!(orch.handle_hotkey_toggle().await, Response::Ok);
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
         match orch.handle(Request::Status).await {
             Response::Status(status) => assert_eq!(status.state, "idle"),

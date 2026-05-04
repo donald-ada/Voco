@@ -1,9 +1,18 @@
 use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, oneshot};
+use tracing::warn;
 use voco_asr::{AsrBackend, AsrError};
 use voco_config::Config;
 use voco_ipc::protocol::{PartialSnapshot, Segment};
+
+const BACKEND_STOP_TIMEOUT_MESSAGE: &str = "backend finalization timed out";
+
+#[cfg(not(test))]
+const BACKEND_STOP_TIMEOUT: Duration = Duration::from_secs(20);
+
+#[cfg(test)]
+const BACKEND_STOP_TIMEOUT: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone)]
 pub struct RecordingPayload {
@@ -161,12 +170,23 @@ impl RecordingSession {
             return Ok(self.partial_payload(Some(message.clone())));
         }
 
-        let final_result = match self.backend.stop().await {
-            Ok(final_result) => final_result,
-            Err(err) => {
-                return Ok(self.partial_payload(Some(err.to_string())));
-            }
-        };
+        let backend_name = self.backend.name();
+        let final_result =
+            match tokio::time::timeout(BACKEND_STOP_TIMEOUT, self.backend.stop()).await {
+                Ok(Ok(final_result)) => final_result,
+                Ok(Err(err)) => {
+                    warn!(backend = backend_name, error = %err, "ASR backend finalization failed");
+                    return Ok(self.partial_payload(Some(err.to_string())));
+                }
+                Err(_) => {
+                    warn!(
+                        backend = backend_name,
+                        timeout_ms = BACKEND_STOP_TIMEOUT.as_millis(),
+                        "ASR backend finalization timed out"
+                    );
+                    return Ok(self.partial_payload(Some(BACKEND_STOP_TIMEOUT_MESSAGE.to_string())));
+                }
+            };
         let finished_at = Instant::now();
         Ok(RecordingPayload {
             text: final_result.text,
@@ -312,6 +332,31 @@ mod tests {
     struct MockBackend {
         feed_calls: usize,
         failure: MockFailure,
+        stop_delay: Duration,
+    }
+
+    impl MockBackend {
+        fn new() -> Self {
+            Self {
+                feed_calls: 0,
+                failure: MockFailure::None,
+                stop_delay: Duration::ZERO,
+            }
+        }
+
+        fn with_failure(failure: MockFailure) -> Self {
+            Self {
+                failure,
+                ..Self::new()
+            }
+        }
+
+        fn with_stop_delay(stop_delay: Duration) -> Self {
+            Self {
+                stop_delay,
+                ..Self::new()
+            }
+        }
     }
 
     #[derive(Default)]
@@ -344,6 +389,9 @@ mod tests {
         }
 
         async fn stop(&mut self) -> Result<Final, AsrError> {
+            if !self.stop_delay.is_zero() {
+                tokio::time::sleep(self.stop_delay).await;
+            }
             Ok(Final {
                 text: "final text".into(),
                 segments: vec![AsrSegment {
@@ -370,10 +418,7 @@ mod tests {
         let (_stop_tx, stop_rx) = oneshot::channel();
         let session = RecordingSession::from_parts_with_amplitude(
             pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
+            Box::new(MockBackend::new()),
             Some(amp_rx),
         );
 
@@ -425,13 +470,7 @@ mod tests {
         pcm_tx.send(vec![4, 5, 6]).await.unwrap();
         drop(pcm_tx);
         let (_stop_tx, stop_rx) = oneshot::channel();
-        let session = RecordingSession::from_parts(
-            pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
-        );
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
 
         let payload = session
             .run(1_000, true, stop_rx)
@@ -456,13 +495,7 @@ mod tests {
         pcm_tx.send(vec![1, 2, 3]).await.unwrap();
         drop(pcm_tx);
         let (_stop_tx, stop_rx) = oneshot::channel();
-        let session = RecordingSession::from_parts(
-            pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
-        );
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
 
         let payload = session.run(1_000, false, stop_rx).await.unwrap();
 
@@ -475,13 +508,7 @@ mod tests {
         let (pcm_tx, pcm_rx) = mpsc::channel(4);
         pcm_tx.send(vec![1, 2, 3]).await.unwrap();
         let (_stop_tx, stop_rx) = oneshot::channel();
-        let session = RecordingSession::from_parts(
-            pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
-        );
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
 
         let payload = session.run(1, true, stop_rx).await.unwrap();
 
@@ -495,13 +522,7 @@ mod tests {
         let (pcm_tx, pcm_rx) = mpsc::channel(4);
         drop(pcm_tx);
         let (_stop_tx, stop_rx) = oneshot::channel();
-        let session = RecordingSession::from_parts(
-            pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
-        );
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
 
         let payload = session.run(1_000, true, stop_rx).await.unwrap();
 
@@ -518,10 +539,7 @@ mod tests {
         let (_stop_tx, stop_rx) = oneshot::channel();
         let session = RecordingSession::from_parts(
             pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::FeedOnCall(2),
-            }),
+            Box::new(MockBackend::with_failure(MockFailure::FeedOnCall(2))),
         );
 
         let payload = session.run(1_000, true, stop_rx).await.unwrap();
@@ -540,18 +558,38 @@ mod tests {
         let (pcm_tx, pcm_rx) = mpsc::channel(4);
         pcm_tx.send(vec![1, 2, 3]).await.unwrap();
         let (stop_tx, stop_rx) = oneshot::channel();
-        let session = RecordingSession::from_parts(
-            pcm_rx,
-            Box::new(MockBackend {
-                feed_calls: 0,
-                failure: MockFailure::None,
-            }),
-        );
+        let session = RecordingSession::from_parts(pcm_rx, Box::new(MockBackend::new()));
 
         stop_tx.send(()).unwrap();
         let payload = session.run(1_000, true, stop_rx).await.unwrap();
 
         assert_eq!(payload.text, "final text");
         assert_eq!(payload.error_hint, None);
+    }
+
+    #[tokio::test]
+    async fn stop_finalization_timeout_returns_partial_payload() {
+        let (pcm_tx, pcm_rx) = mpsc::channel(4);
+        pcm_tx.send(vec![1, 2, 3]).await.unwrap();
+        drop(pcm_tx);
+        let (_stop_tx, stop_rx) = oneshot::channel();
+        let session = RecordingSession::from_parts(
+            pcm_rx,
+            Box::new(MockBackend::with_stop_delay(Duration::from_secs(5))),
+        );
+
+        let payload = tokio::time::timeout(
+            Duration::from_millis(250),
+            session.run(1_000, true, stop_rx),
+        )
+        .await
+        .expect("session should not hang while backend finalizes")
+        .unwrap();
+
+        assert_eq!(payload.text, "partial-1");
+        assert_eq!(
+            payload.error_hint.as_deref(),
+            Some("backend finalization timed out")
+        );
     }
 }

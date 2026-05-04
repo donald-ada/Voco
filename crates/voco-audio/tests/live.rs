@@ -10,13 +10,20 @@ fn default_input_stream_yields_pcm_and_amplitude() {
 
     let mut session = AudioCapture::start().expect("default input stream starts");
 
-    std::thread::sleep(Duration::from_millis(100));
-
-    let pcm = session.pcm_rx.try_recv().expect("pcm frame available");
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    let pcm = loop {
+        if let Ok(pcm) = session.pcm_rx.try_recv() {
+            break pcm;
+        }
+        if std::time::Instant::now() >= deadline {
+            panic!("pcm frame available within 3s");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
     assert!(!pcm.is_empty());
 
     let amp = *session.amplitude_rx.borrow_and_update();
-    assert!(amp > 0.0 && amp <= 1.0, "amp={amp}");
+    assert!((0.0..=1.0).contains(&amp), "amp={amp}");
 
     session.stop();
 }

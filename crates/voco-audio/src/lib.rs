@@ -20,12 +20,15 @@ pub struct AudioCapture;
 
 impl AudioCapture {
     pub fn start() -> Result<Session, AudioError> {
+        let (pcm_tx, pcm_rx) = mpsc::channel(64);
+        let (amplitude_tx, amplitude_rx) = watch::channel(0.0_f32);
+        let dropped_frames = Arc::new(AtomicU64::new(0));
+        info!("resolving default input device");
         let host = cpal::default_host();
         let device = host
             .default_input_device()
             .ok_or(AudioError::NoInputDevice)?;
         let device_name = device.name()?;
-        let supported = device.supported_input_configs()?.count();
         let config = cpal::StreamConfig {
             channels: 1,
             sample_rate: cpal::SampleRate(TARGET_SAMPLE_RATE),
@@ -34,15 +37,11 @@ impl AudioCapture {
 
         info!(
             device = %device_name,
-            supported_input_configs = supported,
             channels = config.channels,
             sample_rate = config.sample_rate.0,
             "opening default input stream"
         );
 
-        let (pcm_tx, pcm_rx) = mpsc::channel(64);
-        let (amplitude_tx, amplitude_rx) = watch::channel(0.0_f32);
-        let dropped_frames = Arc::new(AtomicU64::new(0));
         let stream = match build_i16_stream(
             &device,
             &config,
@@ -52,18 +51,8 @@ impl AudioCapture {
         ) {
             Ok(stream) => stream,
             Err(BuildStreamError::StreamConfigNotSupported) => {
-                let fallback_config = fallback_f32_config(&device)?;
-                warn!(
-                    sample_rate = fallback_config.sample_rate.0,
-                    "16kHz mono i16 input unsupported; falling back to f32 input with downsampling"
-                );
-                build_f32_stream(
-                    &device,
-                    &fallback_config,
-                    pcm_tx,
-                    amplitude_tx,
-                    dropped_frames,
-                )?
+                warn!("16kHz mono i16 input unsupported; using default f32 input fallback");
+                build_fallback_f32_stream(&device, pcm_tx, amplitude_tx, dropped_frames)?
             }
             Err(err) => return Err(err.into()),
         };
@@ -125,22 +114,23 @@ fn build_f32_stream(
     dropped_frames: Arc<AtomicU64>,
 ) -> Result<cpal::Stream, BuildStreamError> {
     let input_sample_rate = config.sample_rate.0;
-    let ratio = input_sample_rate / TARGET_SAMPLE_RATE;
-    let mut pending = Vec::new();
+    let channels = config.channels.max(1) as usize;
+    let mut resampler = F32ToI16Resampler::new(input_sample_rate, TARGET_SAMPLE_RATE);
 
     device.build_input_stream::<f32, _, _>(
         config,
         move |data: &[f32], _| {
-            pending.extend(
-                data.iter()
-                    .map(|sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16),
-            );
-            let complete_len = pending.len() / ratio as usize * ratio as usize;
-            if complete_len == 0 {
+            let mono;
+            let samples = if channels == 1 {
+                data
+            } else {
+                mono = downmix_interleaved_f32(data, channels);
+                &mono
+            };
+            let pcm = resampler.push(samples);
+            if pcm.is_empty() {
                 return;
             }
-            let pcm = downsample_integer_ratio_i16(&pending[..complete_len], ratio as usize);
-            pending.drain(..complete_len);
             push_pcm(pcm, &pcm_tx, &amplitude_tx, &dropped_frames);
         },
         log_stream_error,
@@ -148,43 +138,95 @@ fn build_f32_stream(
     )
 }
 
-fn fallback_f32_config(device: &cpal::Device) -> Result<cpal::StreamConfig, AudioError> {
-    let preferred_rates = [
-        TARGET_SAMPLE_RATE,
-        TARGET_SAMPLE_RATE * 2,
-        TARGET_SAMPLE_RATE * 3,
-        TARGET_SAMPLE_RATE * 6,
-    ];
-    let configs: Vec<_> = device.supported_input_configs()?.collect();
+fn build_fallback_f32_stream(
+    device: &cpal::Device,
+    pcm_tx: mpsc::Sender<Vec<i16>>,
+    amplitude_tx: watch::Sender<f32>,
+    dropped_frames: Arc<AtomicU64>,
+) -> Result<cpal::Stream, AudioError> {
+    info!("querying default input config");
+    let default_config = device.default_input_config()?;
+    if default_config.sample_format() != cpal::SampleFormat::F32 {
+        return Err(AudioError::UnsupportedInputConfig(format!(
+            "default input sample format must be f32 for fallback, got {:?}",
+            default_config.sample_format()
+        )));
+    }
 
-    for rate in preferred_rates {
-        for cfg in &configs {
-            if cfg.channels() != 1 || cfg.sample_format() != cpal::SampleFormat::F32 {
-                continue;
-            }
-            if cfg.min_sample_rate().0 <= rate && rate <= cfg.max_sample_rate().0 {
-                return Ok(cpal::StreamConfig {
-                    channels: 1,
-                    sample_rate: cpal::SampleRate(rate),
-                    buffer_size: cpal::BufferSize::Default,
-                });
-            }
+    let config = cpal::StreamConfig {
+        channels: default_config.channels(),
+        sample_rate: default_config.sample_rate(),
+        buffer_size: cpal::BufferSize::Default,
+    };
+    warn!(
+        channels = config.channels,
+        sample_rate = config.sample_rate.0,
+        "using default f32 input fallback with resampling"
+    );
+
+    build_f32_stream(device, &config, pcm_tx, amplitude_tx, dropped_frames).map_err(Into::into)
+}
+
+struct F32ToI16Resampler {
+    step: f64,
+    next_source_position: f64,
+    pending: Vec<f32>,
+}
+
+impl F32ToI16Resampler {
+    fn new(source_rate: u32, target_rate: u32) -> Self {
+        debug_assert!(source_rate > 0);
+        debug_assert!(target_rate > 0);
+        Self {
+            step: source_rate as f64 / target_rate as f64,
+            next_source_position: 0.0,
+            pending: Vec::new(),
         }
     }
 
-    Err(AudioError::UnsupportedInputConfig(
-        "need mono f32 input at 16kHz or an integer multiple of 16kHz".into(),
-    ))
+    fn push(&mut self, samples: &[f32]) -> Vec<i16> {
+        self.pending
+            .extend(samples.iter().map(|sample| sample.clamp(-1.0, 1.0)));
+
+        let mut pcm = Vec::with_capacity((samples.len() as f64 / self.step).ceil() as usize + 1);
+        loop {
+            let idx = self.next_source_position.floor() as usize;
+            if idx >= self.pending.len() {
+                break;
+            }
+
+            let frac = self.next_source_position - idx as f64;
+            let sample = if frac <= f64::EPSILON {
+                self.pending[idx]
+            } else if let Some(next) = self.pending.get(idx + 1) {
+                self.pending[idx] + ((*next - self.pending[idx]) * frac as f32)
+            } else {
+                break;
+            };
+
+            pcm.push(f32_to_i16(sample));
+            self.next_source_position += self.step;
+        }
+
+        let drain_len = (self.next_source_position.floor() as usize).min(self.pending.len());
+        if drain_len > 0 {
+            self.pending.drain(..drain_len);
+            self.next_source_position -= drain_len as f64;
+        }
+
+        pcm
+    }
 }
 
-fn downsample_integer_ratio_i16(samples: &[i16], ratio: usize) -> Vec<i16> {
-    debug_assert!(ratio > 0);
+fn f32_to_i16(sample: f32) -> i16 {
+    (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
+}
+
+fn downmix_interleaved_f32(samples: &[f32], channels: usize) -> Vec<f32> {
+    debug_assert!(channels > 0);
     samples
-        .chunks_exact(ratio)
-        .map(|chunk| {
-            let sum: i32 = chunk.iter().map(|sample| *sample as i32).sum();
-            (sum / ratio as i32) as i16
-        })
+        .chunks_exact(channels)
+        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
         .collect()
 }
 
@@ -223,16 +265,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn downsample_integer_ratio_averages_full_chunks() {
-        let input = [3, 6, 9, 12, 15, 18];
-
-        assert_eq!(downsample_integer_ratio_i16(&input, 3), vec![6, 15]);
+    fn downmix_interleaved_f32_averages_channels() {
+        assert_eq!(
+            downmix_interleaved_f32(&[1.0, -1.0, 0.25, 0.75], 2),
+            vec![0.0, 0.5]
+        );
     }
 
     #[test]
-    fn downsample_integer_ratio_drops_partial_tail() {
-        let input = [3, 6, 9, 99];
+    fn f32_resampler_converts_24khz_to_16khz() {
+        let mut resampler = F32ToI16Resampler::new(24_000, TARGET_SAMPLE_RATE);
+        let pcm = resampler.push(&vec![0.5; 240]);
 
-        assert_eq!(downsample_integer_ratio_i16(&input, 3), vec![6]);
+        assert_eq!(pcm.len(), 160);
+        assert!(pcm.iter().all(|sample| *sample == 16_383));
     }
 }

@@ -8,8 +8,8 @@ pub enum AudioError {
     #[error("input device name: {0}")]
     DeviceName(#[from] cpal::DeviceNameError),
 
-    #[error("input device supported configs: {0}")]
-    SupportedConfigs(#[from] cpal::SupportedStreamConfigsError),
+    #[error("default input config: {0}")]
+    DefaultInputConfig(#[from] cpal::DefaultStreamConfigError),
 
     #[error("unsupported input config: {0}")]
     UnsupportedInputConfig(String),
