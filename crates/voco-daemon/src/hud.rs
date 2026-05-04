@@ -19,6 +19,10 @@ pub enum HudEvent {
     Amplitude {
         value: f32,
     },
+    Transcript {
+        text: String,
+        stable_prefix_len: usize,
+    },
 }
 
 impl HudEvent {
@@ -39,6 +43,13 @@ impl HudEvent {
     pub fn amplitude(value: f32) -> Self {
         Self::Amplitude {
             value: clamp_amplitude(value),
+        }
+    }
+
+    pub fn transcript(text: impl Into<String>, stable_prefix_len: usize) -> Self {
+        Self::Transcript {
+            text: text.into(),
+            stable_prefix_len,
         }
     }
 }
@@ -402,6 +413,24 @@ mod tests {
     fn amplitude_event_is_clamped_before_serializing() {
         let line = event_to_json_line(&HudEvent::amplitude(1.4)).unwrap();
         assert_eq!(line, "{\"type\":\"amplitude\",\"value\":1.0}\n");
+    }
+
+    #[test]
+    fn transcript_event_serializes_as_swift_jsonl_shape() {
+        let line = event_to_json_line(&HudEvent::transcript("你好世界", 6)).unwrap();
+        assert_eq!(
+            line,
+            "{\"type\":\"transcript\",\"text\":\"你好世界\",\"stable_prefix_len\":6}\n"
+        );
+    }
+
+    #[test]
+    fn transcript_event_preserves_empty_text() {
+        let line = event_to_json_line(&HudEvent::transcript("", 0)).unwrap();
+        assert_eq!(
+            line,
+            "{\"type\":\"transcript\",\"text\":\"\",\"stable_prefix_len\":0}\n"
+        );
     }
 
     #[test]
