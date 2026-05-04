@@ -17,6 +17,11 @@ final class HudEventTests: XCTestCase {
         XCTAssertEqual(event, .amplitude(0.42))
     }
 
+    func testDecodesTranscriptEvent() throws {
+        let event = try HudEvent.decodeLine(#"{"type":"transcript","text":"你好世界","stable_prefix_len":6}"#)
+        XCTAssertEqual(event, .transcript(text: "你好世界", stablePrefixLen: 6))
+    }
+
     func testRejectsUnknownEventType() {
         XCTAssertThrowsError(try HudEvent.decodeLine(#"{"type":"unknown"}"#))
     }
@@ -66,6 +71,46 @@ final class HudModelTests: XCTestCase {
         model.apply(.amplitude(0.5))
 
         XCTAssertEqual(model.presentationEpoch, 1)
+    }
+
+    func testTranscriptDoesNotChangePresentationEpoch() {
+        let model = HudModel()
+
+        model.apply(.state(.recording, message: nil))
+        model.apply(.transcript(text: "你好世界", stablePrefixLen: 6))
+
+        XCTAssertEqual(model.presentationEpoch, 1)
+        XCTAssertEqual(model.transcriptText, "你好世界")
+        XCTAssertEqual(model.stablePrefixLen, 6)
+    }
+
+    func testHiddenStateClearsTranscript() {
+        let model = HudModel()
+
+        model.apply(.state(.recording, message: nil))
+        model.apply(.transcript(text: "你好世界", stablePrefixLen: 6))
+        model.apply(.state(.hidden, message: nil))
+
+        XCTAssertEqual(model.transcriptText, "")
+        XCTAssertEqual(model.stablePrefixLen, 0)
+    }
+
+    func testTranscriptDisplaySplitsUtf8StablePrefix() {
+        let model = HudModel()
+
+        model.apply(.transcript(text: "你好世界", stablePrefixLen: 6))
+
+        XCTAssertEqual(model.transcriptDisplay.stable, "你好")
+        XCTAssertEqual(model.transcriptDisplay.live, "世界")
+    }
+
+    func testTranscriptDisplayFallsBackToCharacterBoundaryForInvalidUtf8Prefix() {
+        let model = HudModel()
+
+        model.apply(.transcript(text: "你好世界", stablePrefixLen: 7))
+
+        XCTAssertEqual(model.transcriptDisplay.stable, "你好")
+        XCTAssertEqual(model.transcriptDisplay.live, "世界")
     }
 
     func testRecordingToTranscribingDoesNotRestartEntryAnimation() {

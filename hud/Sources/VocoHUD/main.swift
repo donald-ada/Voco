@@ -80,6 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel?.orderFrontRegardless()
         case .amplitude:
             break
+        case .transcript:
+            break
         }
     }
 
