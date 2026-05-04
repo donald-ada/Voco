@@ -140,7 +140,7 @@ fn set_creates_doubao_section_with_seed_asr_2_resource_id() -> anyhow::Result<()
         .assert()
         .success()
         .stdout(predicate::str::contains(
-            "endpoint = \"wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream\"",
+            "endpoint = \"wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async\"",
         ))
         .stdout(predicate::str::contains(
             "resource_id = \"volc.seedasr.sauc.duration\"",

@@ -142,7 +142,7 @@ impl ProbeOutcome {
             )),
             Self::TimedOut => CheckResult::Fail {
                 headline: "Doubao handshake timed out".into(),
-                fix: "check endpoint/network, or switch doubao.endpoint to the non-async bigmodel endpoint for the empty-audio doctor probe".into(),
+                fix: "check endpoint/network; for live dictation prefer wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".into(),
             },
         }
     }

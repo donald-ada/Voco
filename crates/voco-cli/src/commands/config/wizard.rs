@@ -220,9 +220,7 @@ fn prompt_doubao_creds(current: Option<&DoubaoCreds>) -> Result<DoubaoCreds> {
     let endpoint_default = current
         .map(|c| c.endpoint.clone())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| {
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream".to_string()
-        });
+        .unwrap_or_else(|| "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string());
     let endpoint = Text::new("Endpoint")
         .with_default(&endpoint_default)
         .prompt()
