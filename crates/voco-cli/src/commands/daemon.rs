@@ -70,13 +70,15 @@ fn start() -> Result<()> {
         return Ok(());
     }
 
-    let agent = discover_launch_agent(None)?;
-    if agent.is_installed() {
-        agent.start()?;
-        wait_for_socket(Duration::from_secs(3))?;
-        println!("✓ daemon started via launchctl");
-        println!("  service: {}", agent.service_target()?);
-        return Ok(());
+    if should_use_launch_agent_for_lifecycle() {
+        let agent = discover_launch_agent(None)?;
+        if agent.is_installed() {
+            agent.start()?;
+            wait_for_socket(Duration::from_secs(3))?;
+            println!("✓ daemon started via launchctl");
+            println!("  service: {}", agent.service_target()?);
+            return Ok(());
+        }
     }
 
     start_direct_spawn()
@@ -118,12 +120,14 @@ fn start_direct_spawn() -> Result<()> {
 }
 
 fn stop() -> Result<()> {
-    let agent = discover_launch_agent(None)?;
-    if agent.is_installed() {
-        agent.stop()?;
-        wait_for_socket_to_disappear(Duration::from_secs(3))?;
-        println!("✓ daemon stopped");
-        return Ok(());
+    if should_use_launch_agent_for_lifecycle() {
+        let agent = discover_launch_agent(None)?;
+        if agent.is_installed() {
+            agent.stop()?;
+            wait_for_socket_to_disappear(Duration::from_secs(3))?;
+            println!("✓ daemon stopped");
+            return Ok(());
+        }
     }
 
     stop_via_ipc()
@@ -156,18 +160,24 @@ fn stop_via_ipc() -> Result<()> {
 }
 
 fn restart() -> Result<()> {
-    let agent = discover_launch_agent(None)?;
-    if agent.is_installed() {
-        agent.restart()?;
-        wait_for_socket(Duration::from_secs(3))?;
-        println!("✓ daemon restarted via launchctl");
-        println!("  service: {}", agent.service_target()?);
-        return Ok(());
+    if should_use_launch_agent_for_lifecycle() {
+        let agent = discover_launch_agent(None)?;
+        if agent.is_installed() {
+            agent.restart()?;
+            wait_for_socket(Duration::from_secs(3))?;
+            println!("✓ daemon restarted via launchctl");
+            println!("  service: {}", agent.service_target()?);
+            return Ok(());
+        }
     }
 
     let _ = stop_via_ipc();
     std::thread::sleep(Duration::from_millis(200));
     start_direct_spawn()
+}
+
+fn should_use_launch_agent_for_lifecycle() -> bool {
+    std::env::var_os("VOCO_HOME").is_none()
 }
 
 fn wait_for_socket(timeout: Duration) -> Result<()> {
@@ -251,4 +261,49 @@ fn locate_daemon_binary() -> Result<PathBuf> {
         "could not find voco-daemon binary; expected next to {} or on PATH",
         here.display()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    struct EnvGuard {
+        key: &'static str,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let old = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, old }
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let old = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, old }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(old) = &self.old {
+                std::env::set_var(self.key, old);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn lifecycle_uses_launch_agent_only_without_voco_home_override() {
+        let _guard = EnvGuard::remove("VOCO_HOME");
+        assert!(should_use_launch_agent_for_lifecycle());
+
+        let _guard = EnvGuard::set("VOCO_HOME", "/tmp/voco-isolated");
+        assert!(!should_use_launch_agent_for_lifecycle());
+    }
 }

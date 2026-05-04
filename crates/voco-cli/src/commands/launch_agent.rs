@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 pub const LABEL: &str = "com.voco.daemon";
 const EXPECTED_BUNDLE_ID: &str = "com.voco.app";
@@ -25,6 +26,13 @@ pub enum InstallOutcome {
 pub struct LaunchAgent {
     pub label: &'static str,
     pub paths: LaunchAgentPaths,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LaunchAgentAction {
+    Bootout,
+    Bootstrap,
+    Kickstart,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -144,22 +152,42 @@ impl LaunchAgent {
     pub fn bootstrap(&self) -> Result<()> {
         let domain = self.domain()?;
         let plist = self.paths.plist_path.display().to_string();
-        let output = run_launchctl(["bootstrap", domain.as_str(), plist.as_str()])?;
-        if output.status_code.is_none() {
-            return Ok(());
+        let mut last_output = None;
+        for attempt in 0..5 {
+            let output = run_launchctl(["bootstrap", domain.as_str(), plist.as_str()])?;
+            if output.status_code.is_none() {
+                return Ok(());
+            }
+            if bootstrap_means_already_loaded(&output) {
+                return Ok(());
+            }
+            if bootstrap_means_transient_io_error(&output) && attempt < 4 {
+                last_output = Some(output);
+                std::thread::sleep(Duration::from_millis(350));
+                continue;
+            }
+            return Err(launchctl_error("bootstrap", &domain, &output));
         }
-        if bootstrap_means_already_loaded(&output) {
-            return Ok(());
-        }
+        let output = last_output.expect("bootstrap retry loop always records retryable output");
         Err(launchctl_error("bootstrap", &domain, &output))
     }
 
     pub fn kickstart(&self) -> Result<()> {
         let target = self.service_target()?;
-        let output = run_launchctl(["kickstart", "-k", target.as_str()])?;
-        if output.status_code.is_none() {
-            return Ok(());
+        let mut last_output = None;
+        for attempt in 0..5 {
+            let output = run_launchctl(["kickstart", "-k", target.as_str()])?;
+            if output.status_code.is_none() {
+                return Ok(());
+            }
+            if kickstart_means_transient_missing_service(&output) && attempt < 4 {
+                last_output = Some(output);
+                std::thread::sleep(Duration::from_millis(350));
+                continue;
+            }
+            return Err(launchctl_error("kickstart", &target, &output));
         }
+        let output = last_output.expect("kickstart retry loop always records retryable output");
         Err(launchctl_error("kickstart", &target, &output))
     }
 
@@ -173,8 +201,7 @@ impl LaunchAgent {
     }
 
     pub fn start(&self) -> Result<()> {
-        self.bootstrap()?;
-        self.kickstart()
+        self.run_actions(start_action_plan())
     }
 
     pub fn stop(&self) -> Result<()> {
@@ -182,10 +209,27 @@ impl LaunchAgent {
     }
 
     pub fn restart(&self) -> Result<()> {
-        self.bootout()?;
-        self.bootstrap()?;
-        self.kickstart()
+        self.run_actions(restart_action_plan())
     }
+
+    fn run_actions(&self, actions: &[LaunchAgentAction]) -> Result<()> {
+        for action in actions {
+            match action {
+                LaunchAgentAction::Bootout => self.bootout()?,
+                LaunchAgentAction::Bootstrap => self.bootstrap()?,
+                LaunchAgentAction::Kickstart => self.kickstart()?,
+            }
+        }
+        Ok(())
+    }
+}
+
+fn start_action_plan() -> &'static [LaunchAgentAction] {
+    &[LaunchAgentAction::Bootstrap, LaunchAgentAction::Kickstart]
+}
+
+fn restart_action_plan() -> &'static [LaunchAgentAction] {
+    &[LaunchAgentAction::Bootout, LaunchAgentAction::Bootstrap]
 }
 
 pub fn install_and_print(agent: &LaunchAgent) -> Result<()> {
@@ -232,6 +276,19 @@ pub fn bootout_means_already_stopped(output: &LaunchctlOutput) -> bool {
 pub fn bootstrap_means_already_loaded(output: &LaunchctlOutput) -> bool {
     let text = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
     text.contains("service already loaded") || text.contains("already bootstrapped")
+}
+
+pub fn bootstrap_means_transient_io_error(output: &LaunchctlOutput) -> bool {
+    let text = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
+    output.status_code == Some(5)
+        && text.contains("bootstrap failed: 5")
+        && text.contains("input/output error")
+        && !bootstrap_means_already_loaded(output)
+}
+
+pub fn kickstart_means_transient_missing_service(output: &LaunchctlOutput) -> bool {
+    let text = format!("{}\n{}", output.stdout, output.stderr).to_lowercase();
+    text.contains("could not find service") || text.contains("service not found")
 }
 
 pub fn launchctl_error(action: &str, target: &str, output: &LaunchctlOutput) -> anyhow::Error {
@@ -726,6 +783,48 @@ mod tests {
         };
 
         assert!(bootstrap_means_already_loaded(&output));
+    }
+
+    #[test]
+    fn bootstrap_plain_io_error_is_retryable() {
+        let output = LaunchctlOutput {
+            status_code: Some(5),
+            stdout: String::new(),
+            stderr: "Bootstrap failed: 5: Input/output error".to_string(),
+        };
+
+        assert!(bootstrap_means_transient_io_error(&output));
+    }
+
+    #[test]
+    fn bootstrap_bad_plist_is_not_retryable_io_error() {
+        let output = LaunchctlOutput {
+            status_code: Some(78),
+            stdout: String::new(),
+            stderr: "bad plist".to_string(),
+        };
+
+        assert!(!bootstrap_means_transient_io_error(&output));
+    }
+
+    #[test]
+    fn kickstart_missing_service_is_retryable_after_bootstrap() {
+        let output = LaunchctlOutput {
+            status_code: Some(113),
+            stdout: String::new(),
+            stderr: "Could not find service \"com.voco.daemon\" in domain for user gui: 501"
+                .to_string(),
+        };
+
+        assert!(kickstart_means_transient_missing_service(&output));
+    }
+
+    #[test]
+    fn restart_relies_on_run_at_load_without_forcing_kickstart() {
+        assert_eq!(
+            restart_action_plan(),
+            &[LaunchAgentAction::Bootout, LaunchAgentAction::Bootstrap]
+        );
     }
 
     #[test]

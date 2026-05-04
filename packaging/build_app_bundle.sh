@@ -114,5 +114,8 @@ require_executable "${MACOS_DIR}/voco"
 require_executable "${MACOS_DIR}/voco-daemon"
 require_executable "${MACOS_DIR}/voco-hud"
 plutil -lint "${INFO_PLIST}" >/dev/null
+codesign --force --deep --sign - "${BUNDLE_PATH}" >/dev/null
+codesign --verify --deep --strict "${BUNDLE_PATH}"
+echo "ok: ad-hoc signed Voco.app bundle"
 
 echo "ok: verified Voco.app bundle: target/Voco.app"

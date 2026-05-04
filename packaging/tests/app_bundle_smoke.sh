@@ -16,6 +16,7 @@ test -x "${MACOS_DIR}/voco-daemon"
 test -x "${MACOS_DIR}/voco-hud"
 
 plutil -lint "${INFO_PLIST}" >/dev/null
+codesign --verify --deep --strict "${BUNDLE_PATH}"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${INFO_PLIST}")"
 EXECUTABLE="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${INFO_PLIST}")"
