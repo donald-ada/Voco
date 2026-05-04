@@ -150,6 +150,24 @@ final class HudThemeTests: XCTestCase {
         )
     }
 
+    func testNotchCapsuleBleedsPastScreenTopToAvoidAntialiasGap() {
+        let screenFrame = CGRect(x: 0, y: 0, width: 1728, height: 1117)
+        let visibleFrame = CGRect(x: 0, y: 66, width: 1728, height: 1018)
+        let panelSize = CGSize(
+            width: HudTheme.Layout.notchPanelWidth,
+            height: HudTheme.Layout.notchPanelHeight
+        )
+
+        let origin = HudPanelPositioning.notchOrigin(
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            panelSize: panelSize
+        )
+        let capsuleTopY = origin.y + panelSize.height - HudTheme.Layout.notchShadowPadding
+
+        XCTAssertEqual(capsuleTopY, screenFrame.maxY + 1)
+    }
+
     func testDynamicIslandLayoutTokens() {
         XCTAssertEqual(HudTheme.Layout.capsuleWidth, 184)
         XCTAssertEqual(HudTheme.Layout.capsuleHeight, 44)
@@ -188,7 +206,7 @@ final class HudThemeTests: XCTestCase {
             HudTheme.Layout.notchPanelHeight,
             HudTheme.Layout.notchExpandedHeight + HudTheme.Layout.notchShadowPadding * 2
         )
-        XCTAssertEqual(HudTheme.Layout.notchTopOffset, 8)
+        XCTAssertEqual(HudTheme.Layout.notchTopOffset, -1)
         XCTAssertEqual(HudTheme.Layout.transcriptFontSize, 17)
         XCTAssertEqual(HudTheme.Layout.transcriptLineLimit, 2)
     }
@@ -199,5 +217,12 @@ final class HudThemeTests: XCTestCase {
         XCTAssertEqual(HudTheme.ColorToken.waveform.hex, "#32D67A")
         XCTAssertEqual(HudTheme.ColorToken.transcriptStable.hex, "#F8F1D4")
         XCTAssertEqual(HudTheme.ColorToken.transcriptLive.hex, "#8DFFB5")
+    }
+
+    func testNotchCapsuleUsesOpaqueBlackTokens() {
+        XCTAssertEqual(HudTheme.ColorToken.notchCapsule.hex, "#000000")
+        XCTAssertEqual(HudTheme.ColorToken.notchCapsule.opacity, 1.0)
+        XCTAssertEqual(HudTheme.ColorToken.notchCapsuleBorder.hex, "#000000")
+        XCTAssertEqual(HudTheme.ColorToken.notchCapsuleBorder.opacity, 0.0)
     }
 }

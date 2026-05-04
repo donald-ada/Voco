@@ -24,7 +24,7 @@ public enum HudTheme {
         public static let notchShadowPadding: CGFloat = 24
         public static let notchPanelWidth: CGFloat = notchExpandedWidth + notchShadowPadding * 2
         public static let notchPanelHeight: CGFloat = notchExpandedHeight + notchShadowPadding * 2
-        public static let notchTopOffset: CGFloat = 8
+        public static let notchTopOffset: CGFloat = -1
         public static let transcriptFontSize: CGFloat = 17
         public static let transcriptStatusFontSize: CGFloat = 13
         public static let transcriptLineLimit = 2
@@ -54,6 +54,20 @@ public enum HudTheme {
             green: 31.0 / 255.0,
             blue: 34.0 / 255.0,
             opacity: 0.95
+        )
+        public static let notchCapsule = ColorToken(
+            hex: "#000000",
+            red: 0.0,
+            green: 0.0,
+            blue: 0.0,
+            opacity: 1.0
+        )
+        public static let notchCapsuleBorder = ColorToken(
+            hex: "#000000",
+            red: 0.0,
+            green: 0.0,
+            blue: 0.0,
+            opacity: 0.0
         )
         public static let recordingMic = ColorToken(
             hex: "#FFCC4D",

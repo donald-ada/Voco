@@ -28,12 +28,12 @@ public struct TranscriptIslandView: View {
                 .frame(width: width, height: height)
                 .background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(HudTheme.ColorToken.capsule.color)
+                        .fill(HudTheme.ColorToken.notchCapsule.color)
                         .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(HudTheme.ColorToken.capsuleBorder.color, lineWidth: 1)
+                        .strokeBorder(HudTheme.ColorToken.notchCapsuleBorder.color, lineWidth: 1)
                 )
                 .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hasTranscript)
                 .padding(.top, HudTheme.Layout.notchShadowPadding)
