@@ -12,30 +12,37 @@ public struct CapsuleView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             let now = timeline.date
             let entry = model.entryProgress(now: now)
-            HStack(spacing: HudTheme.Layout.contentSpacing) {
-                microphone(at: now)
-                if model.state == .transcribing {
-                    TranscribingSpinner(time: now.timeIntervalSinceReferenceDate)
-                } else {
-                    WaveformBars(
-                        amplitude: model.amplitude,
-                        state: model.state,
-                        time: now.timeIntervalSinceReferenceDate
-                    )
+            ZStack {
+                HStack(spacing: HudTheme.Layout.contentSpacing) {
+                    microphone(at: now)
+                    if model.state == .transcribing {
+                        TranscribingSpinner(time: now.timeIntervalSinceReferenceDate)
+                    } else {
+                        WaveformBars(
+                            amplitude: model.amplitude,
+                            state: model.state,
+                            time: now.timeIntervalSinceReferenceDate
+                        )
+                    }
                 }
-            }
-            .padding(.horizontal, 14)
-            .frame(width: HudTheme.Layout.capsuleWidth, height: HudTheme.Layout.capsuleHeight)
-            .background(HudTheme.ColorToken.capsule.color, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(
-                    HudTheme.ColorToken.capsuleBorder.color,
-                    lineWidth: 1
+                .padding(.horizontal, 14)
+                .frame(width: HudTheme.Layout.capsuleWidth, height: HudTheme.Layout.capsuleHeight)
+                .background {
+                    Capsule()
+                        .fill(HudTheme.ColorToken.capsule.color)
+                        .shadow(color: Color.black.opacity(0.32), radius: 16, y: 8)
+                }
+                .overlay(
+                    Capsule().strokeBorder(
+                        HudTheme.ColorToken.capsuleBorder.color,
+                        lineWidth: 1
+                    )
                 )
-            )
-            .shadow(color: Color.black.opacity(0.46), radius: 18, y: 10)
-            .opacity(entry)
-            .scaleEffect(0.94 + (0.06 * entry))
+                .opacity(entry)
+                .scaleEffect(0.94 + (0.06 * entry))
+            }
+            .frame(width: HudTheme.Layout.panelWidth, height: HudTheme.Layout.panelHeight)
+            .background(Color.clear)
         }
     }
 

@@ -17,12 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createPanel() {
         let view = CapsuleView(model: model)
         let hosting = NSHostingController(rootView: view)
+        makeTransparent(hosting.view)
         let panel = NSPanel(
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: HudTheme.Layout.capsuleWidth,
-                height: HudTheme.Layout.capsuleHeight
+                width: HudTheme.Layout.panelWidth,
+                height: HudTheme.Layout.panelHeight
             ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        makeTransparent(panel.contentView)
         panel.level = .floating
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -87,8 +89,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let frame = screen?.visibleFrame else { return }
         let size = panel.frame.size
         let x = frame.midX - size.width / 2
-        let y = frame.minY + HudTheme.Layout.panelBottomOffset
+        let y = frame.minY + HudTheme.Layout.panelBottomOffset - HudTheme.Layout.shadowPadding
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func makeTransparent(_ view: NSView?) {
+        guard let view else { return }
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.layer?.isOpaque = false
     }
 }
 

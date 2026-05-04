@@ -88,6 +88,19 @@ final class HudThemeTests: XCTestCase {
         XCTAssertEqual(HudTheme.Layout.waveformBarCount, 7)
     }
 
+    func testPanelLeavesTransparentPaddingForCapsuleShadow() {
+        XCTAssertGreaterThan(HudTheme.Layout.panelWidth, HudTheme.Layout.capsuleWidth)
+        XCTAssertGreaterThan(HudTheme.Layout.panelHeight, HudTheme.Layout.capsuleHeight)
+        XCTAssertEqual(
+            HudTheme.Layout.panelWidth,
+            HudTheme.Layout.capsuleWidth + HudTheme.Layout.shadowPadding * 2
+        )
+        XCTAssertEqual(
+            HudTheme.Layout.panelHeight,
+            HudTheme.Layout.capsuleHeight + HudTheme.Layout.shadowPadding * 2
+        )
+    }
+
     func testBlackYellowGreenColorTokens() {
         XCTAssertEqual(HudTheme.ColorToken.capsule.hex, "#050607")
         XCTAssertEqual(HudTheme.ColorToken.recordingMic.hex, "#FFCC4D")

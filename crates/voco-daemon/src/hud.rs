@@ -112,9 +112,11 @@ pub struct HudProcess {
 }
 
 struct HudProcessInner {
+    helper_path: PathBuf,
     child: Option<Child>,
     tx: Option<SyncSender<String>>,
     writer: Option<JoinHandle<()>>,
+    last_state: Option<HudEvent>,
     enabled: bool,
     warned: bool,
 }
@@ -124,32 +126,23 @@ impl HudProcess {
         let Some(path) = locate_hud_binary() else {
             return Err(HudError::MissingHelper);
         };
-        let mut child = Command::new(&path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(HudError::Spawn)?;
-        let Some(stdin) = child.stdin.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(HudError::Write(std::io::ErrorKind::BrokenPipe.into()));
-        };
-        let (tx, rx) = sync_channel::<String>(64);
-        let writer = std::thread::spawn(move || {
-            let mut stdin = stdin;
-            for line in rx {
-                if let Err(err) = stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()) {
-                    warn!(error = %err, "HUD helper write failed; disabling HUD");
-                    return;
-                }
-            }
-        });
+        Self::spawn_with_path(path)
+    }
+
+    #[cfg(test)]
+    fn spawn_with_path_for_test(path: PathBuf) -> Result<Self, HudError> {
+        Self::spawn_with_path(path)
+    }
+
+    fn spawn_with_path(path: PathBuf) -> Result<Self, HudError> {
+        let (child, tx, writer) = spawn_helper(&path)?;
         let process = Self {
             inner: Mutex::new(HudProcessInner {
+                helper_path: path,
                 child: Some(child),
                 tx: Some(tx),
                 writer: Some(writer),
+                last_state: None,
                 enabled: true,
                 warned: false,
             }),
@@ -159,29 +152,58 @@ impl HudProcess {
     }
 }
 
+fn spawn_helper(path: &PathBuf) -> Result<(Child, SyncSender<String>, JoinHandle<()>), HudError> {
+    let mut child = Command::new(path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(HudError::Spawn)?;
+    let Some(stdin) = child.stdin.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(HudError::Write(std::io::ErrorKind::BrokenPipe.into()));
+    };
+    let (tx, rx) = sync_channel::<String>(64);
+    let writer = std::thread::spawn(move || {
+        let mut stdin = stdin;
+        for line in rx {
+            if let Err(err) = stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()) {
+                warn!(error = %err, "HUD helper pipe broke; waiting for respawn");
+                return;
+            }
+        }
+    });
+    Ok((child, tx, writer))
+}
+
 impl HudSink for HudProcess {
     fn send(&self, event: HudEvent) -> Result<(), HudError> {
         let line = event_to_json_line(&event)?;
-        let tx = {
-            let mut inner = self.lock_inner();
-            if !inner.enabled {
-                return Ok(());
-            }
-            let Some(tx) = inner.tx.as_ref() else {
-                inner.enabled = false;
-                return Ok(());
-            };
-            tx.clone()
+        let mut inner = self.lock_inner();
+        if !inner.enabled {
+            return Ok(());
+        }
+        if matches!(event, HudEvent::State { .. }) {
+            inner.last_state = Some(event.clone());
+        }
+        if self.helper_exited_locked(&mut inner) {
+            return self.respawn_and_retry(&mut inner, event, line);
+        }
+        let Some(tx) = inner.tx.as_ref().cloned() else {
+            return self.respawn_and_retry(&mut inner, event, line);
         };
 
-        match tx.try_send(line) {
+        match tx.try_send(line.clone()) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
-                Err(self.disable_with_write_error(std::io::ErrorKind::WouldBlock.into()))
+                if !inner.warned {
+                    inner.warned = true;
+                    warn!("HUD helper queue full; dropping HUD event without disabling HUD");
+                }
+                Ok(())
             }
-            Err(TrySendError::Disconnected(_)) => {
-                Err(self.disable_with_write_error(std::io::ErrorKind::BrokenPipe.into()))
-            }
+            Err(TrySendError::Disconnected(_)) => self.respawn_and_retry(&mut inner, event, line),
         }
     }
 }
@@ -231,14 +253,70 @@ impl HudProcess {
         }
     }
 
-    fn disable_with_write_error(&self, err: std::io::Error) -> HudError {
-        let mut inner = self.lock_inner();
-        inner.enabled = false;
-        if !inner.warned {
-            inner.warned = true;
-            warn!(error = %err, "HUD helper write failed; disabling HUD");
+    fn respawn_and_retry(
+        &self,
+        inner: &mut HudProcessInner,
+        event: HudEvent,
+        line: String,
+    ) -> Result<(), HudError> {
+        self.stop_locked_helper(inner);
+        let (child, tx, writer) = spawn_helper(&inner.helper_path)?;
+        inner.child = Some(child);
+        inner.tx = Some(tx);
+        inner.writer = Some(writer);
+        inner.warned = false;
+
+        if let Some(state) = inner.last_state.clone() {
+            let state_line = event_to_json_line(&state)?;
+            self.send_line_locked(inner, state_line)?;
         }
-        HudError::Write(err)
+        if inner.last_state.as_ref() != Some(&event) {
+            self.send_line_locked(inner, line)?;
+        }
+        Ok(())
+    }
+
+    fn send_line_locked(&self, inner: &mut HudProcessInner, line: String) -> Result<(), HudError> {
+        let Some(tx) = inner.tx.as_ref() else {
+            return Err(HudError::Write(std::io::ErrorKind::BrokenPipe.into()));
+        };
+        tx.try_send(line).map_err(|err| match err {
+            TrySendError::Full(_) => HudError::Write(std::io::ErrorKind::WouldBlock.into()),
+            TrySendError::Disconnected(_) => HudError::Write(std::io::ErrorKind::BrokenPipe.into()),
+        })
+    }
+
+    fn helper_exited_locked(&self, inner: &mut HudProcessInner) -> bool {
+        inner
+            .child
+            .as_mut()
+            .and_then(|child| child.try_wait().ok())
+            .flatten()
+            .is_some()
+    }
+
+    fn stop_locked_helper(&self, inner: &mut HudProcessInner) {
+        let mut child = inner.child.take();
+        let writer = inner.writer.take();
+        let _ = inner.tx.take();
+
+        if let Some(child) = child.as_mut() {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(300);
+            while std::time::Instant::now() < deadline {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            if matches!(child.try_wait(), Ok(None)) {
+                let _ = child.kill();
+            }
+            let _ = child.wait();
+        }
+
+        if let Some(writer) = writer {
+            let _ = writer.join();
+        }
     }
 }
 
@@ -375,5 +453,51 @@ mod tests {
             locate_hud_binary_from(None, None, Some(&path)),
             Some(helper)
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hud_process_respawns_after_helper_pipe_breaks() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let log = temp.path().join("hud-lines.log");
+        let helper = temp.path().join("voco-hud");
+        std::fs::write(
+            &helper,
+            format!(
+                "#!/bin/sh\nprintf 'start\\n' >> '{}'\nif IFS= read -r line; then printf '%s\\n' \"$line\" >> '{}'; fi\nexit 0\n",
+                log.display(),
+                log.display()
+            ),
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&helper, permissions).unwrap();
+
+        let process = HudProcess::spawn_with_path_for_test(helper).unwrap();
+        wait_until_log_contains(&log, "\"hidden\"");
+
+        process.send(HudEvent::state(HudState::Recording)).unwrap();
+        wait_until_log_contains(&log, "\"recording\"");
+
+        let contents = std::fs::read_to_string(log).unwrap();
+        assert!(contents.matches("start").count() >= 2, "{contents}");
+    }
+
+    #[cfg(unix)]
+    fn wait_until_log_contains(path: &std::path::Path, needle: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if std::fs::read_to_string(path)
+                .map(|contents| contents.contains(needle))
+                .unwrap_or(false)
+            {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        panic!("timed out waiting for {needle} in {}", path.display());
     }
 }

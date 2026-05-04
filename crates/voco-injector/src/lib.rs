@@ -9,6 +9,7 @@ pub enum InjectionOutcome {
     Injected,
     ClipboardFallback { reason: String },
     ClipboardOnly,
+    SkippedEmpty,
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -50,6 +51,9 @@ where
         output: &OutputConfig,
     ) -> Result<InjectionOutcome, InjectionError> {
         let normalized = normalize_text(text, output);
+        if normalized.is_empty() {
+            return Ok(InjectionOutcome::SkippedEmpty);
+        }
         match output.mode {
             OutputMode::ClipboardOnly => {
                 self.sink.write_clipboard(&normalized)?;
@@ -265,6 +269,19 @@ mod tests {
         assert_eq!(outcome, InjectionOutcome::Injected);
         assert_eq!(sink.unicode_attempts, 1);
         assert_eq!(sink.clipboard, None);
+    }
+
+    #[test]
+    fn empty_normalized_text_is_not_injected_as_keycode_zero() {
+        let mut sink = MockSink::default();
+        let outcome = InjectionEngine::new(&mut sink)
+            .insert("   ", &output(OutputMode::InjectThenClipboard))
+            .unwrap();
+
+        assert_eq!(outcome, InjectionOutcome::SkippedEmpty);
+        assert_eq!(sink.unicode_attempts, 0);
+        assert_eq!(sink.clipboard, None);
+        assert_eq!(sink.paste_attempts, 0);
     }
 
     #[test]
