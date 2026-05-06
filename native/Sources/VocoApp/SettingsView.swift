@@ -26,11 +26,13 @@ struct SettingsView: View {
 
                     launchAtLoginSection
 
-                    hotkeySection
+                hotkeySection
 
-                    permissionsSection
+                recordingDiagnosticsSection
 
-                    Spacer()
+                permissionsSection
+
+                Spacer()
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, minHeight: 360, alignment: .topLeading)
@@ -149,6 +151,44 @@ struct SettingsView: View {
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    @ViewBuilder
+    private var recordingDiagnosticsSection: some View {
+        if coordinator.lastTranscript != nil || coordinator.lastInjection != nil || coordinator.lastErrorMessage != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("录音诊断")
+                    .font(.headline)
+
+                if let transcript = coordinator.lastTranscript {
+                    diagnosticRow(
+                        title: "转写",
+                        value: "\(transcript.providerName) · \(transcript.finalText.count) 字符",
+                        systemImage: "text.bubble"
+                    )
+                }
+
+                if let injection = coordinator.lastInjection {
+                    diagnosticRow(
+                        title: "输入",
+                        value: "\(injection.targetAppName ?? "无目标 App") · \(injection.strategy.title)",
+                        systemImage: "text.cursor"
+                    )
+
+                    Text(injection.detail)
+                        .font(.caption)
+                        .foregroundStyle(injection.succeeded ? Color.secondary : Color.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let message = coordinator.lastErrorMessage {
+                    diagnosticRow(title: "错误", value: message, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(12)
+            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
     private func permissionRow(_ permission: PermissionSnapshot) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: permission.kind.systemImage)
@@ -201,6 +241,23 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func diagnosticRow(title: String, value: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .frame(width: 18)
+                .foregroundStyle(.secondary)
+
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func permissionTint(_ state: PermissionGrantState) -> Color {
