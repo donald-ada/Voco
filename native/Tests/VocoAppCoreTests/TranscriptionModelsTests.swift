@@ -27,4 +27,36 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertTrue(TranscriptionProviderError.transport(providerName: "Doubao", message: "timeout", retryable: true).isRetryable)
         XCTAssertFalse(TranscriptionProviderError.authentication(providerName: "Doubao", message: "invalid token").isRetryable)
     }
+
+    func testTranscriptSnapshotAppendsNonEmptyPartials() {
+        let base = TranscriptSnapshot(
+            finalText: "",
+            partials: [],
+            providerName: "Doubao",
+            latencyMilliseconds: nil
+        )
+
+        let updated = base.appendingPartial(
+            TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "Doubao")
+        )
+
+        XCTAssertEqual(updated.finalText, "")
+        XCTAssertEqual(updated.partials, ["你好"])
+        XCTAssertEqual(updated.providerName, "Doubao")
+    }
+
+    func testTranscriptSnapshotIgnoresBlankPartials() {
+        let base = TranscriptSnapshot(
+            finalText: "",
+            partials: ["你好"],
+            providerName: "Doubao",
+            latencyMilliseconds: nil
+        )
+
+        let updated = base.appendingPartial(
+            TranscriptPartialSnapshot(text: " \n ", stablePrefixLength: 0, providerName: "Doubao")
+        )
+
+        XCTAssertEqual(updated.partials, ["你好"])
+    }
 }

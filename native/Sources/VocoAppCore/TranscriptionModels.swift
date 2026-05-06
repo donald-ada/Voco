@@ -1,5 +1,19 @@
 import Foundation
 
+public struct TranscriptPartialSnapshot: Equatable, Sendable {
+    public let text: String
+    public let stablePrefixLength: Int
+    public let providerName: String
+
+    public init(text: String, stablePrefixLength: Int, providerName: String) {
+        self.text = text
+        self.stablePrefixLength = max(0, stablePrefixLength)
+        self.providerName = providerName
+    }
+}
+
+public typealias TranscriptionProgressHandler = @MainActor @Sendable (TranscriptPartialSnapshot) -> Void
+
 public enum TranscriptionProviderStatus: Equatable, Sendable {
     case notConfigured
     case ready(providerName: String)

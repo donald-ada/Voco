@@ -28,6 +28,22 @@ public struct TranscriptSnapshot: Equatable, Sendable {
     }
 }
 
+public extension TranscriptSnapshot {
+    func appendingPartial(_ partial: TranscriptPartialSnapshot) -> TranscriptSnapshot {
+        let trimmedText = partial.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return self
+        }
+
+        return TranscriptSnapshot(
+            finalText: finalText,
+            partials: partials + [trimmedText],
+            providerName: partial.providerName,
+            latencyMilliseconds: latencyMilliseconds
+        )
+    }
+}
+
 public struct RecordingWorkflowResult: Equatable, Sendable {
     public let audio: CapturedAudioSnapshot
     public let transcript: TranscriptSnapshot
