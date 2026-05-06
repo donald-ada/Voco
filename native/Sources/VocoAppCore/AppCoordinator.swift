@@ -134,6 +134,37 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
+    public func diagnosticBundle(generatedAt: Date = Date()) -> DiagnosticBundle {
+        let menuSnapshot = snapshot
+        let diagnosticsSnapshot = DiagnosticsSnapshot(
+            appStatusTitle: menuSnapshot.title,
+            permissions: permissions,
+            audio: lastAudio,
+            hotkeyState: hotkeyRuntimeState,
+            hotkeyBinding: hotkeyBinding,
+            hotkeyMode: hotkeyMode,
+            asrStatus: transcriptionProviderStatus,
+            credentials: transcriptionCredentials,
+            transcript: lastTranscript,
+            injection: lastInjection,
+            lastErrorMessage: lastErrorMessage,
+            generatedAt: generatedAt
+        )
+
+        return DiagnosticBundle(
+            snapshot: diagnosticsSnapshot,
+            redaction: DiagnosticRedactionContext(
+                secrets: diagnosticSecrets,
+                transcriptBodies: diagnosticTranscriptBodies
+            )
+        )
+    }
+
+    @discardableResult
+    public func exportDiagnosticBundle(to url: URL) throws -> URL {
+        try DiagnosticBundleExporter.write(bundle: diagnosticBundle(), to: url)
+    }
+
     public var audioSettingsSnapshot: AudioSettingsSnapshot {
         AudioSettingsSnapshot(lastAudio: lastAudio)
     }
@@ -160,6 +191,18 @@ public final class AppCoordinator: ObservableObject {
 
     public var launchAtLoginEnabled: Bool {
         launchAtLoginState.isEnabled
+    }
+
+    private var diagnosticSecrets: [String] {
+        [transcriptionCredentials.maskedAPIKey].compactMap { $0 }
+    }
+
+    private var diagnosticTranscriptBodies: [String] {
+        guard let lastTranscript else {
+            return []
+        }
+
+        return [lastTranscript.finalText] + lastTranscript.partials
     }
 
     public func finishLaunching() {

@@ -37,6 +37,92 @@ final class DiagnosticsModelsTests: XCTestCase {
         XCTAssertTrue(redacted.contains("[redacted transcript]"))
     }
 
+    func testDiagnosticBundleJSONRedactsSecretsAndTranscriptBody() throws {
+        let snapshot = DiagnosticsSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 1),
+            appStatusTitle: "就绪",
+            events: [
+                DiagnosticEvent(
+                    id: "asr",
+                    category: .asr,
+                    severity: .ok,
+                    title: "Doubao",
+                    detail: "stored secret sk-live-abcdef123456"
+                ),
+                DiagnosticEvent(
+                    id: "transcript",
+                    category: .asr,
+                    severity: .ok,
+                    title: "转写",
+                    detail: "raw transcript body"
+                )
+            ]
+        )
+
+        let bundle = DiagnosticBundle(
+            snapshot: snapshot,
+            redaction: DiagnosticRedactionContext(
+                secrets: ["sk-live-abcdef123456"],
+                transcriptBodies: ["raw transcript body"]
+            )
+        )
+        let json = String(decoding: try bundle.jsonData(), as: UTF8.self)
+
+        XCTAssertFalse(json.contains("sk-live-abcdef123456"))
+        XCTAssertFalse(json.contains("raw transcript body"))
+        XCTAssertTrue(json.contains("[redacted secret]"))
+        XCTAssertTrue(json.contains("[redacted transcript]"))
+    }
+
+    func testDiagnosticBundleExporterMapsWriteFailuresToDescriptiveError() throws {
+        let snapshot = DiagnosticsSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 1),
+            appStatusTitle: "就绪",
+            events: []
+        )
+        let bundle = DiagnosticBundle(snapshot: snapshot)
+        let blockedURL = URL(fileURLWithPath: "/dev/null/voco-diagnostics.json")
+
+        XCTAssertThrowsError(try DiagnosticBundleExporter.write(bundle: bundle, to: blockedURL)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("导出诊断包失败"))
+            XCTAssertTrue(error.localizedDescription.contains(blockedURL.path))
+        }
+    }
+
+    @MainActor
+    func testCoordinatorDiagnosticBundleRedactsTranscriptByDefault() async throws {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),
+            transcript: TranscriptSnapshot(
+                finalText: "do not export this transcript",
+                partials: ["do not export this partial"],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 42
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted"
+            )
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-live-abcdef123456"),
+            recordingWorkflow: StaticRecordingWorkflow(result: result, transcriptionStatus: .ready(providerName: "Fake ASR"))
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        let json = String(decoding: try coordinator.diagnosticBundle().jsonData(), as: UTF8.self)
+        XCTAssertFalse(json.contains("do not export this transcript"))
+        XCTAssertFalse(json.contains("do not export this partial"))
+        XCTAssertFalse(json.contains("sk-live-abcdef123456"))
+        XCTAssertTrue(json.contains("[redacted transcript]"))
+    }
+
     @MainActor
     func testCoordinatorDiagnosticsSnapshotIncludesRuntimeCategories() async {
         let result = RecordingWorkflowResult(

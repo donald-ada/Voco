@@ -110,7 +110,17 @@ struct DiagnosticsView: View {
     }
 
     private func exportDiagnostics() {
-        exportMessage = "诊断导出将在下一步启用。"
+        let exportURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voco-diagnostics-\(Int(Date().timeIntervalSince1970)).json")
+
+        do {
+            let writtenURL = try coordinator.exportDiagnosticBundle(to: exportURL)
+            exportMessage = "已导出：\(writtenURL.path)"
+        } catch {
+            let message = error.localizedDescription
+            exportMessage = message
+            coordinator.fail(message)
+        }
     }
 
     private func severityTint(_ severity: DiagnosticSeverity) -> Color {
