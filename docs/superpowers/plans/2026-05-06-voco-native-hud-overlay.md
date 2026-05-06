@@ -591,7 +591,7 @@ git commit -m "feat(native): show in-process hud overlay"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-06-voco-native-hud-overlay.md`
 
-- [ ] **Step 1: Run full native tests**
+- [x] **Step 1: Run full native tests**
 
 Run:
 
@@ -601,7 +601,7 @@ cd native && swift test
 
 Expected: all native tests pass.
 
-- [ ] **Step 2: Run native bundle smoke**
+- [x] **Step 2: Run native bundle smoke**
 
 Run from repository root:
 
@@ -611,7 +611,7 @@ packaging/tests/native_app_bundle_smoke.sh
 
 Expected: native bundle builds, signs, verifies, and launches for smoke validation.
 
-- [ ] **Step 3: Run diff and signature checks**
+- [x] **Step 3: Run diff and signature checks**
 
 Run:
 
@@ -622,11 +622,11 @@ codesign --verify --deep --strict target/native/Voco.app
 
 Expected: no whitespace errors and a valid ad-hoc signature on `target/native/Voco.app`.
 
-- [ ] **Step 4: Record verification results**
+- [x] **Step 4: Record verification results**
 
 Append a `Verification Results` section to this plan with exact command output summaries.
 
-- [ ] **Step 5: Commit verification notes**
+- [x] **Step 5: Commit verification notes**
 
 Run:
 
@@ -640,3 +640,29 @@ git commit -m "docs(native): mark hud overlay verification"
 - Covers the native rewrite requirement that HUD state lives in-process and reads directly from `AppCoordinator`.
 - Creates the AppKit `NSPanel` shape needed for a non-activating overlay that can join all Spaces.
 - Keeps streaming partial transcript delivery, polished notch geometry, Keychain credential storage, real ASR provider, and release DMG notarization as separate slices.
+
+## Verification Results
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 62 tests with 0 failures across `AppCoordinatorTests`, `AudioCaptureBufferTests`, `HUDModelsTests`, `HotkeyModelsTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, `RecordingWorkflowTests`, `SettingsSectionTests`, `TextInjectionModelsTests`, `TextInjectionProviderTests`, and `TranscriptionModelsTests`.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built the native debug app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced the ad-hoc signature, verified the bundle, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+```
+
+Result: PASS. No whitespace errors.
+
+```bash
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. The ad-hoc signed native app bundle verified successfully.
