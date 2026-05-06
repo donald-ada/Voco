@@ -381,17 +381,46 @@ public struct OnboardingSnapshot: Equatable, Sendable {
     }
 }
 
+public struct OnboardingCompletionResolution: Equatable, Sendable {
+    public let hasCompletedOnboarding: Bool
+    public let valueToPersist: Bool?
+
+    public init(hasCompletedOnboarding: Bool, valueToPersist: Bool?) {
+        self.hasCompletedOnboarding = hasCompletedOnboarding
+        self.valueToPersist = valueToPersist
+    }
+}
+
 public enum OnboardingCompletionMigration {
     public static func resolvedCompletion(
         storedValue: Bool?,
         permissions: [PermissionSnapshot],
         transcriptionCredentials: TranscriptionCredentialSnapshot
     ) -> Bool {
+        resolution(
+            storedValue: storedValue,
+            permissions: permissions,
+            transcriptionCredentials: transcriptionCredentials
+        ).hasCompletedOnboarding
+    }
+
+    public static func resolution(
+        storedValue: Bool?,
+        permissions: [PermissionSnapshot],
+        transcriptionCredentials: TranscriptionCredentialSnapshot
+    ) -> OnboardingCompletionResolution {
         if let storedValue {
-            return storedValue
+            return OnboardingCompletionResolution(
+                hasCompletedOnboarding: storedValue,
+                valueToPersist: nil
+            )
         }
 
-        return PermissionSummary(snapshots: permissions).allRequiredGranted &&
+        let inferredCompletion = PermissionSummary(snapshots: permissions).allRequiredGranted &&
             transcriptionCredentials.hasAPIKey
+        return OnboardingCompletionResolution(
+            hasCompletedOnboarding: inferredCompletion,
+            valueToPersist: inferredCompletion ? true : nil
+        )
     }
 }

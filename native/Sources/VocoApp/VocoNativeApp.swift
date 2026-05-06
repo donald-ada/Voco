@@ -73,16 +73,20 @@ struct VocoNativeApp: App {
         let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
         let defaults = UserDefaults.standard
         let storedOnboardingCompletion = defaults.object(forKey: Self.onboardingCompletionDefaultsKey) as? Bool
-        let hasCompletedOnboarding = OnboardingCompletionMigration.resolvedCompletion(
+        let persistOnboardingCompletion: @MainActor @Sendable (Bool) -> Void = { completed in
+            defaults.set(completed, forKey: Self.onboardingCompletionDefaultsKey)
+        }
+        let onboardingCompletion = OnboardingCompletionMigration.resolution(
             storedValue: storedOnboardingCompletion,
             permissions: permissionProvider.currentSnapshots(),
             transcriptionCredentials: credentialStore.currentSnapshot()
         )
+        if let valueToPersist = onboardingCompletion.valueToPersist {
+            persistOnboardingCompletion(valueToPersist)
+        }
         let appCoordinator = AppCoordinator(
-            hasCompletedOnboarding: hasCompletedOnboarding,
-            setHasCompletedOnboarding: { completed in
-                defaults.set(completed, forKey: Self.onboardingCompletionDefaultsKey)
-            },
+            hasCompletedOnboarding: onboardingCompletion.hasCompletedOnboarding,
+            setHasCompletedOnboarding: persistOnboardingCompletion,
             permissionProvider: permissionProvider,
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
             transcriptionCredentialStore: credentialStore,

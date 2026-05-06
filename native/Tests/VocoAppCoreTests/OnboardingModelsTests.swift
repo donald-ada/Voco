@@ -163,6 +163,46 @@ final class OnboardingModelsTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testCompletionMigrationPersistsConfiguredUpgradeAndKeepsPermissionRecoveryOnNextLaunch() {
+        let migration = OnboardingCompletionMigration.resolution(
+            storedValue: nil,
+            permissions: grantedPermissions,
+            transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef")
+        )
+        XCTAssertTrue(migration.hasCompletedOnboarding)
+        XCTAssertEqual(migration.valueToPersist, true)
+
+        let nextLaunch = OnboardingCompletionMigration.resolution(
+            storedValue: migration.valueToPersist,
+            permissions: [
+                .microphone(.denied),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef")
+        )
+        XCTAssertTrue(nextLaunch.hasCompletedOnboarding)
+        XCTAssertNil(nextLaunch.valueToPersist)
+
+        let permissionProvider = StaticPermissionProvider(
+            snapshots: [
+                .microphone(.denied),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: nextLaunch.hasCompletedOnboarding,
+            permissionProvider: permissionProvider,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
+        )
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
+    }
+
     func testCompletionMigrationKeepsFirstRunWhenDefaultsKeyIsMissingAndSetupIsIncomplete() {
         XCTAssertFalse(
             OnboardingCompletionMigration.resolvedCompletion(
