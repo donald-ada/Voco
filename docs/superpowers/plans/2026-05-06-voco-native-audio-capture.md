@@ -596,3 +596,26 @@ git commit -m "docs(native): mark audio capture verification"
 - Produces 16 kHz mono PCM samples for the future Swift transcription provider.
 - Records duration, sample rate, sample count, and amplitude diagnostics for the settings surface.
 - Keeps hotkey, ASR provider, text injection, HUD overlay, Keychain, and DMG notarization as separate implementation slices.
+
+## Verification Results
+
+Completed on 2026-05-06:
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 42 tests with 0 failures across `AppCoordinatorTests`, `AudioCaptureBufferTests`, `HotkeyModelsTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, `RecordingWorkflowTests`, and `SettingsSectionTests`.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built the native debug app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced the ad-hoc signature, verified the bundle, launched it for smoke validation, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. No whitespace errors were reported and the generated app bundle passed strict codesign verification.
