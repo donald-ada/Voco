@@ -39,7 +39,7 @@ Observed before Task 1: PASS. XCTest executed 56 tests with 0 failures.
 - Create: `native/Tests/VocoAppCoreTests/HUDModelsTests.swift`
 - Create: `native/Sources/VocoAppCore/HUDModels.swift`
 
-- [ ] **Step 1: Write failing HUD model tests**
+- [x] **Step 1: Write failing HUD model tests**
 
 Create `native/Tests/VocoAppCoreTests/HUDModelsTests.swift`:
 
@@ -141,7 +141,7 @@ final class HUDModelsTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -151,7 +151,7 @@ cd native && swift test --filter HUDModelsTests
 
 Expected: compile failure because `HUDSnapshot` and `HUDPhase` do not exist.
 
-- [ ] **Step 3: Implement HUD models**
+- [x] **Step 3: Implement HUD models**
 
 Create `native/Sources/VocoAppCore/HUDModels.swift` with:
 
@@ -288,7 +288,7 @@ private func transcriptPreview(from transcript: TranscriptSnapshot?) -> String? 
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -298,7 +298,7 @@ cd native && swift test --filter HUDModelsTests
 
 Expected: all `HUDModelsTests` pass.
 
-- [ ] **Step 5: Commit HUD models**
+- [x] **Step 5: Commit HUD models**
 
 Run:
 
