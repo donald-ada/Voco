@@ -79,4 +79,100 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(coordinator.launchAtLoginEnabled)
     }
+
+    @MainActor
+    func testFinishingLaunchWithMissingPermissionShowsOnboarding() {
+        let provider = FakePermissionProvider(
+            current: [
+                .microphone(.denied),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.permissionSummary.missingRequiredPermissions, [.microphone])
+        XCTAssertFalse(coordinator.snapshot.isRecordingActionEnabled)
+    }
+
+    @MainActor
+    func testRefreshingPermissionsMovesReadyAppToPermissionNeeded() {
+        let provider = FakePermissionProvider(
+            current: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.status, .ready)
+
+        provider.current = [
+            .microphone(.granted),
+            .accessibility(.denied),
+            .inputMonitoring(.granted)
+        ]
+        coordinator.refreshPermissions()
+
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
+        XCTAssertEqual(coordinator.snapshot.title, "需要权限")
+        XCTAssertEqual(coordinator.permissionSummary.missingRequiredPermissions, [.accessibility])
+    }
+
+    @MainActor
+    func testRequestingMicrophonePermissionRefreshesPermissionsAndRestoresReady() async {
+        let provider = FakePermissionProvider(
+            current: [
+                .microphone(.notDetermined),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+
+        await coordinator.requestMicrophonePermission()
+
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.permissions, provider.requested)
+        XCTAssertTrue(coordinator.permissionSummary.allRequiredGranted)
+    }
+}
+
+private final class FakePermissionProvider: PermissionProviding {
+    var current: [PermissionSnapshot]
+    let requested: [PermissionSnapshot]
+
+    init(current: [PermissionSnapshot], requested: [PermissionSnapshot]) {
+        self.current = current
+        self.requested = requested
+    }
+
+    func currentSnapshots() -> [PermissionSnapshot] {
+        current
+    }
+
+    func requestMicrophoneAccess() async -> [PermissionSnapshot] {
+        requested
+    }
 }

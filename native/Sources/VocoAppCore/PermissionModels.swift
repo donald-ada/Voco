@@ -153,6 +153,7 @@ public struct PermissionSummary: Equatable, Sendable {
     }
 }
 
+@MainActor
 public protocol PermissionProviding {
     func currentSnapshots() -> [PermissionSnapshot]
     func requestMicrophoneAccess() async -> [PermissionSnapshot]

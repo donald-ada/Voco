@@ -47,17 +47,22 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var status: AppRuntimeStatus
     @Published public private(set) var lastErrorMessage: String?
     @Published public private(set) var launchAtLoginEnabled: Bool
+    @Published public private(set) var permissions: [PermissionSnapshot]
 
     private let hasCompletedOnboarding: Bool
+    private let permissionProvider: any PermissionProviding
 
     public init(
         hasCompletedOnboarding: Bool = false,
-        launchAtLoginEnabled: Bool = false
+        launchAtLoginEnabled: Bool = false,
+        permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted
     ) {
         self.status = .launching
         self.lastErrorMessage = nil
         self.launchAtLoginEnabled = launchAtLoginEnabled
         self.hasCompletedOnboarding = hasCompletedOnboarding
+        self.permissionProvider = permissionProvider
+        self.permissions = permissionProvider.currentSnapshots()
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -75,9 +80,36 @@ public final class AppCoordinator: ObservableObject {
         status == .recording
     }
 
+    public var permissionSummary: PermissionSummary {
+        PermissionSummary(snapshots: permissions)
+    }
+
     public func finishLaunching() {
         lastErrorMessage = nil
-        status = hasCompletedOnboarding ? .ready : .needsOnboarding
+        permissions = permissionProvider.currentSnapshots()
+        status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
+    }
+
+    public func refreshPermissions() {
+        let shouldUpdateRuntimeStatus = status == .ready || status == .permissionNeeded
+        permissions = permissionProvider.currentSnapshots()
+
+        guard shouldUpdateRuntimeStatus else {
+            return
+        }
+
+        status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
+    }
+
+    public func requestMicrophonePermission() async {
+        let shouldUpdateRuntimeStatus = status == .ready || status == .permissionNeeded
+        permissions = await permissionProvider.requestMicrophoneAccess()
+
+        if shouldUpdateRuntimeStatus {
+            status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
+        } else {
+            status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
+        }
     }
 
     public func toggleRecordingFromMenu() {
