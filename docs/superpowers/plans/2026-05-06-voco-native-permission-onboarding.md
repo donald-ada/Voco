@@ -292,4 +292,23 @@ git commit -m "docs(native): mark permission onboarding verification"
 
 ## Verification Results
 
-Not run yet.
+Completed on 2026-05-06:
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built `target/native/Voco.app`, generated `Voco.icns`, verified the bundle signature, checked native app icon and menu bar icon resources, launched the app for smoke validation, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 14 tests with 0 failures across `AppCoordinatorTests`, `PermissionModelsTests`, and `SettingsSectionTests`.
+
+```bash
+git diff --check
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. No whitespace errors were reported and the generated app bundle passed strict codesign verification.
