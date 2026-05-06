@@ -4,6 +4,10 @@ Packaging templates and development bundle scripts.
 
 ## Native App Shell
 
+The native Swift/SwiftUI app bundle and DMG are the user-facing install path.
+The native app uses macOS Login Items and must not install the legacy
+`~/Library/LaunchAgents/com.voco.daemon.plist` plist.
+
 Build the native Swift/SwiftUI app shell:
 
 ```bash
@@ -122,11 +126,41 @@ xcrun stapler validate dist/Voco.dmg
 spctl --assess --type open --verbose=4 dist/Voco.dmg
 ```
 
-This native app shell is the starting point for the rewrite. The older
-LaunchAgent and development app bundle workflows remain documented below while
-the native rewrite reaches feature parity.
+## Native Migration Cleanup
 
-## LaunchAgent
+Native Voco detects the legacy user LaunchAgent at:
+
+```text
+~/Library/LaunchAgents/com.voco.daemon.plist
+```
+
+When present, Settings shows a migration warning and an explicit removal action.
+The cleanup path removes only that known user-level plist, never touches
+`/Library/LaunchAgents`, and never requires `sudo`. If removal fails, the app
+surfaces the exact path and the underlying OS error.
+
+## Legacy Asset Removal Gate
+
+The older LaunchAgent and development app bundle workflows remain documented
+below as archived/development-only references. Do not delete or archive the
+legacy CLI, daemon, LaunchAgent template, legacy app bundle script, or Swift HUD
+helper packaging until all native feature-parity items and Task 8 manual UX
+verification pass:
+
+```text
+native microphone capture
+native hotkey recording workflow
+native Doubao transcription
+native text injection
+native HUD overlay
+native Keychain credentials
+native Settings and Diagnostics
+native launch-at-login
+native release packaging
+Task 8 manual UX verification
+```
+
+## Legacy LaunchAgent (Development-Only)
 
 `com.voco.daemon.plist.tmpl` is rendered by:
 
@@ -150,7 +184,7 @@ Template variables:
 
 Phase 6-A uses a user-level LaunchAgent and does not require `sudo`.
 
-## Development App Bundle
+## Legacy Development App Bundle (Development-Only)
 
 Build an unsigned local `Voco.app` bundle:
 

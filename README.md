@@ -6,18 +6,74 @@ See `docs/superpowers/specs/2026-05-01-voco-design.md` for the full design.
 
 ## Status
 
-Phase 7 development: Phase 5 hotkey recording, text injection, and hidden Swift HUD helper are implemented. The daemon can be installed as a user-level LaunchAgent, and a generated `Voco.app` can be copied to `~/Applications/Voco.app` for per-user local installs.
+Native rewrite development: Voco now has a native macOS menu bar app with
+onboarding, Settings, Diagnostics, Keychain-backed credentials, audio capture,
+hotkey recording, Doubao transcription, text injection, HUD overlay, launch at
+login, and native release packaging. The user-facing install path is the native
+`Voco.app` distributed through `dist/Voco.dmg`.
 
-## Build
+The older Rust CLI/daemon, user LaunchAgent template, and Swift HUD helper
+packaging remain in the repository for development reference until the final
+feature-parity and manual UX gate passes. They are not the native user install
+path.
+
+## Native Build
 
 ```sh
-cargo build --workspace
-cd hud && swift build && cd ..
+cd native
+swift build
+swift test
 ```
 
-## Development Daemon
+Build a local native app bundle and run the bundle smoke test:
 
-Without installing the LaunchAgent, `voco daemon start` keeps the direct-spawn development workflow:
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+## Native Install
+
+Build a native DMG for local smoke testing:
+
+```bash
+packaging/build_native_dmg.sh --profile debug --signing-style adhoc
+open dist/Voco.dmg
+```
+
+For a Developer ID release build:
+
+```bash
+VOCO_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Team (TEAMID)" \
+packaging/build_native_dmg.sh --profile release --signing-style developer-id
+```
+
+Open the DMG, drag `Voco.app` to `/Applications`, then launch Voco from the app.
+Grant the requested macOS permissions during onboarding. Login behavior is
+managed by the native app through macOS Login Items; the native app does not
+install `~/Library/LaunchAgents/com.voco.daemon.plist`.
+
+## Migration Cleanup
+
+If an older development install left this user-level LaunchAgent behind:
+
+```text
+~/Library/LaunchAgents/com.voco.daemon.plist
+```
+
+the native Settings window shows a migration warning and offers an explicit
+remove action. Cleanup removes only that known plist path, never touches
+`/Library/LaunchAgents`, and does not require `sudo`. Any removal failure shows
+the exact path and OS error.
+
+## Legacy Development Archive
+
+The commands below are retained for development and historical verification of
+the pre-native architecture. Do not use them as the native user install path.
+
+### Development Daemon
+
+Without installing the LaunchAgent, `voco daemon start` keeps the direct-spawn
+development workflow:
 
 ```bash
 target/debug/voco daemon start
@@ -25,9 +81,9 @@ target/debug/voco status
 target/debug/voco daemon stop
 ```
 
-## LaunchAgent Install
+### Legacy LaunchAgent Install
 
-Install the user LaunchAgent without `sudo`:
+Install the legacy user LaunchAgent without `sudo`:
 
 ```bash
 target/debug/voco daemon install
@@ -61,9 +117,9 @@ target/debug/voco daemon stop
 target/debug/voco daemon uninstall
 ```
 
-## Development App Bundle
+### Legacy Development App Bundle
 
-Build and install a local per-user app bundle:
+Build and install a local legacy per-user app bundle:
 
 ```bash
 packaging/build_app_bundle.sh --profile release
@@ -85,10 +141,10 @@ so launchd runs:
 ~/Applications/Voco.app/Contents/MacOS/voco-daemon
 ```
 
-No `sudo` is required. This local install flow does not sign, notarize,
+No `sudo` is required. This legacy local install flow does not sign, notarize,
 create a DMG/pkg, or install under `/Applications`.
 
-## Phase 5 HUD Development
+### Phase 5 HUD Development
 
 Build the Swift HUD helper before running the daemon from source:
 
