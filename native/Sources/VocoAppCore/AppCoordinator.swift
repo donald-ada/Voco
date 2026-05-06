@@ -156,6 +156,7 @@ public final class AppCoordinator: ObservableObject {
             hotkeyMode: hotkeyMode,
             asrStatus: transcriptionProviderStatus,
             credentials: transcriptionCredentials,
+            installLocation: installLocation,
             transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage
@@ -173,6 +174,7 @@ public final class AppCoordinator: ObservableObject {
             hotkeyMode: hotkeyMode,
             asrStatus: transcriptionProviderStatus,
             credentials: transcriptionCredentials,
+            installLocation: installLocation,
             transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage,

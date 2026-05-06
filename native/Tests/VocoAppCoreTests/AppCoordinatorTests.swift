@@ -767,6 +767,26 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .ready)
         XCTAssertTrue(coordinator.onboarding.isComplete)
     }
+
+    @MainActor
+    func testMountedImageLocationBlocksLaunchAtLoginEnable() async {
+        let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            launchAtLoginProvider: launchProvider,
+            installLocationProvider: StaticInstallLocationProvider(
+                snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Volumes/Voco/Voco.app")
+            )
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.setLaunchAtLoginEnabled(true)
+
+        XCTAssertTrue(launchProvider.requests.isEmpty)
+        XCTAssertEqual(coordinator.launchAtLoginState, .unavailable)
+        XCTAssertEqual(coordinator.installLocation.status, .mountedImage)
+        XCTAssertTrue(coordinator.lastErrorMessage?.contains("/Applications") == true)
+    }
 }
 
 private final class FakePermissionProvider: PermissionProviding {

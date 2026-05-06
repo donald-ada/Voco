@@ -268,4 +268,21 @@ final class DiagnosticsModelsTests: XCTestCase {
         XCTAssertEqual(failure?.severity, .error)
         XCTAssertEqual(failure?.detail, "provider offline")
     }
+
+    @MainActor
+    func testCoordinatorDiagnosticsSnapshotIncludesMountedImageInstallLocationWarning() {
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            installLocationProvider: StaticInstallLocationProvider(
+                snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Volumes/Voco/Voco.app")
+            )
+        )
+
+        coordinator.finishLaunching()
+
+        let installLocationEvent = coordinator.diagnosticsSnapshot.events.first { $0.category == .installLocation }
+        XCTAssertEqual(installLocationEvent?.severity, .warning)
+        XCTAssertEqual(installLocationEvent?.title, "从磁盘映像运行")
+        XCTAssertTrue(installLocationEvent?.detail.contains("/Applications") == true)
+    }
 }

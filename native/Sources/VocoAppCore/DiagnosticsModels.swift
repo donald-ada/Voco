@@ -2,6 +2,7 @@ import Foundation
 
 public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
     case permission
+    case installLocation
     case audio
     case hotkey
     case asr
@@ -16,6 +17,8 @@ public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identi
         switch self {
         case .permission:
             "权限"
+        case .installLocation:
+            "安装位置"
         case .audio:
             "音频"
         case .hotkey:
@@ -33,6 +36,8 @@ public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identi
         switch self {
         case .permission:
             "lock.shield"
+        case .installLocation:
+            "externaldrive"
         case .audio:
             "waveform"
         case .hotkey:
@@ -136,6 +141,7 @@ public struct DiagnosticsSnapshot: Equatable, Sendable {
         hotkeyMode: HotkeyMode,
         asrStatus: TranscriptionProviderStatus,
         credentials: TranscriptionCredentialSnapshot,
+        installLocation: InstallLocationSnapshot? = nil,
         transcript: TranscriptSnapshot?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?,
@@ -152,6 +158,7 @@ public struct DiagnosticsSnapshot: Equatable, Sendable {
                 hotkeyMode: hotkeyMode,
                 asrStatus: asrStatus,
                 credentials: credentials,
+                installLocation: installLocation,
                 transcript: transcript,
                 injection: injection,
                 lastErrorMessage: lastErrorMessage
@@ -224,11 +231,15 @@ public enum DiagnosticEventFactory {
         hotkeyMode: HotkeyMode,
         asrStatus: TranscriptionProviderStatus,
         credentials: TranscriptionCredentialSnapshot,
+        installLocation: InstallLocationSnapshot? = nil,
         transcript: TranscriptSnapshot?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?
     ) -> [DiagnosticEvent] {
         var events = permissionEvents(permissions)
+        if let installLocationEvent = installLocationEvent(installLocation) {
+            events.append(installLocationEvent)
+        }
         events.append(audioEvent(audio))
         events.append(hotkeyEvent(state: hotkeyState, binding: hotkeyBinding, mode: hotkeyMode))
         events.append(asrStatusEvent(asrStatus))
@@ -274,6 +285,19 @@ public enum DiagnosticEventFactory {
         case .denied, .restricted:
             permission.isRequired ? .error : .warning
         }
+    }
+
+    private static func installLocationEvent(_ snapshot: InstallLocationSnapshot?) -> DiagnosticEvent? {
+        guard let snapshot, snapshot.status == .mountedImage else {
+            return nil
+        }
+
+        return DiagnosticEvent(
+            category: .installLocation,
+            severity: .warning,
+            title: snapshot.warningTitle ?? snapshot.title,
+            detail: snapshot.warningDetail ?? snapshot.detail
+        )
     }
 
     private static func audioEvent(_ audio: CapturedAudioSnapshot?) -> DiagnosticEvent {
