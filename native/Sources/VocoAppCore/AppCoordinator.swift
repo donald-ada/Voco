@@ -51,6 +51,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var permissions: [PermissionSnapshot]
     @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
     @Published public private(set) var transcriptionProviderStatus: TranscriptionProviderStatus
+    @Published public private(set) var transcriptionCredentials: TranscriptionCredentialSnapshot
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
@@ -60,6 +61,7 @@ public final class AppCoordinator: ObservableObject {
     private let launchAtLoginProvider: any LaunchAtLoginProviding
     private let recordingWorkflow: any RecordingWorkflowing
     private let hotkeyProvider: any HotkeyProviding
+    private let transcriptionCredentialStore: any TranscriptionCredentialStoring
     public let hotkeyBinding: HotkeyBinding
     public let hotkeyMode: HotkeyMode
 
@@ -68,6 +70,7 @@ public final class AppCoordinator: ObservableObject {
         launchAtLoginEnabled: Bool = false,
         permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted,
         launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider(),
+        transcriptionCredentialStore: any TranscriptionCredentialStoring = InMemoryTranscriptionCredentialStore(),
         recordingWorkflow: any RecordingWorkflowing = StaticRecordingWorkflow(),
         hotkeyProvider: any HotkeyProviding = StaticHotkeyProvider(),
         hotkeyBinding: HotkeyBinding = .default,
@@ -80,12 +83,14 @@ public final class AppCoordinator: ObservableObject {
         self.launchAtLoginProvider = launchAtLoginProvider
         self.recordingWorkflow = recordingWorkflow
         self.hotkeyProvider = hotkeyProvider
+        self.transcriptionCredentialStore = transcriptionCredentialStore
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
         self.permissions = permissionProvider.currentSnapshots()
         self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
         self.hotkeyRuntimeState = .inactive
         self.transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
+        self.transcriptionCredentials = transcriptionCredentialStore.currentSnapshot()
         self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
@@ -128,6 +133,7 @@ public final class AppCoordinator: ObservableObject {
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
+        refreshTranscriptionCredentials()
         status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
         refreshHotkeyRuntime()
     }
@@ -149,7 +155,15 @@ public final class AppCoordinator: ObservableObject {
 
     public func prepareForSettingsPresentation() {
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
+        refreshTranscriptionCredentials()
         refreshPermissions()
+    }
+
+    public func refreshTranscriptionCredentials() {
+        transcriptionCredentials = transcriptionCredentialStore.currentSnapshot()
+        if let message = transcriptionCredentials.lastErrorMessage {
+            lastErrorMessage = message
+        }
     }
 
     public func requestMicrophonePermission() async {
@@ -199,6 +213,28 @@ public final class AppCoordinator: ObservableObject {
             let message = error.localizedDescription
             launchAtLoginState = .failed(message)
             lastErrorMessage = "登录时启动设置失败：\(message)"
+        }
+    }
+
+    public func saveTranscriptionAPIKey(_ apiKey: String) async {
+        do {
+            transcriptionCredentials = try await transcriptionCredentialStore.saveAPIKey(apiKey, for: .doubao)
+            lastErrorMessage = nil
+        } catch {
+            let message = error.localizedDescription
+            transcriptionCredentials = .failed(provider: .doubao, message: message)
+            lastErrorMessage = message
+        }
+    }
+
+    public func clearTranscriptionCredentials() async {
+        do {
+            transcriptionCredentials = try await transcriptionCredentialStore.deleteCredentials(for: .doubao)
+            lastErrorMessage = nil
+        } catch {
+            let message = error.localizedDescription
+            transcriptionCredentials = .failed(provider: .doubao, message: message)
+            lastErrorMessage = message
         }
     }
 

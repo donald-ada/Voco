@@ -369,6 +369,52 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesTranscriptionCredentialSnapshot() {
+        let credentialStore = InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+
+        coordinator.finishLaunching()
+
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasAPIKey)
+        XCTAssertEqual(coordinator.transcriptionCredentials.maskedAPIKey, "sk-t...cdef")
+    }
+
+    @MainActor
+    func testCoordinatorSavesAndClearsTranscriptionCredentials() async throws {
+        let credentialStore = InMemoryTranscriptionCredentialStore()
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+
+        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
+
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasAPIKey)
+        XCTAssertEqual(coordinator.transcriptionCredentials.maskedAPIKey, "sk-t...cdef")
+        XCTAssertNil(coordinator.lastErrorMessage)
+        let savedAPIKey = try await credentialStore.apiKey(for: .doubao)
+        XCTAssertEqual(savedAPIKey, "sk-test-abcdef")
+
+        await coordinator.clearTranscriptionCredentials()
+
+        XCTAssertFalse(coordinator.transcriptionCredentials.hasAPIKey)
+        XCTAssertNil(coordinator.lastErrorMessage)
+        let clearedAPIKey = try await credentialStore.apiKey(for: .doubao)
+        XCTAssertNil(clearedAPIKey)
+    }
+
+    @MainActor
+    func testCredentialStoreFailureSurfacesError() async {
+        let credentialStore = FakeTranscriptionCredentialStore(
+            saveError: TranscriptionCredentialError.storeFailed(message: "Keychain denied")
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+
+        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
+
+        XCTAssertEqual(coordinator.transcriptionCredentials.statusTitle, "Doubao 凭证读取失败")
+        XCTAssertEqual(coordinator.transcriptionCredentials.lastErrorMessage, "保存 ASR 凭证失败：Keychain denied")
+        XCTAssertEqual(coordinator.lastErrorMessage, "保存 ASR 凭证失败：Keychain denied")
+    }
+
+    @MainActor
     func testCoordinatorPublishesRecordingHUDSnapshot() async {
         let coordinator = AppCoordinator(hasCompletedOnboarding: true)
         coordinator.finishLaunching()
@@ -558,5 +604,54 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         }
 
         return result
+    }
+}
+
+@MainActor
+private final class FakeTranscriptionCredentialStore: TranscriptionCredentialStoring {
+    var snapshot: TranscriptionCredentialSnapshot
+    var saveError: Error?
+    var deleteError: Error?
+    private var storedAPIKey: String?
+
+    init(
+        snapshot: TranscriptionCredentialSnapshot = .missing(provider: .doubao),
+        saveError: Error? = nil,
+        deleteError: Error? = nil
+    ) {
+        self.snapshot = snapshot
+        self.saveError = saveError
+        self.deleteError = deleteError
+    }
+
+    func currentSnapshot() -> TranscriptionCredentialSnapshot {
+        snapshot
+    }
+
+    func saveAPIKey(
+        _ apiKey: String,
+        for provider: TranscriptionCredentialProvider
+    ) async throws -> TranscriptionCredentialSnapshot {
+        if let saveError {
+            throw saveError
+        }
+
+        storedAPIKey = apiKey
+        snapshot = .stored(provider: provider, apiKey: apiKey)
+        return snapshot
+    }
+
+    func deleteCredentials(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredentialSnapshot {
+        if let deleteError {
+            throw deleteError
+        }
+
+        storedAPIKey = nil
+        snapshot = .missing(provider: provider)
+        return snapshot
+    }
+
+    func apiKey(for provider: TranscriptionCredentialProvider) async throws -> String? {
+        storedAPIKey
     }
 }
