@@ -285,6 +285,45 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
+    func testURLSessionTransportStreamingChunksSnapshotAudioWhenNoRealtimeChunksWereSent() async throws {
+        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
+            last: true
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let samples = Array(repeating: Int16(1), count: 6_401)
+
+        let streamingSession = try await transport.startStreaming(request: request, progress: nil)
+        _ = try await streamingSession.finish(
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 0.5,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: samples
+            )
+        )
+
+        XCTAssertEqual(task.sentMessages.count, 4)
+        let audioFrameHeaders = task.sentMessages.dropFirst().compactMap { message -> [UInt8]? in
+            guard case .data(let frame) = message else {
+                return nil
+            }
+            return Array(frame.prefix(4))
+        }
+        XCTAssertEqual(
+            audioFrameHeaders,
+            [
+                [0x11, 0x20, 0x01, 0x00],
+                [0x11, 0x20, 0x01, 0x00],
+                [0x11, 0x22, 0x01, 0x00]
+            ]
+        )
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
     func testURLSessionTransportPreservesServerErrorClassification() async throws {
         let errorFrame = DoubaoWireProtocol.buildTestServerErrorFrame(
             code: 45000002,

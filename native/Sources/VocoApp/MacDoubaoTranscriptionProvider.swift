@@ -227,6 +227,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
     private var pendingError: TranscriptionProviderError?
     private var isFinished = false
     private var sentAnyAudio = false
+    private var sentAudioSampleCount = 0
     private var pendingAudioSamples: [Int16] = []
 
     init(
@@ -266,6 +267,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
                     )
                 )
                 sentAnyAudio = true
+                sentAudioSampleCount += frameSamples.count
             }
         } catch let providerError as TranscriptionProviderError {
             pendingError = providerError
@@ -286,26 +288,16 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
         isFinished = true
 
         do {
-            if !pendingAudioSamples.isEmpty {
-                let tailSamples = pendingAudioSamples
-                pendingAudioSamples.removeAll(keepingCapacity: false)
-                try await task.send(
-                    .data(
-                        try DoubaoWireProtocol.buildAudioFrame(
-                            pcm16Samples: tailSamples,
-                            last: true
-                        )
-                    )
-                )
-            } else if !sentAnyAudio, !audio.pcm16Samples.isEmpty {
-                try await task.send(
-                    .data(
-                        try DoubaoWireProtocol.buildAudioFrame(
-                            pcm16Samples: audio.pcm16Samples,
-                            last: true
-                        )
-                    )
-                )
+            var finalSamples = pendingAudioSamples
+            pendingAudioSamples.removeAll(keepingCapacity: false)
+
+            let accountedSampleCount = min(sentAudioSampleCount + finalSamples.count, audio.pcm16Samples.count)
+            if audio.pcm16Samples.count > accountedSampleCount {
+                finalSamples.append(contentsOf: audio.pcm16Samples[accountedSampleCount...])
+            }
+
+            if !finalSamples.isEmpty {
+                try await sendFinalAudioSamples(finalSamples)
             } else {
                 try await task.send(
                     .data(
@@ -326,6 +318,25 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
         } catch {
             await cancelTask()
             throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+        }
+    }
+
+    private func sendFinalAudioSamples(_ samples: [Int16]) async throws {
+        var cursor = 0
+        while cursor < samples.count {
+            let end = min(cursor + Self.frameSampleCount, samples.count)
+            let isLast = end == samples.count
+            try await task.send(
+                .data(
+                    try DoubaoWireProtocol.buildAudioFrame(
+                        pcm16Samples: Array(samples[cursor..<end]),
+                        last: isLast
+                    )
+                )
+            )
+            sentAnyAudio = true
+            sentAudioSampleCount += end - cursor
+            cursor = end
         }
     }
 
