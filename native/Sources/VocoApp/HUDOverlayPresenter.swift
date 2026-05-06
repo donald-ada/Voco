@@ -11,6 +11,7 @@ final class HUDOverlayPresenter {
     private var cancellables: Set<AnyCancellable> = []
     private var autoHideTask: Task<Void, Never>?
     private var lastSnapshot: HUDSnapshot = .hidden
+    private var presentationState = HUDOverlayPresentationState()
 
     private init() {}
 
@@ -61,9 +62,14 @@ final class HUDOverlayPresenter {
         autoHideTask?.cancel()
         lastSnapshot = snapshot
 
-        guard snapshot.isVisible else {
+        switch presentationState.presentationDecision(for: snapshot) {
+        case .hide:
             panel?.orderOut(nil)
             return
+        case .ignore:
+            return
+        case .show:
+            break
         }
 
         positionPanel()
@@ -100,8 +106,40 @@ final class HUDOverlayPresenter {
                 guard self?.lastSnapshot == snapshot else {
                     return
                 }
+                self?.presentationState.markAutoHidden(snapshot)
                 self?.panel?.orderOut(nil)
             }
         }
+    }
+}
+
+enum HUDOverlayPresentationDecision: Equatable {
+    case show
+    case hide
+    case ignore
+}
+
+struct HUDOverlayPresentationState {
+    private var autoHiddenSnapshot: HUDSnapshot?
+
+    mutating func presentationDecision(for snapshot: HUDSnapshot) -> HUDOverlayPresentationDecision {
+        if autoHiddenSnapshot != snapshot {
+            autoHiddenSnapshot = nil
+        }
+
+        guard snapshot.isVisible else {
+            autoHiddenSnapshot = nil
+            return .hide
+        }
+
+        guard autoHiddenSnapshot != snapshot else {
+            return .ignore
+        }
+
+        return .show
+    }
+
+    mutating func markAutoHidden(_ snapshot: HUDSnapshot) {
+        autoHiddenSnapshot = snapshot
     }
 }

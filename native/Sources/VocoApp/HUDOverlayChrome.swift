@@ -6,6 +6,7 @@ enum HUDOverlayChrome {
         static let statusLabelText = "语音输入"
         static let waveformWidth: CGFloat = 48
         static let waveformHeight: CGFloat = 30
+        static let waveformRefreshInterval = 1.0 / 30.0
         static let waveformBarWidth: CGFloat = 2.4
         static let waveformBarSpacing: CGFloat = 3
         static let waveformBarCount = 7
@@ -23,6 +24,7 @@ enum HUDOverlayChrome {
         static let transcriptFontSize: CGFloat = 17
         static let transcriptStatusFontSize: CGFloat = 13
         static let transcriptLineLimit = 2
+        static let transcriptRevealOffsetY: CGFloat = -5
     }
 
     struct ColorToken: Equatable, Sendable {

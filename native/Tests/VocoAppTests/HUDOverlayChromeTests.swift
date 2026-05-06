@@ -7,6 +7,7 @@ final class HUDOverlayChromeTests: XCTestCase {
         XCTAssertEqual(HUDOverlayChrome.Layout.statusLabelText, "语音输入")
         XCTAssertEqual(HUDOverlayChrome.Layout.waveformWidth, 48)
         XCTAssertEqual(HUDOverlayChrome.Layout.waveformHeight, 30)
+        XCTAssertEqual(HUDOverlayChrome.Layout.waveformRefreshInterval, 1.0 / 30.0)
         XCTAssertEqual(HUDOverlayChrome.Layout.waveformBarWidth, 2.4)
         XCTAssertEqual(HUDOverlayChrome.Layout.waveformBarSpacing, 3)
         XCTAssertEqual(HUDOverlayChrome.Layout.waveformBarCount, 7)
@@ -22,6 +23,7 @@ final class HUDOverlayChromeTests: XCTestCase {
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptStatusFontSize, 13)
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptFontSize, 17)
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptLineLimit, 2)
+        XCTAssertEqual(HUDOverlayChrome.Layout.transcriptRevealOffsetY, -5)
     }
 
     func testNotchIslandUsesLatestBlackYellowGreenTokens() {

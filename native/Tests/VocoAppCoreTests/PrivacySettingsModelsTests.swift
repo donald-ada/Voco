@@ -8,7 +8,7 @@ final class PrivacySettingsModelsTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.keychain.title, "Keychain 未保存凭证")
-        XCTAssertEqual(snapshot.keychain.detail, "Keychain 中没有保存 API Key。")
+        XCTAssertEqual(snapshot.keychain.detail, "Keychain 中没有保存 Doubao 凭证。")
         XCTAssertEqual(snapshot.transcriptRetention.title, "不保留转写文本")
         XCTAssertEqual(snapshot.transcriptRetention.detail, "转写文本仅用于本次插入和当前运行时诊断。")
         XCTAssertEqual(snapshot.logsPolicy.title, "日志默认脱敏")

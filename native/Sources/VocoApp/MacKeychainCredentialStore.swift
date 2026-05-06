@@ -12,26 +12,27 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
 
     func currentSnapshot() -> TranscriptionCredentialSnapshot {
         do {
-            guard let apiKey = try readAPIKey(for: .doubao) else {
+            guard let credential = try readCredential(for: .doubao) else {
                 return .missing(provider: .doubao)
             }
 
-            return .stored(provider: .doubao, apiKey: apiKey)
+            return .stored(provider: .doubao, credential: credential)
         } catch {
             return .failed(provider: .doubao, message: error.localizedDescription)
         }
     }
 
-    func saveAPIKey(
-        _ apiKey: String,
+    func saveCredential(
+        _ credential: TranscriptionCredential,
         for provider: TranscriptionCredentialProvider
     ) async throws -> TranscriptionCredentialSnapshot {
-        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw TranscriptionCredentialError.emptyAPIKey
+        let normalizedCredential = try credential.normalized()
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(normalizedCredential)
+        } catch {
+            throw TranscriptionCredentialError.storeFailed(message: error.localizedDescription)
         }
-
-        let data = Data(trimmed.utf8)
         let updateStatus = SecItemUpdate(
             baseQuery(for: provider) as CFDictionary,
             [kSecValueData as String: data] as CFDictionary
@@ -39,7 +40,7 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
 
         switch updateStatus {
         case errSecSuccess:
-            return .stored(provider: provider, apiKey: trimmed)
+            return .stored(provider: provider, credential: normalizedCredential)
         case errSecItemNotFound:
             var addQuery = baseQuery(for: provider)
             addQuery[kSecValueData as String] = data
@@ -50,7 +51,7 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
                 throw TranscriptionCredentialError.storeFailed(message: statusMessage(addStatus))
             }
 
-            return .stored(provider: provider, apiKey: trimmed)
+            return .stored(provider: provider, credential: normalizedCredential)
         default:
             throw TranscriptionCredentialError.storeFailed(message: statusMessage(updateStatus))
         }
@@ -65,11 +66,11 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
         return .missing(provider: provider)
     }
 
-    func apiKey(for provider: TranscriptionCredentialProvider) async throws -> String? {
-        try readAPIKey(for: provider)
+    func credential(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredential? {
+        try readCredential(for: provider)
     }
 
-    private func readAPIKey(for provider: TranscriptionCredentialProvider) throws -> String? {
+    private func readCredential(for provider: TranscriptionCredentialProvider) throws -> TranscriptionCredential? {
         var query = baseQuery(for: provider)
         query[kSecReturnData as String] = kCFBooleanTrue
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -82,10 +83,20 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
             guard let data = item as? Data else {
                 throw TranscriptionCredentialError.readFailed(message: "Keychain 返回的数据格式无效。")
             }
-            guard let apiKey = String(data: data, encoding: .utf8) else {
-                throw TranscriptionCredentialError.readFailed(message: "Keychain 返回的数据不是 UTF-8 文本。")
+
+            if let credential = try? JSONDecoder().decode(TranscriptionCredential.self, from: data) {
+                return try credential.normalized()
             }
-            return apiKey
+
+            guard let legacyAPIKey = String(data: data, encoding: .utf8) else {
+                throw TranscriptionCredentialError.readFailed(message: "Keychain 返回的数据不是 JSON 或 UTF-8 文本。")
+            }
+            let trimmedLegacyAPIKey = legacyAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedLegacyAPIKey.isEmpty else {
+                return nil
+            }
+
+            return .doubaoAPIKey(trimmedLegacyAPIKey)
         case errSecItemNotFound:
             return nil
         default:

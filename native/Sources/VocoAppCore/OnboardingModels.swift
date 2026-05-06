@@ -267,9 +267,9 @@ public struct OnboardingSnapshot: Equatable, Sendable {
         if let message = credentials.lastErrorMessage {
             status = .blocked
             statusDetail = message
-        } else if credentials.hasAPIKey {
+        } else if credentials.hasCredential {
             status = .complete
-            statusDetail = credentials.maskedAPIKey ?? credentials.storageDetail
+            statusDetail = credentials.maskedCredential ?? credentials.storageDetail
         } else {
             status = .actionNeeded
             statusDetail = credentials.storageDetail
@@ -277,8 +277,8 @@ public struct OnboardingSnapshot: Equatable, Sendable {
 
         return OnboardingStepSnapshot(
             id: .asrSetup,
-            detail: "保存 Doubao API Key 后，Voco 才能完成本地录音后的云端转写。",
-            systemImage: credentials.hasAPIKey ? "key.fill" : "key",
+            detail: "保存 Doubao 凭证后，Voco 才能完成本地录音后的云端转写。",
+            systemImage: credentials.hasCredential ? "key.fill" : "key",
             status: status,
             statusDetail: statusDetail,
             isRequired: true,
@@ -415,7 +415,7 @@ public enum OnboardingCompletionMigration {
         }
 
         let inferredCompletion = PermissionSummary(snapshots: permissions).allRequiredGranted &&
-            transcriptionCredentials.hasAPIKey
+            transcriptionCredentials.hasCredential
         return OnboardingCompletionResolution(
             hasCompletedOnboarding: inferredCompletion,
             valueToPersist: inferredCompletion ? true : nil

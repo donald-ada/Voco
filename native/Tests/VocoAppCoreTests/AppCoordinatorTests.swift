@@ -520,6 +520,24 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorSavesLegacyDoubaoCredentialMode() async throws {
+        let credentialStore = InMemoryTranscriptionCredentialStore()
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+
+        await coordinator.saveDoubaoAppIDAccessToken(
+            appID: "3145608744",
+            accessToken: "legacy-token"
+        )
+
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasCredential)
+        XCTAssertFalse(coordinator.transcriptionCredentials.hasAPIKey)
+        XCTAssertEqual(coordinator.transcriptionCredentials.mode, .appIDAccessToken)
+        let credential = try await credentialStore.credential(for: .doubao)
+        XCTAssertEqual(credential?.appID, "3145608744")
+        XCTAssertEqual(credential?.accessToken, "legacy-token")
+    }
+
+    @MainActor
     func testSavingTranscriptionCredentialRefreshesProviderStatus() async {
         let credentialStore = InMemoryTranscriptionCredentialStore()
         let recordingWorkflow = FakeRecordingWorkflow(
@@ -1079,7 +1097,7 @@ private final class FakeTranscriptionCredentialStore: TranscriptionCredentialSto
     var snapshot: TranscriptionCredentialSnapshot
     var saveError: Error?
     var deleteError: Error?
-    private var storedAPIKey: String?
+    private var storedCredential: TranscriptionCredential?
 
     init(
         snapshot: TranscriptionCredentialSnapshot = .missing(provider: .doubao),
@@ -1095,16 +1113,17 @@ private final class FakeTranscriptionCredentialStore: TranscriptionCredentialSto
         snapshot
     }
 
-    func saveAPIKey(
-        _ apiKey: String,
+    func saveCredential(
+        _ credential: TranscriptionCredential,
         for provider: TranscriptionCredentialProvider
     ) async throws -> TranscriptionCredentialSnapshot {
         if let saveError {
             throw saveError
         }
 
-        storedAPIKey = apiKey
-        snapshot = .stored(provider: provider, apiKey: apiKey)
+        let normalizedCredential = try credential.normalized()
+        storedCredential = normalizedCredential
+        snapshot = .stored(provider: provider, credential: normalizedCredential)
         return snapshot
     }
 
@@ -1113,12 +1132,12 @@ private final class FakeTranscriptionCredentialStore: TranscriptionCredentialSto
             throw deleteError
         }
 
-        storedAPIKey = nil
+        storedCredential = nil
         snapshot = .missing(provider: provider)
         return snapshot
     }
 
-    func apiKey(for provider: TranscriptionCredentialProvider) async throws -> String? {
-        storedAPIKey
+    func credential(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredential? {
+        storedCredential
     }
 }

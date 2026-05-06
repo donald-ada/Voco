@@ -7,8 +7,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     func testProviderReportsAuthenticationRequiredWithoutStoredAPIKey() {
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
-            transport: FakeDoubaoTransport(),
-            legacyConfigURL: nil
+            transport: FakeDoubaoTransport()
         )
 
         XCTAssertEqual(provider.status, .authenticationRequired(providerName: "Doubao"))
@@ -18,8 +17,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let transport = FakeDoubaoTransport()
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
-            transport: transport,
-            legacyConfigURL: nil
+            transport: transport
         )
 
         do {
@@ -35,7 +33,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         } catch {
             XCTAssertEqual(
                 error.localizedDescription,
-                "Doubao 认证失败：Keychain 中没有保存 Doubao API Key。"
+                "Doubao 认证失败：Keychain 中没有保存 Doubao 凭证。"
             )
         }
 
@@ -59,8 +57,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         )
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
-            transport: transport,
-            legacyConfigURL: nil
+            transport: transport
         )
         var received: [TranscriptPartialSnapshot] = []
 
@@ -83,19 +80,16 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertNil(transport.requests.first?.safeDebugDescription.range(of: "sk-test-secret"))
     }
 
-    func testProviderPrefersLegacyConfigAppIDAccessTokenCredentials() async throws {
-        let legacyConfigURL = try makeLegacyDoubaoConfig(
-            appID: "3145608744",
-            accessToken: "legacy-token",
-            resourceID: "volc.seedasr.sauc.duration"
-        )
-        defer { try? FileManager.default.removeItem(at: legacyConfigURL.deletingLastPathComponent()) }
-
+    func testProviderBuildsRequestFromStoredAppIDAccessTokenCredential() async throws {
         let transport = FakeDoubaoTransport()
         let provider = MacDoubaoTranscriptionProvider(
-            credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "wrong-api-key"),
-            transport: transport,
-            legacyConfigURL: legacyConfigURL
+            credentialStore: InMemoryTranscriptionCredentialStore(
+                credential: .doubaoAppIDAccessToken(
+                    appID: "3145608744",
+                    accessToken: "legacy-token"
+                )
+            ),
+            transport: transport
         )
 
         _ = try await provider.transcribe(
@@ -110,26 +104,23 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 1)
         XCTAssertEqual(
             transport.requests.first?.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
         )
         XCTAssertEqual(transport.requests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.requests.first?.headers["X-Api-Access-Key"], "legacy-token")
         XCTAssertNil(transport.requests.first?.headers["X-Api-Key"])
     }
 
-    func testProviderStartsStreamingFromLegacyConfigCredentials() async throws {
-        let legacyConfigURL = try makeLegacyDoubaoConfig(
-            appID: "3145608744",
-            accessToken: "legacy-token",
-            resourceID: "volc.seedasr.sauc.duration"
-        )
-        defer { try? FileManager.default.removeItem(at: legacyConfigURL.deletingLastPathComponent()) }
-
+    func testProviderStartsStreamingFromStoredAppIDAccessTokenCredential() async throws {
         let transport = FakeDoubaoTransport()
         let provider = MacDoubaoTranscriptionProvider(
-            credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "wrong-api-key"),
-            transport: transport,
-            legacyConfigURL: legacyConfigURL
+            credentialStore: InMemoryTranscriptionCredentialStore(
+                credential: .doubaoAppIDAccessToken(
+                    appID: "3145608744",
+                    accessToken: "legacy-token"
+                )
+            ),
+            transport: transport
         )
 
         _ = try await provider.startStreaming(progress: nil)
@@ -137,7 +128,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.streamingRequests.count, 1)
         XCTAssertEqual(
             transport.streamingRequests.first?.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
         )
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-Access-Key"], "legacy-token")
@@ -410,28 +401,6 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
-    private func makeLegacyDoubaoConfig(
-        appID: String,
-        accessToken: String,
-        resourceID: String
-    ) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("voco-native-doubao-config-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("config.toml")
-        let contents = """
-        backend = "doubao"
-
-        [doubao]
-        app_id = "\(appID)"
-        access_token = "\(accessToken)"
-        endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
-        model_id = "bigmodel"
-        resource_id = "\(resourceID)"
-        """
-        try Data(contents.utf8).write(to: url)
-        return url
-    }
 }
 
 @MainActor

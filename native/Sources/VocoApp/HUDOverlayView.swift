@@ -15,67 +15,76 @@ private struct HUDNotchIslandOverlay: View {
     let snapshot: HUDSnapshot
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            let now = timeline.date.timeIntervalSinceReferenceDate
-            let preview = transcriptPreview
-            let hasTranscript = preview != nil
-            let width = hasTranscript
-                ? HUDOverlayChrome.Layout.notchExpandedWidth
-                : HUDOverlayChrome.Layout.notchCollapsedWidth
-            let height = hasTranscript
-                ? HUDOverlayChrome.Layout.notchExpandedHeight
-                : HUDOverlayChrome.Layout.notchCollapsedHeight
-            let cornerRadius = hasTranscript
-                ? 28.0
-                : HUDOverlayChrome.Layout.notchCollapsedHeight / 2.0
+        let preview = transcriptPreview
+        let hasTranscript = preview != nil
+        let width = hasTranscript
+            ? HUDOverlayChrome.Layout.notchExpandedWidth
+            : HUDOverlayChrome.Layout.notchCollapsedWidth
+        let height = hasTranscript
+            ? HUDOverlayChrome.Layout.notchExpandedHeight
+            : HUDOverlayChrome.Layout.notchCollapsedHeight
+        let cornerRadius = hasTranscript
+            ? 28.0
+            : HUDOverlayChrome.Layout.notchCollapsedHeight / 2.0
 
-            ZStack(alignment: .top) {
-                islandContent(time: now, transcriptPreview: preview)
-                    .padding(.horizontal, hasTranscript ? 20 : 16)
-                    .frame(width: width, height: height)
-                    .background {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(HUDOverlayChrome.ColorToken.notchCapsule.color)
-                            .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
-                    }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(
-                                HUDOverlayChrome.ColorToken.notchCapsuleBorder.color,
-                                lineWidth: 1
-                            )
-                    )
-                    .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hasTranscript)
-                    .padding(.top, HUDOverlayChrome.Layout.notchShadowPadding)
-            }
-            .opacity(snapshot.isVisible ? 1.0 : 0.0)
-            .frame(
-                width: HUDOverlayChrome.Layout.panelSize.width,
-                height: HUDOverlayChrome.Layout.panelSize.height,
-                alignment: .top
-            )
-            .background(Color.clear)
+        ZStack(alignment: .top) {
+            islandContent(transcriptPreview: preview)
+                .padding(.horizontal, hasTranscript ? 20 : 16)
+                .frame(width: width, height: height)
+                .clipped()
+                .background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(HUDOverlayChrome.ColorToken.notchCapsule.color)
+                        .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            HUDOverlayChrome.ColorToken.notchCapsuleBorder.color,
+                            lineWidth: 1
+                        )
+                )
+                .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hasTranscript)
+                .padding(.top, HUDOverlayChrome.Layout.notchShadowPadding)
         }
+        .opacity(snapshot.isVisible ? 1.0 : 0.0)
+        .frame(
+            width: HUDOverlayChrome.Layout.panelSize.width,
+            height: HUDOverlayChrome.Layout.panelSize.height,
+            alignment: .top
+        )
+        .background(Color.clear)
     }
 
     @ViewBuilder
-    private func islandContent(time: TimeInterval, transcriptPreview: String?) -> some View {
-        if let transcriptPreview {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    statusLabel
-                    Spacer(minLength: 12)
-                    HUDMiniWaveform(phase: snapshot.phase, time: time)
-                }
+    private func islandContent(transcriptPreview: String?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            statusRow
+
+            if let transcriptPreview {
                 transcriptLine(transcriptPreview)
-            }
-        } else {
-            HStack(spacing: HUDOverlayChrome.Layout.contentSpacing) {
-                statusLabel
-                Spacer(minLength: 6)
-                HUDMiniWaveform(phase: snapshot.phase, time: time)
+                    .transition(transcriptRevealTransition)
             }
         }
+    }
+
+    private var statusRow: some View {
+        HStack(spacing: HUDOverlayChrome.Layout.contentSpacing) {
+            statusLabel
+            Spacer(minLength: 12)
+            HUDMiniWaveform(phase: snapshot.phase)
+        }
+    }
+
+    private var transcriptRevealTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(
+                with: .offset(y: HUDOverlayChrome.Layout.transcriptRevealOffsetY)
+            ),
+            removal: .opacity.combined(
+                with: .offset(y: HUDOverlayChrome.Layout.transcriptRevealOffsetY)
+            )
+        )
     }
 
     private var statusLabel: some View {
@@ -130,16 +139,31 @@ private struct HUDNotchIslandOverlay: View {
 
 private struct HUDMiniWaveform: View {
     let phase: HUDPhase
-    let time: TimeInterval
 
     var body: some View {
+        TimelineView(
+            .animation(minimumInterval: HUDOverlayChrome.Layout.waveformRefreshInterval)
+        ) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+
+            waveformBars(time: time)
+        }
+    }
+
+    private var color: Color {
+        phase == .error
+            ? HUDOverlayChrome.ColorToken.error.color
+            : HUDOverlayChrome.ColorToken.waveform.color
+    }
+
+    private func waveformBars(time: TimeInterval) -> some View {
         HStack(spacing: HUDOverlayChrome.Layout.waveformBarSpacing) {
             ForEach(0..<HUDOverlayChrome.Layout.waveformBarCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: HUDOverlayChrome.Layout.waveformBarWidth / 2.0)
                     .fill(color)
                     .frame(
                         width: HUDOverlayChrome.Layout.waveformBarWidth,
-                        height: barHeight(index)
+                        height: barHeight(index, time: time)
                     )
             }
         }
@@ -149,13 +173,7 @@ private struct HUDMiniWaveform: View {
         )
     }
 
-    private var color: Color {
-        phase == .error
-            ? HUDOverlayChrome.ColorToken.error.color
-            : HUDOverlayChrome.ColorToken.waveform.color
-    }
-
-    private func barHeight(_ index: Int) -> CGFloat {
+    private func barHeight(_ index: Int, time: TimeInterval) -> CGFloat {
         let pattern = [0.40, 0.70, 1.0, 0.78, 0.48, 0.62, 0.42][index]
 
         switch phase {

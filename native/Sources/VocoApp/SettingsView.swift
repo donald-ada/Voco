@@ -4,7 +4,10 @@ import VocoAppCore
 
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
+    @State private var selectedDoubaoCredentialMode: DoubaoCredentialMode = .apiKey
     @State private var transcriptionAPIKey = ""
+    @State private var doubaoAppID = ""
+    @State private var doubaoAccessToken = ""
 
     var body: some View {
         NavigationSplitView {
@@ -63,11 +66,13 @@ struct SettingsView: View {
         }
         .onAppear {
             coordinator.prepareForSettingsPresentation()
+            syncSelectedDoubaoCredentialMode()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             coordinator.refreshLegacyInstall()
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
+            syncSelectedDoubaoCredentialMode()
         }
     }
 
@@ -338,7 +343,7 @@ struct SettingsView: View {
             Divider()
 
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: coordinator.transcriptionCredentials.hasAPIKey ? "key.fill" : "key")
+                Image(systemName: coordinator.transcriptionCredentials.hasCredential ? "key.fill" : "key")
                     .frame(width: 18)
                     .foregroundStyle(credentialTint(coordinator.transcriptionCredentials))
 
@@ -347,27 +352,52 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
 
-                    Text(coordinator.transcriptionCredentials.maskedAPIKey ?? coordinator.transcriptionCredentials.storageDetail)
+                    Text(
+                        coordinator.transcriptionCredentials.maskedCredential
+                            ?? coordinator.transcriptionCredentials.storageDetail
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            SecureField("Doubao API Key", text: $transcriptionAPIKey)
-                .textFieldStyle(.roundedBorder)
+            Picker("Doubao 凭证模式", selection: $selectedDoubaoCredentialMode) {
+                ForEach(DoubaoCredentialMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(selectedDoubaoCredentialMode.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            credentialFields
 
             HStack(spacing: 8) {
                 Button {
+                    let mode = selectedDoubaoCredentialMode
                     let apiKey = transcriptionAPIKey
-                    transcriptionAPIKey = ""
+                    let appID = doubaoAppID
+                    let accessToken = doubaoAccessToken
+                    clearTranscriptionInputFields()
                     Task {
-                        await coordinator.saveTranscriptionAPIKey(apiKey)
+                        switch mode {
+                        case .apiKey:
+                            await coordinator.saveTranscriptionAPIKey(apiKey)
+                        case .appIDAccessToken:
+                            await coordinator.saveDoubaoAppIDAccessToken(
+                                appID: appID,
+                                accessToken: accessToken
+                            )
+                        }
                     }
                 } label: {
                     Label("保存到 Keychain", systemImage: "key")
                 }
-                .disabled(transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canSaveSelectedCredential)
 
                 Button(role: .destructive) {
                     Task {
@@ -376,11 +406,36 @@ struct SettingsView: View {
                 } label: {
                     Label("清除凭证", systemImage: "trash")
                 }
-                .disabled(!coordinator.transcriptionCredentials.hasAPIKey)
+                .disabled(!coordinator.transcriptionCredentials.hasCredential)
             }
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var credentialFields: some View {
+        switch selectedDoubaoCredentialMode {
+        case .apiKey:
+            SecureField("Doubao API Key", text: $transcriptionAPIKey)
+                .textFieldStyle(.roundedBorder)
+        case .appIDAccessToken:
+            TextField("Doubao App ID", text: $doubaoAppID)
+                .textFieldStyle(.roundedBorder)
+
+            SecureField("Doubao Access Token", text: $doubaoAccessToken)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var canSaveSelectedCredential: Bool {
+        switch selectedDoubaoCredentialMode {
+        case .apiKey:
+            !transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .appIDAccessToken:
+            !doubaoAppID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !doubaoAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     @ViewBuilder
@@ -604,7 +659,21 @@ struct SettingsView: View {
             return .red
         }
 
-        return snapshot.hasAPIKey ? .green : .secondary
+        return snapshot.hasCredential ? .green : .secondary
+    }
+
+    private func syncSelectedDoubaoCredentialMode() {
+        guard let mode = coordinator.transcriptionCredentials.mode else {
+            return
+        }
+
+        selectedDoubaoCredentialMode = mode
+    }
+
+    private func clearTranscriptionInputFields() {
+        transcriptionAPIKey = ""
+        doubaoAppID = ""
+        doubaoAccessToken = ""
     }
 
     private func statusTint(for systemImage: String) -> Color {

@@ -4,7 +4,10 @@ import VocoAppCore
 
 struct OnboardingView: View {
     @ObservedObject var coordinator: AppCoordinator
+    @State private var selectedDoubaoCredentialMode: DoubaoCredentialMode = .apiKey
     @State private var transcriptionAPIKey = ""
+    @State private var doubaoAppID = ""
+    @State private var doubaoAccessToken = ""
 
     var body: some View {
         ScrollView {
@@ -47,10 +50,12 @@ struct OnboardingView: View {
         .onAppear {
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
+            syncSelectedDoubaoCredentialMode()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
+            syncSelectedDoubaoCredentialMode()
         }
     }
 
@@ -166,20 +171,42 @@ struct OnboardingView: View {
 
     private var asrControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SecureField("Doubao API Key", text: $transcriptionAPIKey)
-                .textFieldStyle(.roundedBorder)
+            Picker("Doubao 凭证模式", selection: $selectedDoubaoCredentialMode) {
+                ForEach(DoubaoCredentialMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(selectedDoubaoCredentialMode.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            onboardingCredentialFields
 
             HStack(spacing: 8) {
                 Button {
+                    let mode = selectedDoubaoCredentialMode
                     let apiKey = transcriptionAPIKey
-                    transcriptionAPIKey = ""
+                    let appID = doubaoAppID
+                    let accessToken = doubaoAccessToken
+                    clearTranscriptionInputFields()
                     Task {
-                        await coordinator.saveTranscriptionAPIKey(apiKey)
+                        switch mode {
+                        case .apiKey:
+                            await coordinator.saveTranscriptionAPIKey(apiKey)
+                        case .appIDAccessToken:
+                            await coordinator.saveDoubaoAppIDAccessToken(
+                                appID: appID,
+                                accessToken: accessToken
+                            )
+                        }
                     }
                 } label: {
                     Label("保存到 Keychain", systemImage: "key")
                 }
-                .disabled(transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canSaveSelectedCredential)
 
                 Button(role: .destructive) {
                     Task {
@@ -188,9 +215,34 @@ struct OnboardingView: View {
                 } label: {
                     Label("清除凭证", systemImage: "trash")
                 }
-                .disabled(!coordinator.transcriptionCredentials.hasAPIKey)
+                .disabled(!coordinator.transcriptionCredentials.hasCredential)
             }
             .controlSize(.small)
+        }
+    }
+
+    @ViewBuilder
+    private var onboardingCredentialFields: some View {
+        switch selectedDoubaoCredentialMode {
+        case .apiKey:
+            SecureField("Doubao API Key", text: $transcriptionAPIKey)
+                .textFieldStyle(.roundedBorder)
+        case .appIDAccessToken:
+            TextField("Doubao App ID", text: $doubaoAppID)
+                .textFieldStyle(.roundedBorder)
+
+            SecureField("Doubao Access Token", text: $doubaoAccessToken)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var canSaveSelectedCredential: Bool {
+        switch selectedDoubaoCredentialMode {
+        case .apiKey:
+            !transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .appIDAccessToken:
+            !doubaoAppID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !doubaoAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
@@ -242,6 +294,20 @@ struct OnboardingView: View {
         } else {
             coordinator.refreshPermissions()
         }
+    }
+
+    private func syncSelectedDoubaoCredentialMode() {
+        guard let mode = coordinator.transcriptionCredentials.mode else {
+            return
+        }
+
+        selectedDoubaoCredentialMode = mode
+    }
+
+    private func clearTranscriptionInputFields() {
+        transcriptionAPIKey = ""
+        doubaoAppID = ""
+        doubaoAccessToken = ""
     }
 
     private func openSettings(_ action: OnboardingAction) {

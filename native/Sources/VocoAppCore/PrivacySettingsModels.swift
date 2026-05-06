@@ -22,9 +22,9 @@ public struct KeychainPrivacyStatusSnapshot: Equatable, Sendable {
             self.title = "Keychain 访问失败"
             self.detail = credentials.storageDetail
             self.systemImage = "exclamationmark.triangle.fill"
-        } else if credentials.hasAPIKey {
+        } else if credentials.hasCredential {
             self.title = "Keychain 已保存凭证"
-            self.detail = credentials.maskedAPIKey ?? credentials.storageDetail
+            self.detail = credentials.maskedCredential ?? credentials.storageDetail
             self.systemImage = "key.fill"
         } else {
             self.title = "Keychain 未保存凭证"

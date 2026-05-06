@@ -416,7 +416,7 @@ public enum DiagnosticEventFactory {
         let severity: DiagnosticSeverity
         if credentials.lastErrorMessage != nil {
             severity = .error
-        } else if credentials.hasAPIKey {
+        } else if credentials.hasCredential {
             severity = .ok
         } else {
             severity = .warning
@@ -426,7 +426,7 @@ public enum DiagnosticEventFactory {
             category: .asr,
             severity: severity,
             title: credentials.statusTitle,
-            detail: credentials.maskedAPIKey ?? credentials.storageDetail
+            detail: credentials.maskedCredential ?? credentials.storageDetail
         )
     }
 

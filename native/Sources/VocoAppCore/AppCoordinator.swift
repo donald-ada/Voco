@@ -264,7 +264,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private var diagnosticSecrets: [String] {
-        [transcriptionCredentials.maskedAPIKey].compactMap { $0 }
+        [transcriptionCredentials.maskedCredential].compactMap { $0 }
     }
 
     private var diagnosticTranscriptBodies: [String] {
@@ -384,8 +384,18 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
+        await saveTranscriptionCredential(.doubaoAPIKey(apiKey))
+    }
+
+    public func saveDoubaoAppIDAccessToken(appID: String, accessToken: String) async {
+        await saveTranscriptionCredential(
+            .doubaoAppIDAccessToken(appID: appID, accessToken: accessToken)
+        )
+    }
+
+    public func saveTranscriptionCredential(_ credential: TranscriptionCredential) async {
         do {
-            transcriptionCredentials = try await transcriptionCredentialStore.saveAPIKey(apiKey, for: .doubao)
+            transcriptionCredentials = try await transcriptionCredentialStore.saveCredential(credential, for: .doubao)
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
