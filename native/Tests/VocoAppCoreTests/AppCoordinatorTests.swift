@@ -210,6 +210,42 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testRefreshingPermissionsAfterCompletedOnboardingRestoresReadyAndHotkey() {
+        let permissionProvider = FakePermissionProvider(
+            current: [
+                .microphone(.granted),
+                .accessibility(.denied),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            permissionProvider: permissionProvider,
+            hotkeyProvider: hotkeyProvider
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .permissionNeeded)
+
+        permissionProvider.current = [
+            .microphone(.granted),
+            .accessibility(.granted),
+            .inputMonitoring(.granted)
+        ]
+        coordinator.refreshPermissions()
+
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
+        XCTAssertEqual(hotkeyProvider.startRequests.count, 1)
+    }
+
+    @MainActor
     func testHotkeyToggleMovesThroughRecordingAndTranscribing() {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)

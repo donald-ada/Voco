@@ -12,24 +12,29 @@ struct SettingsView: View {
             }
             .navigationTitle("Voco")
         } detail: {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Voco 设置")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Voco 设置")
+                        .font(.title2)
+                        .fontWeight(.semibold)
 
-                statusRow
+                    statusRow
 
-                Text("当前版本包含 native macOS app shell：菜单栏状态、设置窗口和登录项开关的界面入口。")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text("当前版本包含 native macOS app shell：菜单栏状态、设置窗口、登录项开关和全局快捷键入口。")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                launchAtLoginSection
+                    launchAtLoginSection
 
-                permissionsSection
+                    hotkeySection
 
-                Spacer()
+                    permissionsSection
+
+                    Spacer()
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, minHeight: 360, alignment: .topLeading)
             }
-            .padding(24)
             .frame(minWidth: 480, minHeight: 360, alignment: .topLeading)
         }
         .onAppear {
@@ -114,6 +119,36 @@ struct SettingsView: View {
         }
     }
 
+    private var hotkeySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("快捷键")
+                    .font(.headline)
+                Spacer()
+                Label(coordinator.hotkeyRuntimeState.title, systemImage: coordinator.hotkeyRuntimeState.systemImage)
+                    .font(.caption)
+                    .foregroundStyle(hotkeyTint(coordinator.hotkeyRuntimeState))
+            }
+
+            HStack(spacing: 8) {
+                Label(coordinator.hotkeyBinding.displayName, systemImage: "keyboard")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text(coordinator.hotkeyMode.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(coordinator.hotkeyRuntimeState.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private func permissionRow(_ permission: PermissionSnapshot) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: permission.kind.systemImage)
@@ -178,6 +213,19 @@ struct SettingsView: View {
             .red
         case .unknown:
             .orange
+        }
+    }
+
+    private func hotkeyTint(_ state: HotkeyRuntimeState) -> Color {
+        switch state {
+        case .listening:
+            .green
+        case .inactive:
+            .secondary
+        case .permissionNeeded:
+            .yellow
+        case .failed:
+            .red
         }
     }
 

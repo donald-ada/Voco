@@ -57,8 +57,10 @@ struct VocoNativeApp: App {
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
         let appCoordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
             permissionProvider: MacPermissionProvider(),
-            launchAtLoginProvider: MacLaunchAtLoginProvider()
+            launchAtLoginProvider: MacLaunchAtLoginProvider(),
+            hotkeyProvider: MacHotkeyProvider()
         )
         appCoordinator.finishLaunching()
         _coordinator = StateObject(wrappedValue: appCoordinator)

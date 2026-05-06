@@ -111,7 +111,10 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func refreshPermissions() {
-        let shouldUpdateRuntimeStatus = status == .ready || status == .permissionNeeded
+        let shouldUpdateRuntimeStatus =
+            status == .ready ||
+            status == .permissionNeeded ||
+            (status == .needsOnboarding && hasCompletedOnboarding)
         permissions = permissionProvider.currentSnapshots()
 
         guard shouldUpdateRuntimeStatus else {
@@ -207,7 +210,7 @@ public final class AppCoordinator: ObservableObject {
 
     private var hotkeyPermissionsGranted: Bool {
         for kind in [PermissionKind.accessibility, .inputMonitoring] {
-            if permissions.first(where: { $0.kind == kind && $0.isRequired })?.state.isGranted == false {
+            if permissions.first(where: { $0.kind == kind && $0.isRequired })?.state.isGranted != true {
                 return false
             }
         }
