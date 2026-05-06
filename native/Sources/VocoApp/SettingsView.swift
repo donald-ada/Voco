@@ -30,6 +30,8 @@ struct SettingsView: View {
 
                     statusRow
 
+                    legacyInstallSection
+
                     Text("当前版本包含 native macOS app shell：菜单栏状态、设置窗口、登录项开关和全局快捷键入口。")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -63,6 +65,7 @@ struct SettingsView: View {
             coordinator.prepareForSettingsPresentation()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            coordinator.refreshLegacyInstall()
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
         }
@@ -121,6 +124,47 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var legacyInstallSection: some View {
+        if coordinator.legacyInstall.requiresUserAction {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(
+                        coordinator.legacyInstall.title,
+                        systemImage: coordinator.legacyInstall.systemImage
+                    )
+                    .font(.headline)
+                    .foregroundStyle(legacyInstallTint(coordinator.legacyInstall.status))
+
+                    Spacer()
+
+                    Button {
+                        coordinator.refreshLegacyInstall()
+                    } label: {
+                        Label("重新检查", systemImage: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
+                }
+
+                Text(coordinator.legacyInstall.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(role: .destructive) {
+                    Task {
+                        await coordinator.removeLegacyLaunchAgentFromUserAction()
+                    }
+                } label: {
+                    Label("移除旧版启动项", systemImage: "trash")
+                }
+                .controlSize(.small)
+            }
+            .padding(12)
+            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     private var audioSettingsSection: some View {
@@ -569,6 +613,17 @@ struct SettingsView: View {
         }
 
         return .secondary
+    }
+
+    private func legacyInstallTint(_ status: LegacyInstallStatus) -> Color {
+        switch status {
+        case .notFound:
+            .secondary
+        case .detected:
+            .yellow
+        case .removalFailed:
+            .red
+        }
     }
 
     private func openSettings(for kind: PermissionKind) {

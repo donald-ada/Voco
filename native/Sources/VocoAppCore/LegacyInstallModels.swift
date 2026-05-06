@@ -39,6 +39,17 @@ public struct LegacyInstallSnapshot: Equatable, Sendable {
         }
     }
 
+    public var systemImage: String {
+        switch status {
+        case .notFound:
+            "checkmark.circle"
+        case .detected:
+            "exclamationmark.triangle.fill"
+        case .removalFailed:
+            "xmark.octagon.fill"
+        }
+    }
+
     public static func knownLaunchAgentURL(homeDirectory: URL) -> URL {
         homeDirectory
             .appendingPathComponent("Library", isDirectory: true)

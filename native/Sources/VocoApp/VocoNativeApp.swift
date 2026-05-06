@@ -96,7 +96,8 @@ struct VocoNativeApp: App {
                 textInjection: MacTextInjectionProvider()
             ),
             hotkeyProvider: MacHotkeyProvider(),
-            installLocationProvider: MacInstallLocationProvider()
+            installLocationProvider: MacInstallLocationProvider(),
+            legacyInstallProvider: MacLegacyInstallProvider()
         )
         appCoordinator.finishLaunching()
         HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
