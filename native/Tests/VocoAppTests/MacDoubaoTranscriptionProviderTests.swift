@@ -215,6 +215,36 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
+    func testURLSessionTransportStreamingUsesLatestPartialWhenFinalFrameHasNoText() async throws {
+        let partialFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":false}]}}"#,
+            last: false
+        )
+        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"","utterances":[]}}"#,
+            last: true
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+
+        let streamingSession = try await transport.startStreaming(request: request, progress: nil)
+        await streamingSession.acceptAudioChunk([1, 2, 3])
+        let transcript = try await streamingSession.finish(
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2, 3]
+            )
+        )
+
+        XCTAssertEqual(transcript.finalText, "hello world")
+        XCTAssertEqual(transcript.partials, ["hello world"])
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
     func testURLSessionTransportStreamingFlushesFullAudioFramesBeforeFinish() async throws {
         let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,

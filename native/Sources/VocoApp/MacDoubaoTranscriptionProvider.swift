@@ -199,7 +199,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
                 throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
             case .response(let flags, let payload):
                 if flags.isLast {
-                    finalText = try DoubaoServerResponse.parseFinalText(payload)
+                    finalText = try DoubaoFinalTextResolver.resolve(payload: payload, partials: partials)
                     let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
                     return TranscriptSnapshot(
                         finalText: finalText ?? "",
@@ -365,7 +365,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
                 throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
             case .response(let flags, let payload):
                 if flags.isLast {
-                    let finalText = try DoubaoServerResponse.parseFinalText(payload)
+                    let finalText = try DoubaoFinalTextResolver.resolve(payload: payload, partials: partials)
                     let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
                     return TranscriptSnapshot(
                         finalText: finalText,
@@ -381,6 +381,35 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
                 }
             }
         }
+    }
+}
+
+private enum DoubaoFinalTextResolver {
+    static func resolve(payload: Data, partials: [String]) throws -> String {
+        do {
+            return try DoubaoServerResponse.parseFinalText(payload)
+        } catch let error as TranscriptionProviderError where canRecoverFromEmptyFinal(error) {
+            if let finalFramePartial = try DoubaoServerResponse.parsePartial(payload)?.text,
+               !finalFramePartial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return finalFramePartial
+            }
+
+            if let latestPartial = partials.last?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !latestPartial.isEmpty {
+                return latestPartial
+            }
+
+            throw error
+        }
+    }
+
+    private static func canRecoverFromEmptyFinal(_ error: TranscriptionProviderError) -> Bool {
+        guard case .provider(let providerName, let message) = error else {
+            return false
+        }
+
+        return providerName == doubaoTranscriptionProviderName
+            && (message == "server response missing result" || message == "server response contains no final text")
     }
 }
 
