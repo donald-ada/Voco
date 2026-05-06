@@ -28,6 +28,8 @@ struct SettingsView: View {
 
                 hotkeySection
 
+                transcriptionSection
+
                 recordingDiagnosticsSection
 
                 permissionsSection
@@ -143,6 +145,29 @@ struct SettingsView: View {
             }
 
             Text(coordinator.hotkeyRuntimeState.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var transcriptionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("转写")
+                    .font(.headline)
+                Spacer()
+                Label(
+                    coordinator.transcriptionProviderStatus.title,
+                    systemImage: coordinator.transcriptionProviderStatus.systemImage
+                )
+                .font(.caption)
+                .foregroundStyle(transcriptionTint(coordinator.transcriptionProviderStatus))
+            }
+
+            Text(coordinator.transcriptionProviderStatus.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -309,6 +334,17 @@ struct SettingsView: View {
         case .requiresApproval:
             .yellow
         case .unavailable, .failed:
+            .red
+        }
+    }
+
+    private func transcriptionTint(_ state: TranscriptionProviderStatus) -> Color {
+        switch state {
+        case .ready:
+            .green
+        case .notConfigured, .authenticationRequired:
+            .yellow
+        case .offline, .failed:
             .red
         }
     }

@@ -50,6 +50,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var launchAtLoginState: LaunchAtLoginState
     @Published public private(set) var permissions: [PermissionSnapshot]
     @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
+    @Published public private(set) var transcriptionProviderStatus: TranscriptionProviderStatus
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
@@ -84,6 +85,7 @@ public final class AppCoordinator: ObservableObject {
         self.permissions = permissionProvider.currentSnapshots()
         self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
         self.hotkeyRuntimeState = .inactive
+        self.transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
@@ -116,6 +118,7 @@ public final class AppCoordinator: ObservableObject {
         lastErrorMessage = nil
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
+        transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
         refreshHotkeyRuntime()
     }
@@ -136,6 +139,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func prepareForSettingsPresentation() {
+        transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshPermissions()
     }
 
@@ -263,7 +267,7 @@ public final class AppCoordinator: ObservableObject {
         do {
             try await recordingWorkflow.startRecording()
         } catch {
-            fail(error.localizedDescription)
+            failFromWorkflowError(error)
         }
     }
 
@@ -291,7 +295,16 @@ public final class AppCoordinator: ObservableObject {
                 fail(result.injection.detail)
             }
         } catch {
-            fail(error.localizedDescription)
+            failFromWorkflowError(error)
+        }
+    }
+
+    private func failFromWorkflowError(_ error: Error) {
+        lastErrorMessage = error.localizedDescription
+        if error is TranscriptionProviderError {
+            status = .providerOffline
+        } else {
+            status = .error
         }
     }
 }

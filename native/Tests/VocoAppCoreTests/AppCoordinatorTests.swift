@@ -359,6 +359,29 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesTranscriptionProviderStatus() {
+        let recordingWorkflow = FakeRecordingWorkflow(transcriptionStatus: .authenticationRequired(providerName: "Doubao"))
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
+    }
+
+    @MainActor
+    func testUnavailableTranscriptionFailureSurfacesProviderMessage() async {
+        let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .providerOffline)
+        XCTAssertEqual(coordinator.lastErrorMessage, "转写服务未配置：请先在设置中配置 ASR provider。")
+    }
+
+    @MainActor
     func testMissingHotkeyPermissionsDoNotInstallHotkey() {
         let permissionProvider = FakePermissionProvider(
             current: [
