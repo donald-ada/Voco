@@ -606,7 +606,7 @@ git commit -m "feat(native): inject text with macos APIs"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-06-voco-native-text-injection.md`
 
-- [ ] **Step 1: Run full native tests**
+- [x] **Step 1: Run full native tests**
 
 Run:
 
@@ -616,7 +616,7 @@ cd native && swift test
 
 Expected: all native tests pass.
 
-- [ ] **Step 2: Run native bundle smoke**
+- [x] **Step 2: Run native bundle smoke**
 
 Run from repository root:
 
@@ -626,7 +626,7 @@ packaging/tests/native_app_bundle_smoke.sh
 
 Expected: native bundle builds, signs, verifies, and launches for smoke validation.
 
-- [ ] **Step 3: Run diff and signature checks**
+- [x] **Step 3: Run diff and signature checks**
 
 Run:
 
@@ -637,11 +637,11 @@ codesign --verify --deep --strict target/native/Voco.app
 
 Expected: no whitespace errors and a valid ad-hoc signature on `target/native/Voco.app`.
 
-- [ ] **Step 4: Record verification results**
+- [x] **Step 4: Record verification results**
 
 Append a `Verification Results` section to this plan with exact command output summaries.
 
-- [ ] **Step 5: Commit verification notes**
+- [x] **Step 5: Commit verification notes**
 
 Run:
 
@@ -655,3 +655,29 @@ git commit -m "docs(native): mark text injection verification"
 - Covers the native rewrite requirement that `TextInjectionEngine` reports target app, strategy, and failure reason.
 - Provides clipboard fallback with explicit restoration and failure reporting.
 - Keeps real ASR provider, Keychain credential storage, streaming partials, in-process HUD overlay, and release DMG notarization as separate executable slices.
+
+## Verification Results
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 56 tests with 0 failures across `AppCoordinatorTests`, `AudioCaptureBufferTests`, `HotkeyModelsTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, `RecordingWorkflowTests`, `SettingsSectionTests`, `TextInjectionModelsTests`, `TextInjectionProviderTests`, and `TranscriptionModelsTests`.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built the native debug app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced the ad-hoc signature, verified the bundle, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+```
+
+Result: PASS. No whitespace errors.
+
+```bash
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. The ad-hoc signed native app bundle verified successfully.
