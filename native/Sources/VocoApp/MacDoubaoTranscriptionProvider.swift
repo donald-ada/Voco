@@ -410,7 +410,7 @@ private enum DoubaoFinalTextResolver {
                 return latestPartial
             }
 
-            throw error
+            return ""
         }
     }
 

@@ -270,6 +270,32 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testRapidToggleDuringRecordingStartQueuesStopAfterStartCompletes() async {
+        let recordingWorkflow = FakeRecordingWorkflow(pauseAfterStart: true)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        let startTask = Task {
+            await coordinator.toggleRecordingFromUserAction()
+        }
+        await recordingWorkflow.waitUntilStartPaused()
+
+        XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(recordingWorkflow.stopCount, 0)
+
+        recordingWorkflow.resumeStart()
+        await startTask.value
+
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
+        XCTAssertEqual(recordingWorkflow.stopCount, 1)
+    }
+
+    @MainActor
     func testHotkeyPressAndHoldActionsStartAndStopRecording() async {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let recordingWorkflow = FakeRecordingWorkflow()
@@ -929,9 +955,13 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     let stopError: Error?
     let partialsToEmitOnStart: [TranscriptPartialSnapshot]
     let partialsToEmit: [TranscriptPartialSnapshot]
+    let pauseAfterStart: Bool
     let pauseAfterPartials: Bool
     private var storedProgress: TranscriptionProgressHandler?
     private var didEmitPartials = false
+    private var didPauseStart = false
+    private var startPausedContinuation: CheckedContinuation<Void, Never>?
+    private var startContinuation: CheckedContinuation<Void, Never>?
     private var partialsEmittedContinuation: CheckedContinuation<Void, Never>?
     private var stopContinuation: CheckedContinuation<Void, Never>?
 
@@ -946,6 +976,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         stopError: Error? = nil,
         partialsToEmitOnStart: [TranscriptPartialSnapshot] = [],
         partialsToEmit: [TranscriptPartialSnapshot] = [],
+        pauseAfterStart: Bool = false,
         pauseAfterPartials: Bool = false
     ) {
         self.result = result
@@ -954,6 +985,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         self.stopError = stopError
         self.partialsToEmitOnStart = partialsToEmitOnStart
         self.partialsToEmit = partialsToEmit
+        self.pauseAfterStart = pauseAfterStart
         self.pauseAfterPartials = pauseAfterPartials
     }
 
@@ -966,6 +998,16 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
 
         if let startError {
             throw startError
+        }
+
+        if pauseAfterStart {
+            didPauseStart = true
+            startPausedContinuation?.resume()
+            startPausedContinuation = nil
+
+            await withCheckedContinuation { continuation in
+                startContinuation = continuation
+            }
         }
 
         for partial in partialsToEmitOnStart {
@@ -1005,6 +1047,21 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         await withCheckedContinuation { continuation in
             partialsEmittedContinuation = continuation
         }
+    }
+
+    func waitUntilStartPaused() async {
+        if didPauseStart {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startPausedContinuation = continuation
+        }
+    }
+
+    func resumeStart() {
+        startContinuation?.resume()
+        startContinuation = nil
     }
 
     func resumeStop() {

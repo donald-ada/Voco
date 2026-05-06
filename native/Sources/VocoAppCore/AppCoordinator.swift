@@ -74,6 +74,8 @@ public final class AppCoordinator: ObservableObject {
     private var hasSkippedLaunchAtLoginForOnboarding: Bool
     private var hasVerifiedHotkeyForOnboarding: Bool
     private var activeTranscriptionSessionID: UUID?
+    private var isRecordingWorkflowTransitionActive: Bool
+    private var pendingStopAfterRecordingStart: Bool
 
     public init(
         hasCompletedOnboarding: Bool = false,
@@ -136,6 +138,8 @@ public final class AppCoordinator: ObservableObject {
         self.hasSkippedLaunchAtLoginForOnboarding = false
         self.hasVerifiedHotkeyForOnboarding = false
         self.activeTranscriptionSessionID = nil
+        self.isRecordingWorkflowTransitionActive = false
+        self.pendingStopAfterRecordingStart = false
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -539,10 +543,11 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func startRecording() async {
-        guard status == .ready else {
+        guard status == .ready, !isRecordingWorkflowTransitionActive else {
             return
         }
 
+        isRecordingWorkflowTransitionActive = true
         lastErrorMessage = nil
         lastAudio = nil
         lastTranscript = nil
@@ -555,7 +560,15 @@ public final class AppCoordinator: ObservableObject {
             try await recordingWorkflow.startRecording { [weak self] partial in
                 self?.publishTranscriptPartial(partial, sessionID: transcriptionSessionID)
             }
+            isRecordingWorkflowTransitionActive = false
+
+            if pendingStopAfterRecordingStart {
+                pendingStopAfterRecordingStart = false
+                await stopRecording()
+            }
         } catch {
+            isRecordingWorkflowTransitionActive = false
+            pendingStopAfterRecordingStart = false
             activeTranscriptionSessionID = nil
             failFromWorkflowError(error)
         }
@@ -566,6 +579,12 @@ public final class AppCoordinator: ObservableObject {
             return
         }
 
+        if isRecordingWorkflowTransitionActive {
+            pendingStopAfterRecordingStart = true
+            return
+        }
+
+        isRecordingWorkflowTransitionActive = true
         status = .transcribing
         let transcriptionSessionID = activeTranscriptionSessionID ?? UUID()
         activeTranscriptionSessionID = transcriptionSessionID
@@ -589,7 +608,9 @@ public final class AppCoordinator: ObservableObject {
             } else {
                 fail(result.injection.detail)
             }
+            isRecordingWorkflowTransitionActive = false
         } catch {
+            isRecordingWorkflowTransitionActive = false
             activeTranscriptionSessionID = nil
             failFromWorkflowError(error)
         }

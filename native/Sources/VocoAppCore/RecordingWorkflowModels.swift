@@ -133,6 +133,9 @@ public extension RecordingWorkflowing {
 }
 
 public final class NativeRecordingWorkflow: RecordingWorkflowing {
+    private static let minimumTranscribableDurationSeconds = 0.25
+    private static let minimumSpeechPeakAmplitude = 0.003
+
     private let audioCapture: any AudioCaptureProviding
     private let transcription: any TranscriptionProviding
     private let textInjection: any TextInjectionProviding
@@ -194,6 +197,17 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         }
 
         let transcript: TranscriptSnapshot
+        if !Self.isTranscribableAudio(audio) {
+            if let streamingSession = currentStreamingSession {
+                currentStreamingSession = nil
+                await streamingSession.cancel()
+            }
+
+            transcript = emptyTranscript()
+            let insertion = try await insertionSnapshot(for: transcript)
+            return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)
+        }
+
         if let streamingSession = currentStreamingSession {
             currentStreamingSession = nil
             transcript = try await streamingSession.finish(audio: audio)
@@ -203,6 +217,33 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         let insertion = try await insertionSnapshot(for: transcript)
 
         return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)
+    }
+
+    private static func isTranscribableAudio(_ audio: CapturedAudioSnapshot) -> Bool {
+        audio.durationSeconds >= minimumTranscribableDurationSeconds
+            && !audio.pcm16Samples.isEmpty
+            && audio.peakAmplitude >= minimumSpeechPeakAmplitude
+    }
+
+    private func emptyTranscript() -> TranscriptSnapshot {
+        TranscriptSnapshot(
+            finalText: "",
+            partials: [],
+            providerName: transcriptionProviderName,
+            latencyMilliseconds: nil
+        )
+    }
+
+    private var transcriptionProviderName: String {
+        switch transcription.status {
+        case .notConfigured:
+            return "Unconfigured"
+        case .ready(let providerName),
+             .authenticationRequired(let providerName),
+             .offline(let providerName),
+             .failed(let providerName, _):
+            return providerName
+        }
     }
 
     private func insertionSnapshot(for transcript: TranscriptSnapshot) async throws -> TextInjectionSnapshot {

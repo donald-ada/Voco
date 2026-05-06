@@ -19,7 +19,12 @@ final class RecordingWorkflowTests: XCTestCase {
 
     @MainActor
     func testStopRecordingTranscribesAndInjectsFinalText() async throws {
-        let capturedAudio = CapturedAudioSnapshot(durationSeconds: 1.25, sampleRate: 16_000, peakAmplitude: 0.72)
+        let capturedAudio = CapturedAudioSnapshot(
+            durationSeconds: 1.25,
+            sampleRate: 16_000,
+            peakAmplitude: 0.72,
+            pcm16Samples: Array(repeating: 1, count: 20_000)
+        )
         let transcript = TranscriptSnapshot(
             finalText: "hello world",
             partials: ["hello"],
@@ -144,6 +149,80 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testStopRecordingCancelsRealtimeTranscriptionAndSkipsInsertionForTooShortAudio() async throws {
+        let audioCapture = FakeAudioCaptureEngine(
+            capturedAudio: CapturedAudioSnapshot(
+                durationSeconds: 0.08,
+                sampleRate: 16_000,
+                peakAmplitude: 0.5,
+                pcm16Samples: Array(repeating: 1, count: 1_280)
+            )
+        )
+        let transcription = FakeRealtimeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "should not be used",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: nil
+            ),
+            partialsToEmitAfterAudio: []
+        )
+        let textInjection = FakeTextInjectionEngine()
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: textInjection
+        )
+
+        try await workflow.startRecording()
+        let result = try await workflow.stopRecording()
+        let didFinish = await transcription.streamingSession?.didFinish() ?? false
+        let didCancel = await transcription.streamingSession?.didCancel() ?? false
+
+        XCTAssertFalse(didFinish)
+        XCTAssertTrue(didCancel)
+        XCTAssertEqual(result.audio, audioCapture.capturedAudio)
+        XCTAssertEqual(result.transcript.finalText, "")
+        XCTAssertEqual(result.transcript.partials, [])
+        XCTAssertEqual(result.injection, .skippedEmpty)
+        XCTAssertTrue(textInjection.requests.isEmpty)
+    }
+
+    @MainActor
+    func testStopRecordingSkipsTranscriptionAndInsertionForSilentAudio() async throws {
+        let silentAudio = CapturedAudioSnapshot(
+            durationSeconds: 1.0,
+            sampleRate: 16_000,
+            peakAmplitude: 0,
+            pcm16Samples: Array(repeating: 0, count: 16_000)
+        )
+        let audioCapture = FakeAudioCaptureEngine(capturedAudio: silentAudio)
+        let transcription = FakeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "should not be used",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: nil
+            )
+        )
+        let textInjection = FakeTextInjectionEngine()
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: textInjection
+        )
+
+        let result = try await workflow.stopRecording()
+
+        XCTAssertTrue(transcription.inputs.isEmpty)
+        XCTAssertEqual(result.audio, silentAudio)
+        XCTAssertEqual(result.transcript.finalText, "")
+        XCTAssertEqual(result.transcript.partials, [])
+        XCTAssertEqual(result.injection, .skippedEmpty)
+        XCTAssertTrue(textInjection.requests.isEmpty)
+    }
+
+    @MainActor
     func testStartRecordingFailureIsThrownWithDescriptiveMessage() async {
         let audio = FakeAudioCaptureEngine()
         audio.startError = RecordingWorkflowError("microphone unavailable")
@@ -219,7 +298,14 @@ private final class FakeAudioCaptureEngine: AudioCaptureProviding {
     let capturedAudio: CapturedAudioSnapshot
     private var audioChunkHandler: AudioCaptureChunkHandler?
 
-    init(capturedAudio: CapturedAudioSnapshot = CapturedAudioSnapshot(durationSeconds: 0.5, sampleRate: 16_000, peakAmplitude: 0.4)) {
+    init(
+        capturedAudio: CapturedAudioSnapshot = CapturedAudioSnapshot(
+            durationSeconds: 0.5,
+            sampleRate: 16_000,
+            peakAmplitude: 0.4,
+            pcm16Samples: Array(repeating: 1, count: 8_000)
+        )
+    ) {
         self.capturedAudio = capturedAudio
     }
 
@@ -337,6 +423,8 @@ private actor FakeRealtimeTranscriptionSession: RealtimeTranscriptionSession {
     private let partialsToEmitAfterAudio: [TranscriptPartialSnapshot]
     private let progress: TranscriptionProgressHandler?
     private var didEmitPartials = false
+    private var finishCount = 0
+    private var cancelCount = 0
     private var audioChunksContinuation: CheckedContinuation<Void, Never>?
 
     init(
@@ -364,13 +452,24 @@ private actor FakeRealtimeTranscriptionSession: RealtimeTranscriptionSession {
     }
 
     func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
-        transcript
+        finishCount += 1
+        return transcript
     }
 
-    func cancel() async {}
+    func cancel() async {
+        cancelCount += 1
+    }
 
     func audioChunksSnapshot() -> [[Int16]] {
         audioChunks
+    }
+
+    func didFinish() -> Bool {
+        finishCount > 0
+    }
+
+    func didCancel() -> Bool {
+        cancelCount > 0
     }
 
     func waitUntilAudioChunksReceived() async {
