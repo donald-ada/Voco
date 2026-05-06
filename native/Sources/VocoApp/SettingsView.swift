@@ -4,6 +4,7 @@ import VocoAppCore
 
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
+    @State private var transcriptionAPIKey = ""
 
     var body: some View {
         NavigationSplitView {
@@ -26,15 +27,15 @@ struct SettingsView: View {
 
                     launchAtLoginSection
 
-                hotkeySection
+                    hotkeySection
 
-                transcriptionSection
+                    transcriptionSection
 
-                recordingDiagnosticsSection
+                    recordingDiagnosticsSection
 
-                permissionsSection
+                    permissionsSection
 
-                Spacer()
+                    Spacer()
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, minHeight: 360, alignment: .topLeading)
@@ -46,6 +47,7 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             coordinator.refreshPermissions()
+            coordinator.refreshTranscriptionCredentials()
         }
     }
 
@@ -171,6 +173,50 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: coordinator.transcriptionCredentials.hasAPIKey ? "key.fill" : "key")
+                    .frame(width: 18)
+                    .foregroundStyle(credentialTint(coordinator.transcriptionCredentials))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(coordinator.transcriptionCredentials.statusTitle)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    Text(coordinator.transcriptionCredentials.maskedAPIKey ?? coordinator.transcriptionCredentials.storageDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            SecureField("Doubao API Key", text: $transcriptionAPIKey)
+                .textFieldStyle(.roundedBorder)
+
+            HStack(spacing: 8) {
+                Button {
+                    let apiKey = transcriptionAPIKey
+                    transcriptionAPIKey = ""
+                    Task {
+                        await coordinator.saveTranscriptionAPIKey(apiKey)
+                    }
+                } label: {
+                    Label("保存到 Keychain", systemImage: "key")
+                }
+                .disabled(transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button(role: .destructive) {
+                    Task {
+                        await coordinator.clearTranscriptionCredentials()
+                    }
+                } label: {
+                    Label("清除凭证", systemImage: "trash")
+                }
+                .disabled(!coordinator.transcriptionCredentials.hasAPIKey)
+            }
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
@@ -347,6 +393,14 @@ struct SettingsView: View {
         case .offline, .failed:
             .red
         }
+    }
+
+    private func credentialTint(_ snapshot: TranscriptionCredentialSnapshot) -> Color {
+        if snapshot.lastErrorMessage != nil {
+            return .red
+        }
+
+        return snapshot.hasAPIKey ? .green : .secondary
     }
 
     private func openSettings(for kind: PermissionKind) {

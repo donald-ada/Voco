@@ -60,6 +60,7 @@ struct VocoNativeApp: App {
             hasCompletedOnboarding: true,
             permissionProvider: MacPermissionProvider(),
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
+            transcriptionCredentialStore: MacKeychainCredentialStore(),
             recordingWorkflow: NativeRecordingWorkflow(
                 audioCapture: MacAudioCaptureEngine(),
                 transcription: UnavailableTranscriptionProvider(),
