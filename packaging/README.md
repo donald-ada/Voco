@@ -2,6 +2,45 @@
 
 Packaging templates and development bundle scripts.
 
+## Native App Shell
+
+Build the native Swift/SwiftUI app shell:
+
+```bash
+packaging/build_native_app_bundle.sh --profile debug
+```
+
+The generated bundle is:
+
+```text
+target/native/Voco.app
+```
+
+It contains only the native app executable:
+
+```text
+Contents/Info.plist
+Contents/MacOS/Voco
+```
+
+It does not contain the legacy CLI, daemon, or HUD helper binaries:
+
+```text
+Contents/MacOS/voco
+Contents/MacOS/voco-daemon
+Contents/MacOS/voco-hud
+```
+
+Run the native app bundle smoke test:
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+This native app shell is the starting point for the rewrite. The older
+LaunchAgent and development app bundle workflows remain documented below while
+the native rewrite reaches feature parity.
+
 ## LaunchAgent
 
 `com.voco.daemon.plist.tmpl` is rendered by:

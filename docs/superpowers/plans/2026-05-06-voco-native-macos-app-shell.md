@@ -906,9 +906,16 @@ MACOS_DIR="${BUNDLE_PATH}/Contents/MacOS"
 test -d "${BUNDLE_PATH}"
 test -f "${INFO_PLIST}"
 test -x "${MACOS_DIR}/Voco"
-test ! -e "${MACOS_DIR}/voco"
-test ! -e "${MACOS_DIR}/voco-daemon"
-test ! -e "${MACOS_DIR}/voco-hud"
+
+for entry in "${MACOS_DIR}"/*; do
+  name="$(basename "${entry}")"
+  case "${name}" in
+    voco|voco-daemon|voco-hud)
+      echo "legacy executable must not be present: ${name}" >&2
+      exit 1
+      ;;
+  esac
+done
 
 plutil -lint "${INFO_PLIST}" >/dev/null
 codesign --verify --deep --strict "${BUNDLE_PATH}"
@@ -1104,3 +1111,10 @@ Expected:
 - `LSUIElement` is `true`;
 - ad-hoc signature verifies;
 - no whitespace errors are reported.
+
+## Verification Results
+
+- `cd native && swift test` passed.
+- `cd native && swift build` passed.
+- `packaging/tests/native_app_bundle_smoke.sh` passed.
+- `git diff --check` passed.
