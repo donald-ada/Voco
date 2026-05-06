@@ -26,6 +26,11 @@ struct VocoNativeApp: App {
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 
+            Button("打开诊断") {
+                coordinator.prepareForSettingsPresentation()
+                DiagnosticsWindowPresenter.shared.show(coordinator: coordinator)
+            }
+
             Toggle(
                 "登录时启动",
                 isOn: Binding(
