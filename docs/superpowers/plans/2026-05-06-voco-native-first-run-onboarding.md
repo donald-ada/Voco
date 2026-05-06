@@ -378,4 +378,45 @@ git commit -m "docs(native): mark onboarding verification"
 
 ## Verification Notes
 
-Pending implementation.
+Completed on 2026-05-06 from `/private/tmp/voco-native-first-run-onboarding`.
+
+RED/GREEN evidence:
+
+- Initial required RED command `cd native && swift test --filter OnboardingModelsTests` executed before tests existed: build succeeded with `warning: No matching test cases were run`; this did not satisfy RED, so `OnboardingModelsTests` was added and the same command was rerun.
+- Actual onboarding model RED: `swift test --filter OnboardingModelsTests` failed to compile with missing `OnboardingStepID`, `OnboardingSnapshot`, and `InstallLocationCheck`.
+- Onboarding model GREEN: `swift test --filter OnboardingModelsTests` passed, 5 tests, 0 failures.
+- Coordinator RED: `swift test --filter AppCoordinatorTests` failed to compile with missing `installLocationProvider`, `onboarding`, `installLocation`, `markLaunchAtLoginSkippedForOnboarding`, `markHotkeyVerifiedForOnboarding`, and `completeOnboardingIfReady`.
+- Coordinator GREEN: `swift test --filter AppCoordinatorTests` passed, 37 tests, 0 failures before DMG tests; after DMG tests it passed, 38 tests, 0 failures.
+- DMG provider RED: `swift test --filter MacInstallLocationProviderTests` failed to compile with missing `MacInstallLocationProvider`.
+- DMG provider GREEN: `swift test --filter MacInstallLocationProviderTests` passed, 1 test, 0 failures.
+
+Final verification:
+
+```bash
+cd native && swift test
+```
+
+Observed: PASS. XCTest executed 124 tests, 1 skipped, 0 failures.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Observed: PASS. Output included `ok: verified native Voco.app bundle: target/native/Voco.app` and `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+```
+
+Observed: PASS. Exit code 0, no output.
+
+```bash
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Observed: PASS. Exit code 0, no output.
+
+Manual behavior not automated in this slice:
+
+- macOS System Settings deep links and actual permission grants require manual UX verification on a clean macOS account.
+- Actual mounted-DMG launch was modeled with deterministic `/Volumes/.../Voco.app` paths and surfaced in onboarding/diagnostics, but not exercised from a real mounted DMG artifact.
