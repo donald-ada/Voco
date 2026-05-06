@@ -31,21 +31,21 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testMenuRecordingToggleMovesThroughRecordingAndTranscribing() {
+    func testMenuRecordingToggleMovesThroughRecordingWorkflow() async {
         let coordinator = AppCoordinator(hasCompletedOnboarding: true)
         coordinator.finishLaunching()
 
-        coordinator.toggleRecordingFromMenu()
+        await coordinator.toggleRecordingFromUserAction()
 
         XCTAssertEqual(coordinator.status, .recording)
         XCTAssertEqual(coordinator.snapshot.title, "录音中")
         XCTAssertEqual(coordinator.snapshot.systemImage, "record.circle")
 
-        coordinator.toggleRecordingFromMenu()
+        await coordinator.toggleRecordingFromUserAction()
 
-        XCTAssertEqual(coordinator.status, .transcribing)
-        XCTAssertEqual(coordinator.snapshot.title, "转写中")
-        XCTAssertEqual(coordinator.snapshot.systemImage, "ellipsis.bubble")
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.snapshot.title, "就绪")
+        XCTAssertEqual(coordinator.snapshot.systemImage, "waveform")
     }
 
     @MainActor
@@ -246,33 +246,115 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testHotkeyToggleMovesThroughRecordingAndTranscribing() {
+    func testHotkeyToggleMovesThroughRecordingWorkflow() async {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
+        let recordingWorkflow = FakeRecordingWorkflow()
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            recordingWorkflow: recordingWorkflow,
+            hotkeyProvider: hotkeyProvider
+        )
         coordinator.finishLaunching()
 
         hotkeyProvider.emit(.toggleRecording)
+        await Task.yield()
 
         XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
 
         hotkeyProvider.emit(.toggleRecording)
+        await Task.yield()
 
-        XCTAssertEqual(coordinator.status, .transcribing)
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(recordingWorkflow.stopCount, 1)
     }
 
     @MainActor
-    func testHotkeyPressAndHoldActionsStartAndStopRecording() {
+    func testHotkeyPressAndHoldActionsStartAndStopRecording() async {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
+        let recordingWorkflow = FakeRecordingWorkflow()
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            recordingWorkflow: recordingWorkflow,
+            hotkeyProvider: hotkeyProvider
+        )
         coordinator.finishLaunching()
 
         hotkeyProvider.emit(.startRecording)
+        await Task.yield()
 
         XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
 
         hotkeyProvider.emit(.stopRecording)
+        await Task.yield()
 
-        XCTAssertEqual(coordinator.status, .transcribing)
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(recordingWorkflow.stopCount, 1)
+    }
+
+    @MainActor
+    func testRecordingWorkflowStartMovesToRecording() async {
+        let recordingWorkflow = FakeRecordingWorkflow()
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
+        XCTAssertEqual(recordingWorkflow.stopCount, 0)
+    }
+
+    @MainActor
+    func testRecordingWorkflowStopStoresDiagnosticsAndReturnsReady() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
+            transcript: TranscriptSnapshot(finalText: "hello", partials: ["he"], providerName: "Fake ASR", latencyMilliseconds: 33),
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted through unicode events"
+            )
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(result: result)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(recordingWorkflow.startCount, 1)
+        XCTAssertEqual(recordingWorkflow.stopCount, 1)
+        XCTAssertEqual(coordinator.lastTranscript, result.transcript)
+        XCTAssertEqual(coordinator.lastInjection, result.injection)
+    }
+
+    @MainActor
+    func testRecordingWorkflowStartFailureSurfacesError() async {
+        let recordingWorkflow = FakeRecordingWorkflow(startError: RecordingWorkflowError("microphone unavailable"))
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .error)
+        XCTAssertEqual(coordinator.lastErrorMessage, "microphone unavailable")
+    }
+
+    @MainActor
+    func testRecordingWorkflowStopFailureSurfacesError() async {
+        let recordingWorkflow = FakeRecordingWorkflow(stopError: RecordingWorkflowError("provider offline"))
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .error)
+        XCTAssertEqual(coordinator.lastErrorMessage, "provider offline")
     }
 
     @MainActor
@@ -385,5 +467,45 @@ private final class FakeHotkeyProvider: HotkeyProviding {
 
     func emit(_ action: HotkeyAction) {
         onAction?(action)
+    }
+}
+
+private final class FakeRecordingWorkflow: RecordingWorkflowing {
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+    let result: RecordingWorkflowResult
+    let startError: Error?
+    let stopError: Error?
+
+    init(
+        result: RecordingWorkflowResult = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 0.4, sampleRate: 16_000, peakAmplitude: 0.5),
+            transcript: TranscriptSnapshot(finalText: "", partials: [], providerName: "Fake ASR", latencyMilliseconds: nil),
+            injection: .skippedEmpty
+        ),
+        startError: Error? = nil,
+        stopError: Error? = nil
+    ) {
+        self.result = result
+        self.startError = startError
+        self.stopError = stopError
+    }
+
+    func startRecording() async throws {
+        startCount += 1
+
+        if let startError {
+            throw startError
+        }
+    }
+
+    func stopRecording() async throws -> RecordingWorkflowResult {
+        stopCount += 1
+
+        if let stopError {
+            throw stopError
+        }
+
+        return result
     }
 }

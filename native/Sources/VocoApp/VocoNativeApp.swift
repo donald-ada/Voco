@@ -60,6 +60,7 @@ struct VocoNativeApp: App {
             hasCompletedOnboarding: true,
             permissionProvider: MacPermissionProvider(),
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
+            recordingWorkflow: StaticRecordingWorkflow(),
             hotkeyProvider: MacHotkeyProvider()
         )
         appCoordinator.finishLaunching()

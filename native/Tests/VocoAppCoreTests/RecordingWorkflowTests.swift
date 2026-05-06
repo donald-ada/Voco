@@ -2,6 +2,7 @@ import XCTest
 @testable import VocoAppCore
 
 final class RecordingWorkflowTests: XCTestCase {
+    @MainActor
     func testStartRecordingStartsAudioCapture() async throws {
         let audio = FakeAudioCaptureEngine()
         let workflow = NativeRecordingWorkflow(
@@ -16,6 +17,7 @@ final class RecordingWorkflowTests: XCTestCase {
         XCTAssertEqual(audio.stopCount, 0)
     }
 
+    @MainActor
     func testStopRecordingTranscribesAndInjectsFinalText() async throws {
         let capturedAudio = CapturedAudioSnapshot(durationSeconds: 1.25, sampleRate: 16_000, peakAmplitude: 0.72)
         let transcript = TranscriptSnapshot(
@@ -49,6 +51,7 @@ final class RecordingWorkflowTests: XCTestCase {
         XCTAssertEqual(result.injection, injection)
     }
 
+    @MainActor
     func testStopRecordingSkipsInjectionForEmptyFinalText() async throws {
         let transcript = TranscriptSnapshot(
             finalText: " \n ",
@@ -72,6 +75,7 @@ final class RecordingWorkflowTests: XCTestCase {
         XCTAssertEqual(result.injection.detail, "Final transcript was empty; skipped text insertion.")
     }
 
+    @MainActor
     func testStartRecordingFailureIsThrownWithDescriptiveMessage() async {
         let audio = FakeAudioCaptureEngine()
         audio.startError = RecordingWorkflowError("microphone unavailable")

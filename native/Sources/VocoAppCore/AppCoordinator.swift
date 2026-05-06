@@ -7,6 +7,7 @@ public enum AppRuntimeStatus: Equatable, Sendable {
     case ready
     case recording
     case transcribing
+    case injecting
     case permissionNeeded
     case providerOffline
     case error
@@ -49,10 +50,13 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var launchAtLoginState: LaunchAtLoginState
     @Published public private(set) var permissions: [PermissionSnapshot]
     @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
+    @Published public private(set) var lastTranscript: TranscriptSnapshot?
+    @Published public private(set) var lastInjection: TextInjectionSnapshot?
 
     private let hasCompletedOnboarding: Bool
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
+    private let recordingWorkflow: any RecordingWorkflowing
     private let hotkeyProvider: any HotkeyProviding
     public let hotkeyBinding: HotkeyBinding
     public let hotkeyMode: HotkeyMode
@@ -62,6 +66,7 @@ public final class AppCoordinator: ObservableObject {
         launchAtLoginEnabled: Bool = false,
         permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted,
         launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider(),
+        recordingWorkflow: any RecordingWorkflowing = StaticRecordingWorkflow(),
         hotkeyProvider: any HotkeyProviding = StaticHotkeyProvider(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
@@ -71,12 +76,15 @@ public final class AppCoordinator: ObservableObject {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.permissionProvider = permissionProvider
         self.launchAtLoginProvider = launchAtLoginProvider
+        self.recordingWorkflow = recordingWorkflow
         self.hotkeyProvider = hotkeyProvider
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
         self.permissions = permissionProvider.currentSnapshots()
         self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
         self.hotkeyRuntimeState = .inactive
+        self.lastTranscript = nil
+        self.lastInjection = nil
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -142,12 +150,17 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func toggleRecordingFromMenu() {
+        Task { [weak self] in
+            await self?.toggleRecordingFromUserAction()
+        }
+    }
+
+    public func toggleRecordingFromUserAction() async {
         switch status {
         case .ready:
-            lastErrorMessage = nil
-            status = .recording
+            await startRecording()
         case .recording:
-            status = .transcribing
+            await stopRecording()
         default:
             break
         }
@@ -220,16 +233,61 @@ public final class AppCoordinator: ObservableObject {
     private func handleHotkeyAction(_ action: HotkeyAction) {
         switch action {
         case .toggleRecording:
-            toggleRecordingFromMenu()
+            Task { [weak self] in
+                await self?.toggleRecordingFromUserAction()
+            }
         case .startRecording:
-            if status == .ready {
-                lastErrorMessage = nil
-                status = .recording
+            Task { [weak self] in
+                await self?.startRecording()
             }
         case .stopRecording:
-            if status == .recording {
-                status = .transcribing
+            Task { [weak self] in
+                await self?.stopRecording()
             }
+        }
+    }
+
+    private func startRecording() async {
+        guard status == .ready else {
+            return
+        }
+
+        lastErrorMessage = nil
+        lastTranscript = nil
+        lastInjection = nil
+        status = .recording
+
+        do {
+            try await recordingWorkflow.startRecording()
+        } catch {
+            fail(error.localizedDescription)
+        }
+    }
+
+    private func stopRecording() async {
+        guard status == .recording else {
+            return
+        }
+
+        status = .transcribing
+
+        do {
+            let result = try await recordingWorkflow.stopRecording()
+            lastTranscript = result.transcript
+            lastInjection = result.injection
+
+            if result.injection.strategy != .skippedEmpty {
+                status = .injecting
+            }
+
+            if result.injection.succeeded {
+                lastErrorMessage = nil
+                status = .ready
+            } else {
+                fail(result.injection.detail)
+            }
+        } catch {
+            fail(error.localizedDescription)
         }
     }
 }
@@ -247,6 +305,8 @@ private extension AppRuntimeStatus {
             "录音中"
         case .transcribing:
             "转写中"
+        case .injecting:
+            "插入中"
         case .permissionNeeded:
             "需要权限"
         case .providerOffline:
@@ -268,6 +328,8 @@ private extension AppRuntimeStatus {
             "record.circle"
         case .transcribing:
             "ellipsis.bubble"
+        case .injecting:
+            "text.cursor"
         case .permissionNeeded:
             "lock.shield"
         case .providerOffline:

@@ -93,19 +93,23 @@ public struct RecordingWorkflowError: LocalizedError, Equatable, Sendable {
     }
 }
 
+@MainActor
 public protocol AudioCaptureProviding {
     func startCapture() async throws
     func stopCapture() async throws -> CapturedAudioSnapshot
 }
 
+@MainActor
 public protocol TranscriptionProviding {
     func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot
 }
 
+@MainActor
 public protocol TextInjectionProviding {
     func insert(_ text: String) async throws -> TextInjectionSnapshot
 }
 
+@MainActor
 public protocol RecordingWorkflowing: AnyObject {
     func startRecording() async throws
     func stopRecording() async throws -> RecordingWorkflowResult
