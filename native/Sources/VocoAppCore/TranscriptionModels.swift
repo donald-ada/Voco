@@ -328,6 +328,14 @@ private struct DoubaoServerUtterance: Decodable {
         case endTime = "end_time"
         case definite
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+        startTime = try container.decodeIfPresent(Int.self, forKey: .startTime)
+        endTime = try container.decodeIfPresent(Int.self, forKey: .endTime)
+        definite = try container.decodeIfPresent(Bool.self, forKey: .definite)
+    }
 }
 
 public enum TranscriptionProviderStatus: Equatable, Sendable {

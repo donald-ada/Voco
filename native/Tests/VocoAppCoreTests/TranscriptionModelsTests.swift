@@ -167,6 +167,21 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(final, "你好世界")
     }
 
+    func testDoubaoResponseParserToleratesIncompleteUtteranceObjects() throws {
+        let payload = Data(
+            #"{"result":{"text":"你好世界","utterances":[{"start_time":0,"end_time":500,"definite":false},{}]}}"#.utf8
+        )
+
+        let partial = try DoubaoServerResponse.parsePartial(payload)
+        let final = try DoubaoServerResponse.parseFinalText(payload)
+
+        XCTAssertEqual(
+            partial,
+            TranscriptPartialSnapshot(text: "你好世界", stablePrefixLength: 0, providerName: "Doubao")
+        )
+        XCTAssertEqual(final, "你好世界")
+    }
+
     func testDoubaoWireProtocolBuildsClientFramesAndParsesFinalServerFrame() throws {
         let fullClientRequest = try DoubaoWireProtocol.buildFullClientRequestFrame()
         XCTAssertEqual(Array(fullClientRequest.prefix(4)), [0x11, 0x10, 0x11, 0x00])
