@@ -23,6 +23,8 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                launchAtLoginSection
+
                 permissionsSection
 
                 Spacer()
@@ -49,6 +51,48 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    private var launchAtLoginSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("登录时启动")
+                    .font(.headline)
+                Spacer()
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { coordinator.launchAtLoginEnabled },
+                        set: { enabled in
+                            Task {
+                                await coordinator.setLaunchAtLoginEnabled(enabled)
+                            }
+                        }
+                    )
+                )
+                .labelsHidden()
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: coordinator.launchAtLoginState.systemImage)
+                    .foregroundStyle(launchAtLoginTint(coordinator.launchAtLoginState))
+                Text(coordinator.launchAtLoginState.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text(coordinator.launchAtLoginState.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if coordinator.launchAtLoginState == .requiresApproval {
+                Text("请在 System Settings → General → Login Items 中批准 Voco。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var permissionsSection: some View {
@@ -134,6 +178,19 @@ struct SettingsView: View {
             .red
         case .unknown:
             .orange
+        }
+    }
+
+    private func launchAtLoginTint(_ state: LaunchAtLoginState) -> Color {
+        switch state {
+        case .enabled:
+            .green
+        case .disabled:
+            .secondary
+        case .requiresApproval:
+            .yellow
+        case .unavailable, .failed:
+            .red
         }
     }
 
