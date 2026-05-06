@@ -113,3 +113,81 @@ public enum TextInjectionError: LocalizedError, Equatable, Sendable {
         }
     }
 }
+
+@MainActor
+public protocol TextInsertionClient {
+    func currentContext() async -> TextInjectionContext
+    func insert(_ text: String, using strategy: TextInjectionStrategy) async throws
+}
+
+public final class NativeTextInjectionProvider: TextInjectionProviding {
+    private let client: any TextInsertionClient
+
+    public init(client: any TextInsertionClient) {
+        self.client = client
+    }
+
+    public func insert(_ text: String) async throws -> TextInjectionSnapshot {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return .skippedEmpty
+        }
+
+        let context = await client.currentContext()
+        guard context.isAccessibilityTrusted else {
+            return failedSnapshot(
+                context: context,
+                strategy: .unavailable,
+                error: TextInjectionError.accessibilityPermissionMissing
+            )
+        }
+
+        guard let strategy = context.preferredStrategy else {
+            return failedSnapshot(
+                context: context,
+                strategy: .unavailable,
+                error: TextInjectionError.noSupportedStrategy(targetAppName: context.targetAppName)
+            )
+        }
+
+        do {
+            try await client.insert(text, using: strategy)
+            return TextInjectionSnapshot(
+                targetAppName: context.targetAppName,
+                strategy: strategy,
+                succeeded: true,
+                detail: successDetail(for: strategy)
+            )
+        } catch {
+            return failedSnapshot(context: context, strategy: strategy, error: error)
+        }
+    }
+
+    private func failedSnapshot(
+        context: TextInjectionContext,
+        strategy: TextInjectionStrategy,
+        error: Error
+    ) -> TextInjectionSnapshot {
+        TextInjectionSnapshot(
+            targetAppName: context.targetAppName,
+            strategy: strategy,
+            succeeded: false,
+            detail: error.localizedDescription
+        )
+    }
+
+    private func successDetail(for strategy: TextInjectionStrategy) -> String {
+        switch strategy {
+        case .directAccessibility:
+            "已通过辅助功能直接插入文本。"
+        case .unicodeEvent:
+            "已通过 Unicode 事件插入文本。"
+        case .clipboardFallback:
+            "已通过剪贴板回退插入文本并恢复剪贴板。"
+        case .unavailable:
+            "没有可用的文本插入方式。"
+        case .skippedEmpty:
+            "Final transcript was empty; skipped text insertion."
+        }
+    }
+}

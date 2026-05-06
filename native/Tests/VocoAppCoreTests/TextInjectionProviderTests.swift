@@ -1,0 +1,141 @@
+import XCTest
+@testable import VocoAppCore
+
+final class TextInjectionProviderTests: XCTestCase {
+    @MainActor
+    func testProviderSkipsEmptyTextWithoutInspectingClient() async throws {
+        let client = FakeTextInsertionClient(context: .trusted())
+        let provider = NativeTextInjectionProvider(client: client)
+
+        let result = try await provider.insert(" \n ")
+
+        XCTAssertEqual(result, .skippedEmpty)
+        XCTAssertEqual(client.contextRequests, 0)
+        XCTAssertTrue(client.insertions.isEmpty)
+    }
+
+    @MainActor
+    func testProviderUsesDirectAccessibilityBeforeFallbacks() async throws {
+        let client = FakeTextInsertionClient(context: .trusted(supportsDirectAccessibility: true))
+        let provider = NativeTextInjectionProvider(client: client)
+
+        let result = try await provider.insert("hello")
+
+        XCTAssertEqual(client.insertions, [InsertionRequest(text: "hello", strategy: .directAccessibility)])
+        XCTAssertEqual(result.targetAppName, "Notes")
+        XCTAssertEqual(result.strategy, .directAccessibility)
+        XCTAssertTrue(result.succeeded)
+        XCTAssertEqual(result.detail, "已通过辅助功能直接插入文本。")
+    }
+
+    @MainActor
+    func testProviderFallsBackToUnicodeThenClipboard() async throws {
+        let unicodeClient = FakeTextInsertionClient(
+            context: .trusted(supportsDirectAccessibility: false, supportsUnicodeEvents: true)
+        )
+        let unicodeProvider = NativeTextInjectionProvider(client: unicodeClient)
+
+        let unicodeResult = try await unicodeProvider.insert("hello")
+
+        XCTAssertEqual(unicodeClient.insertions, [InsertionRequest(text: "hello", strategy: .unicodeEvent)])
+        XCTAssertEqual(unicodeResult.strategy, .unicodeEvent)
+
+        let clipboardClient = FakeTextInsertionClient(
+            context: .trusted(
+                supportsDirectAccessibility: false,
+                supportsUnicodeEvents: false,
+                supportsClipboardFallback: true
+            )
+        )
+        let clipboardProvider = NativeTextInjectionProvider(client: clipboardClient)
+
+        let clipboardResult = try await clipboardProvider.insert("hello")
+
+        XCTAssertEqual(clipboardClient.insertions, [InsertionRequest(text: "hello", strategy: .clipboardFallback)])
+        XCTAssertEqual(clipboardResult.strategy, .clipboardFallback)
+        XCTAssertEqual(clipboardResult.detail, "已通过剪贴板回退插入文本并恢复剪贴板。")
+    }
+
+    @MainActor
+    func testProviderReportsPermissionFailureWithoutCallingInsertionClient() async throws {
+        let client = FakeTextInsertionClient(context: .untrusted())
+        let provider = NativeTextInjectionProvider(client: client)
+
+        let result = try await provider.insert("hello")
+
+        XCTAssertEqual(result.strategy, .unavailable)
+        XCTAssertFalse(result.succeeded)
+        XCTAssertEqual(result.detail, "无法插入文本：请先在系统设置中允许 Voco 使用辅助功能。")
+        XCTAssertTrue(client.insertions.isEmpty)
+    }
+
+    @MainActor
+    func testProviderReturnsFailedSnapshotWhenInsertionFails() async throws {
+        let client = FakeTextInsertionClient(context: .trusted(supportsDirectAccessibility: true))
+        client.error = TextInjectionError.insertionFailed(strategy: .directAccessibility, message: "AX error -25204")
+        let provider = NativeTextInjectionProvider(client: client)
+
+        let result = try await provider.insert("hello")
+
+        XCTAssertEqual(result.targetAppName, "Notes")
+        XCTAssertEqual(result.strategy, .directAccessibility)
+        XCTAssertFalse(result.succeeded)
+        XCTAssertEqual(result.detail, "辅助功能直接插入失败：AX error -25204")
+    }
+}
+
+private struct InsertionRequest: Equatable {
+    let text: String
+    let strategy: TextInjectionStrategy
+}
+
+@MainActor
+private final class FakeTextInsertionClient: TextInsertionClient {
+    let context: TextInjectionContext
+    var error: Error?
+    private(set) var contextRequests = 0
+    private(set) var insertions: [InsertionRequest] = []
+
+    init(context: TextInjectionContext) {
+        self.context = context
+    }
+
+    func currentContext() async -> TextInjectionContext {
+        contextRequests += 1
+        return context
+    }
+
+    func insert(_ text: String, using strategy: TextInjectionStrategy) async throws {
+        insertions.append(InsertionRequest(text: text, strategy: strategy))
+
+        if let error {
+            throw error
+        }
+    }
+}
+
+private extension TextInjectionContext {
+    static func trusted(
+        supportsDirectAccessibility: Bool = true,
+        supportsUnicodeEvents: Bool = true,
+        supportsClipboardFallback: Bool = true
+    ) -> TextInjectionContext {
+        TextInjectionContext(
+            targetAppName: "Notes",
+            isAccessibilityTrusted: true,
+            supportsDirectAccessibility: supportsDirectAccessibility,
+            supportsUnicodeEvents: supportsUnicodeEvents,
+            supportsClipboardFallback: supportsClipboardFallback
+        )
+    }
+
+    static func untrusted() -> TextInjectionContext {
+        TextInjectionContext(
+            targetAppName: "Notes",
+            isAccessibilityTrusted: false,
+            supportsDirectAccessibility: true,
+            supportsUnicodeEvents: true,
+            supportsClipboardFallback: true
+        )
+    }
+}

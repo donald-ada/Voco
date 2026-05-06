@@ -270,7 +270,7 @@ git commit -m "feat(native): add text injection models"
 - Modify: `native/Sources/VocoAppCore/TextInjectionModels.swift`
 - Create: `native/Tests/VocoAppCoreTests/TextInjectionProviderTests.swift`
 
-- [ ] **Step 1: Write failing provider tests**
+- [x] **Step 1: Write failing provider tests**
 
 Create `native/Tests/VocoAppCoreTests/TextInjectionProviderTests.swift`:
 
@@ -418,7 +418,7 @@ private extension TextInjectionContext {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -428,7 +428,7 @@ cd native && swift test --filter TextInjectionProviderTests
 
 Expected: compile failure because `TextInsertionClient` and `NativeTextInjectionProvider` do not exist.
 
-- [ ] **Step 3: Implement provider and client protocol**
+- [x] **Step 3: Implement provider and client protocol**
 
 Append to `native/Sources/VocoAppCore/TextInjectionModels.swift`:
 
@@ -512,7 +512,7 @@ public final class NativeTextInjectionProvider: TextInjectionProviding {
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -522,7 +522,7 @@ cd native && swift test --filter TextInjectionProviderTests
 
 Expected: all `TextInjectionProviderTests` pass.
 
-- [ ] **Step 5: Commit provider**
+- [x] **Step 5: Commit provider**
 
 Run:
 
