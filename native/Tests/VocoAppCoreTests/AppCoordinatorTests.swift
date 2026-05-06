@@ -554,6 +554,49 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesDefaultSettingsSnapshots() {
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+
+        XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "系统默认输入")
+        XCTAssertEqual(coordinator.injectionSettingsSnapshot.strategy.title, "等待插入")
+        XCTAssertEqual(coordinator.hudSettingsSnapshot.position.title, "顶部居中")
+        XCTAssertEqual(coordinator.privacySettingsSnapshot.transcriptRetention.title, "不保留转写文本")
+    }
+
+    @MainActor
+    func testCoordinatorSettingsSnapshotsReflectRecentRuntimeState() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),
+            transcript: TranscriptSnapshot(
+                finalText: "hello",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 10
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "已通过 Unicode 事件插入文本。"
+            )
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            recordingWorkflow: FakeRecordingWorkflow(result: result)
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.audioSettingsSnapshot.levelMeter.title, "电平正常")
+        XCTAssertEqual(coordinator.audioSettingsSnapshot.sampleRate.title, "16,000 Hz")
+        XCTAssertEqual(coordinator.injectionSettingsSnapshot.focusedApp.title, "TextEdit")
+        XCTAssertEqual(coordinator.privacySettingsSnapshot.keychain.detail, "sk-t...cdef")
+    }
+
+    @MainActor
     func testUnavailableTranscriptionFailureSurfacesProviderMessage() async {
         let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)

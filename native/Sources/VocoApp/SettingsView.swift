@@ -9,7 +9,16 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsSection.allCases) { section in
-                Label(section.title, systemImage: section.systemImage)
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(section.title)
+                        Text(section.summary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: section.systemImage)
+                }
             }
             .navigationTitle("Voco")
         } detail: {
@@ -29,7 +38,15 @@ struct SettingsView: View {
 
                     hotkeySection
 
+                    audioSettingsSection
+
                     transcriptionSection
+
+                    injectionSettingsSection
+
+                    hudSettingsSection
+
+                    privacySettingsSection
 
                     recordingDiagnosticsSection
 
@@ -106,6 +123,32 @@ struct SettingsView: View {
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    private var audioSettingsSection: some View {
+        let snapshot = coordinator.audioSettingsSnapshot
+
+        return settingsCard(section: .audio) {
+            settingsStatusRow(
+                title: snapshot.inputDevice.title,
+                detail: snapshot.inputDevice.detail,
+                systemImage: snapshot.inputDevice.systemImage
+            )
+
+            settingsStatusRow(
+                title: snapshot.levelMeter.title,
+                detail: snapshot.levelMeter.detail,
+                systemImage: snapshot.levelMeter.systemImage,
+                tint: statusTint(for: snapshot.levelMeter.systemImage)
+            )
+
+            settingsStatusRow(
+                title: snapshot.sampleRate.title,
+                detail: snapshot.sampleRate.detail,
+                systemImage: snapshot.sampleRate.systemImage,
+                tint: statusTint(for: snapshot.sampleRate.systemImage)
+            )
+        }
+    }
+
     private var permissionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -153,6 +196,76 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var injectionSettingsSection: some View {
+        let snapshot = coordinator.injectionSettingsSnapshot
+
+        return settingsCard(section: .injection) {
+            settingsStatusRow(
+                title: snapshot.strategy.title,
+                detail: snapshot.strategy.detail,
+                systemImage: snapshot.strategy.systemImage,
+                tint: statusTint(for: snapshot.strategy.systemImage)
+            )
+
+            settingsStatusRow(
+                title: snapshot.focusedApp.title,
+                detail: snapshot.focusedApp.detail,
+                systemImage: snapshot.focusedApp.systemImage,
+                tint: statusTint(for: snapshot.focusedApp.systemImage)
+            )
+        }
+    }
+
+    private var hudSettingsSection: some View {
+        let snapshot = coordinator.hudSettingsSnapshot
+
+        return settingsCard(section: .hud) {
+            settingsStatusRow(
+                title: snapshot.position.title,
+                detail: snapshot.position.detail,
+                systemImage: snapshot.position.systemImage
+            )
+
+            settingsStatusRow(
+                title: snapshot.notchMode.title,
+                detail: snapshot.notchMode.detail,
+                systemImage: snapshot.notchMode.systemImage
+            )
+
+            settingsStatusRow(
+                title: snapshot.transcriptPreview.title,
+                detail: snapshot.transcriptPreview.detail,
+                systemImage: snapshot.transcriptPreview.systemImage,
+                tint: snapshot.transcriptPreview.isVisible ? .green : .secondary
+            )
+        }
+    }
+
+    private var privacySettingsSection: some View {
+        let snapshot = coordinator.privacySettingsSnapshot
+
+        return settingsCard(section: .privacy) {
+            settingsStatusRow(
+                title: snapshot.keychain.title,
+                detail: snapshot.keychain.detail,
+                systemImage: snapshot.keychain.systemImage,
+                tint: statusTint(for: snapshot.keychain.systemImage)
+            )
+
+            settingsStatusRow(
+                title: snapshot.transcriptRetention.title,
+                detail: snapshot.transcriptRetention.detail,
+                systemImage: snapshot.transcriptRetention.systemImage
+            )
+
+            settingsStatusRow(
+                title: snapshot.logsPolicy.title,
+                detail: snapshot.logsPolicy.detail,
+                systemImage: snapshot.logsPolicy.systemImage
+            )
+        }
     }
 
     private var transcriptionSection: some View {
@@ -328,6 +441,49 @@ struct SettingsView: View {
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    private func settingsCard<Content: View>(
+        section: SettingsSection,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(section.title, systemImage: section.systemImage)
+                .font(.headline)
+
+            Text(section.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            content()
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func settingsStatusRow(
+        title: String,
+        detail: String,
+        systemImage: String,
+        tint: Color = .secondary
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .frame(width: 18)
+                .foregroundStyle(tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private func diagnosticRow(title: String, value: String, systemImage: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: systemImage)
@@ -401,6 +557,18 @@ struct SettingsView: View {
         }
 
         return snapshot.hasAPIKey ? .green : .secondary
+    }
+
+    private func statusTint(for systemImage: String) -> Color {
+        if systemImage.contains("checkmark") || systemImage == "key.fill" {
+            return .green
+        }
+
+        if systemImage.contains("xmark") || systemImage.contains("exclamationmark") {
+            return .red
+        }
+
+        return .secondary
     }
 
     private func openSettings(for kind: PermissionKind) {

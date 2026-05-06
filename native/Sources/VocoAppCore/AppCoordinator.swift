@@ -118,6 +118,22 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
+    public var audioSettingsSnapshot: AudioSettingsSnapshot {
+        AudioSettingsSnapshot(lastAudio: lastAudio)
+    }
+
+    public var injectionSettingsSnapshot: InjectionSettingsSnapshot {
+        InjectionSettingsSnapshot(lastInjection: lastInjection)
+    }
+
+    public var hudSettingsSnapshot: HUDSettingsSnapshot {
+        HUDSettingsSnapshot()
+    }
+
+    public var privacySettingsSnapshot: PrivacySettingsSnapshot {
+        PrivacySettingsSnapshot(transcriptionCredentials: transcriptionCredentials)
+    }
+
     public var isRecording: Bool {
         status == .recording
     }
