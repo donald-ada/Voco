@@ -5,6 +5,8 @@ import VocoAppCore
 @main
 @MainActor
 struct VocoNativeApp: App {
+    private static let onboardingCompletionDefaultsKey = "hasCompletedOnboarding"
+
     @StateObject private var coordinator: AppCoordinator
 
     var body: some Scene {
@@ -15,6 +17,11 @@ struct VocoNativeApp: App {
             .disabled(!coordinator.snapshot.isRecordingActionEnabled && !coordinator.isRecording)
 
             Divider()
+
+            Button("打开首次设置") {
+                coordinator.refreshOnboardingState()
+                OnboardingWindowPresenter.shared.show(coordinator: coordinator)
+            }
 
             Button("打开设置") {
                 coordinator.prepareForSettingsPresentation()
@@ -63,8 +70,12 @@ struct VocoNativeApp: App {
         NSApplication.shared.setActivationPolicy(.accessory)
         let credentialStore = MacKeychainCredentialStore()
         let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
+        let defaults = UserDefaults.standard
         let appCoordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
+            hasCompletedOnboarding: defaults.bool(forKey: Self.onboardingCompletionDefaultsKey),
+            setHasCompletedOnboarding: { completed in
+                defaults.set(completed, forKey: Self.onboardingCompletionDefaultsKey)
+            },
             permissionProvider: MacPermissionProvider(),
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
             transcriptionCredentialStore: credentialStore,
@@ -77,6 +88,9 @@ struct VocoNativeApp: App {
         )
         appCoordinator.finishLaunching()
         HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
+        if appCoordinator.status == .needsOnboarding {
+            OnboardingWindowPresenter.shared.show(coordinator: appCoordinator)
+        }
         _coordinator = StateObject(wrappedValue: appCoordinator)
     }
 }

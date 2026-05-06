@@ -635,6 +635,138 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.hotkeyRuntimeState, .permissionNeeded)
         XCTAssertTrue(hotkeyProvider.startRequests.isEmpty)
     }
+
+    @MainActor
+    func testFinishingLaunchPublishesOnboardingSnapshotWhenSetupIsIncomplete() {
+        let permissionProvider = FakePermissionProvider(
+            current: [
+                .microphone(.notDetermined),
+                .accessibility(.denied),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.denied),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            permissionProvider: permissionProvider,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(),
+            installLocationProvider: StaticInstallLocationProvider(
+                snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Applications/Voco.app")
+            )
+        )
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.onboarding.steps.map(\.id), OnboardingStepID.ordered)
+        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .actionNeeded)
+        XCTAssertEqual(coordinator.onboarding.step(id: .accessibility)?.status, .blocked)
+        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .actionNeeded)
+        XCTAssertEqual(coordinator.installLocation.status, .final)
+    }
+
+    @MainActor
+    func testRequestingMicrophonePermissionRefreshesOnboardingStep() async {
+        let permissionProvider = FakePermissionProvider(
+            current: [
+                .microphone(.notDetermined),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            permissionProvider: permissionProvider,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .actionNeeded)
+
+        await coordinator.requestMicrophonePermission()
+
+        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .complete)
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+    }
+
+    @MainActor
+    func testSavingASRKeyRefreshesOnboardingStep() async {
+        let credentialStore = InMemoryTranscriptionCredentialStore()
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            transcriptionCredentialStore: credentialStore
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .actionNeeded)
+
+        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
+
+        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .complete)
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasAPIKey)
+    }
+
+    @MainActor
+    func testLaunchAtLoginCanBeSkippedDuringOnboarding() {
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.onboarding.step(id: .launchAtLogin)?.status, .actionNeeded)
+
+        coordinator.markLaunchAtLoginSkippedForOnboarding()
+
+        XCTAssertFalse(coordinator.launchAtLoginEnabled)
+        XCTAssertEqual(coordinator.onboarding.step(id: .launchAtLogin)?.status, .skipped)
+        XCTAssertEqual(coordinator.status, .needsOnboarding)
+    }
+
+    @MainActor
+    func testHotkeyVerificationCompletesHotkeyOnboardingStep() {
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            hotkeyProvider: hotkeyProvider
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
+        XCTAssertEqual(coordinator.onboarding.step(id: .hotkeyTest)?.status, .actionNeeded)
+
+        coordinator.markHotkeyVerifiedForOnboarding()
+
+        XCTAssertEqual(coordinator.onboarding.step(id: .hotkeyTest)?.status, .complete)
+    }
+
+    @MainActor
+    func testCompletingOnboardingPersistsAndMovesReadyWhenRequiredSetupIsComplete() {
+        var persistedCompletion: Bool?
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: false,
+            setHasCompletedOnboarding: { persistedCompletion = $0 },
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            hotkeyProvider: hotkeyProvider
+        )
+        coordinator.finishLaunching()
+        coordinator.markLaunchAtLoginSkippedForOnboarding()
+        coordinator.markHotkeyVerifiedForOnboarding()
+
+        let didComplete = coordinator.completeOnboardingIfReady()
+
+        XCTAssertTrue(didComplete)
+        XCTAssertEqual(persistedCompletion, true)
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertTrue(coordinator.onboarding.isComplete)
+    }
 }
 
 private final class FakePermissionProvider: PermissionProviding {
