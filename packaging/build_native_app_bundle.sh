@@ -3,13 +3,21 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: packaging/build_native_app_bundle.sh --profile <debug|release>
+Usage: packaging/build_native_app_bundle.sh --profile <debug|release> [--signing-style <adhoc|developer-id>] [--signing-identity <identity>]
 
 Builds target/native/Voco.app from the Swift native app package.
+
+Signing:
+  --signing-style adhoc        Local signing path. No Apple credentials required.
+  --signing-style developer-id Release signing path. Requires --profile release and a Developer ID Application identity.
+
+Developer ID identity can be passed with --signing-identity or VOCO_DEVELOPER_ID_APPLICATION.
 USAGE
 }
 
 PROFILE="debug"
+SIGNING_STYLE="adhoc"
+SIGNING_IDENTITY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,6 +27,22 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       PROFILE="$2"
+      shift 2
+      ;;
+    --signing-style)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 64
+      fi
+      SIGNING_STYLE="$2"
+      shift 2
+      ;;
+    --signing-identity)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 64
+      fi
+      SIGNING_IDENTITY="$2"
       shift 2
       ;;
     -h|--help)
@@ -46,6 +70,35 @@ case "${PROFILE}" in
     exit 64
     ;;
 esac
+
+case "${SIGNING_STYLE}" in
+  adhoc|developer-id)
+    ;;
+  *)
+    echo "invalid signing style: ${SIGNING_STYLE}" >&2
+    usage
+    exit 64
+    ;;
+esac
+
+if [[ "${SIGNING_STYLE}" == "developer-id" ]]; then
+  if [[ "${PROFILE}" != "release" ]]; then
+    echo "developer-id signing requires --profile release" >&2
+    exit 64
+  fi
+
+  if [[ -z "${SIGNING_IDENTITY}" ]]; then
+    SIGNING_IDENTITY="${VOCO_DEVELOPER_ID_APPLICATION:-}"
+  fi
+
+  if [[ -z "${SIGNING_IDENTITY}" ]]; then
+    cat >&2 <<'EOF'
+missing Developer ID Application signing identity
+set VOCO_DEVELOPER_ID_APPLICATION or pass --signing-identity "Developer ID Application: ..."
+EOF
+    exit 65
+  fi
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -116,7 +169,24 @@ iconutil -c icns "${ICONSET_DIR}" -o "${RESOURCES_DIR}/Voco.icns"
 echo "ok: generated native app icon: target/native/Voco.app/Contents/Resources/Voco.icns"
 
 plutil -lint "${INFO_PLIST}" >/dev/null
-codesign --force --deep --sign - "${BUNDLE_PATH}" >/dev/null
+
+if [[ "${SIGNING_STYLE}" == "developer-id" ]]; then
+  if ! codesign --force --deep --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${BUNDLE_PATH}" >/dev/null; then
+    echo "failed to sign native app with Developer ID Application identity: ${SIGNING_IDENTITY}" >&2
+    exit 1
+  fi
+
+  if ! codesign --display --verbose=4 "${BUNDLE_PATH}" 2>&1 | grep -q 'flags=.*runtime'; then
+    echo "native app Developer ID signature is missing hardened runtime flag: ${BUNDLE_PATH}" >&2
+    exit 1
+  fi
+else
+  if ! codesign --force --deep --sign - "${BUNDLE_PATH}" >/dev/null; then
+    echo "failed to ad-hoc sign native app: ${BUNDLE_PATH}" >&2
+    exit 1
+  fi
+fi
+
 codesign --verify --deep --strict "${BUNDLE_PATH}"
 
 echo "ok: verified native Voco.app bundle: target/native/Voco.app"
