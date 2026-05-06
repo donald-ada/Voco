@@ -92,6 +92,23 @@ final class RecordingWorkflowTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, "microphone unavailable")
         }
     }
+
+    @MainActor
+    func testStaticProvidersReturnConfiguredSnapshots() async throws {
+        let audio = CapturedAudioSnapshot(
+            durationSeconds: 0.2,
+            sampleRate: 16_000,
+            peakAmplitude: 0.1,
+            pcm16Samples: [1, 2]
+        )
+        let transcript = try await StaticTranscriptionProvider().transcribe(audio)
+        let injection = try await StaticTextInjectionProvider().insert("hello")
+
+        XCTAssertEqual(transcript.providerName, "Unconfigured")
+        XCTAssertEqual(transcript.finalText, "")
+        XCTAssertEqual(injection.strategy, .skippedEmpty)
+        XCTAssertTrue(injection.succeeded)
+    }
 }
 
 private final class FakeAudioCaptureEngine: AudioCaptureProviding {

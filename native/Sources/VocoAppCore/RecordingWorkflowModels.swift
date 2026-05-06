@@ -154,6 +154,37 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     }
 }
 
+public final class StaticTranscriptionProvider: TranscriptionProviding {
+    private let transcript: TranscriptSnapshot
+
+    public init(
+        transcript: TranscriptSnapshot = TranscriptSnapshot(
+            finalText: "",
+            partials: [],
+            providerName: "Unconfigured",
+            latencyMilliseconds: nil
+        )
+    ) {
+        self.transcript = transcript
+    }
+
+    public func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        transcript
+    }
+}
+
+public final class StaticTextInjectionProvider: TextInjectionProviding {
+    private let result: TextInjectionSnapshot
+
+    public init(result: TextInjectionSnapshot = .skippedEmpty) {
+        self.result = result
+    }
+
+    public func insert(_ text: String) async throws -> TextInjectionSnapshot {
+        result
+    }
+}
+
 public final class StaticRecordingWorkflow: RecordingWorkflowing {
     private let result: RecordingWorkflowResult
     private let startError: Error?
