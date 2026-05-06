@@ -394,7 +394,7 @@ git commit -m "feat(native): expose hud snapshot"
 - Create: `native/Sources/VocoApp/HUDOverlayPresenter.swift`
 - Modify: `native/Sources/VocoApp/VocoNativeApp.swift`
 
-- [ ] **Step 1: Add SwiftUI HUD view**
+- [x] **Step 1: Add SwiftUI HUD view**
 
 Create `native/Sources/VocoApp/HUDOverlayView.swift`:
 
@@ -454,7 +454,7 @@ struct HUDOverlayView: View {
 }
 ```
 
-- [ ] **Step 2: Add non-activating panel presenter**
+- [x] **Step 2: Add non-activating panel presenter**
 
 Create `native/Sources/VocoApp/HUDOverlayPresenter.swift`:
 
@@ -559,7 +559,7 @@ final class HUDOverlayPresenter {
 }
 ```
 
-- [ ] **Step 3: Attach presenter in native app**
+- [x] **Step 3: Attach presenter in native app**
 
 Modify `native/Sources/VocoApp/VocoNativeApp.swift` after `appCoordinator.finishLaunching()`:
 
@@ -567,7 +567,7 @@ Modify `native/Sources/VocoApp/VocoNativeApp.swift` after `appCoordinator.finish
 HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
 ```
 
-- [ ] **Step 4: Run app compile tests**
+- [x] **Step 4: Run app compile tests**
 
 Run:
 
@@ -577,7 +577,7 @@ cd native && swift test
 
 Expected: all native tests pass and `VocoApp` compiles with `HUDOverlayPresenter`.
 
-- [ ] **Step 5: Commit overlay presenter**
+- [x] **Step 5: Commit overlay presenter**
 
 Run:
 

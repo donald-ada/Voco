@@ -68,6 +68,7 @@ struct VocoNativeApp: App {
             hotkeyProvider: MacHotkeyProvider()
         )
         appCoordinator.finishLaunching()
+        HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
         _coordinator = StateObject(wrappedValue: appCoordinator)
     }
 }
