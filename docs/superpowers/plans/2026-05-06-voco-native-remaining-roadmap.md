@@ -12,14 +12,16 @@
 
 ## Baseline
 
-Current known state before this roadmap:
+Current known state after Task 1 integration:
 
-- Current branch: `codex/native-keychain-credentials`.
-- Current completed branch head: `59e28ec docs(native): mark keychain credential verification`.
-- `master` is still at `936cb56 docs(native): mark hud overlay verification`.
-- The Keychain credentials slice has fresh verification evidence: `cd native && swift test` executed 69 tests with 0 failures.
+- Current branch: `master`.
+- Current `master` head: `42b9510 docs(native): plan remaining native roadmap`.
+- The Keychain credentials slice has been fast-forward merged into `master`.
+- The `codex/native-keychain-credentials` branch and `/private/tmp/voco-native-keychain-credentials` worktree have been deleted after merge.
+- Task 2 should start from clean `master` by creating a dedicated implementation branch and its dedicated ASR plan.
+- The merged Keychain credentials slice has fresh verification evidence: `cd native && swift test` executed 69 tests with 0 failures.
 
-Before starting Task 1, run:
+Before starting Task 2, run:
 
 ```bash
 git status --short --branch
@@ -28,9 +30,9 @@ git log --oneline --decorate --max-count=8
 
 Expected:
 
-- Worktree is clean.
-- `codex/native-keychain-credentials` contains `59e28ec`.
-- `master` is an ancestor of the current branch.
+- Worktree is clean on `master`.
+- Log contains `42b9510 docs(native): plan remaining native roadmap`.
+- Create a new dedicated Task 2 branch before editing ASR files.
 
 ## Execution Rules
 
@@ -71,27 +73,27 @@ Expected code areas by subsystem:
 
 **Files:**
 - No code files.
-- Existing branch: `codex/native-keychain-credentials`.
+- Integrated branch: `codex/native-keychain-credentials` (deleted after merge).
 
-- [ ] **Step 1: Verify feature branch state**
+- [x] **Step 1: Verify feature branch state**
 
-Run from `/private/tmp/voco-native-keychain-credentials`:
+Completed from `/private/tmp/voco-native-keychain-credentials`:
 
 ```bash
 git status --short --branch
 git merge-base --is-ancestor master HEAD
-git log --oneline --decorate --max-count=6
+git log --oneline --decorate --max-count=8
 ```
 
-Expected:
+Observed:
 
 - Status shows `## codex/native-keychain-credentials`.
 - `git merge-base --is-ancestor master HEAD` exits 0.
-- Log contains `59e28ec docs(native): mark keychain credential verification`.
+- Log contains `59e28ec docs(native): mark keychain credential verification` and `42b9510 docs(native): plan remaining native roadmap`.
 
-- [ ] **Step 2: Merge into master locally**
+- [x] **Step 2: Merge into master locally**
 
-Run from `/Users/zhangxiaolong/claude-dev/app/Voco`:
+Completed from `/Users/zhangxiaolong/claude-dev/app/Voco`:
 
 ```bash
 git status --short --branch
@@ -100,25 +102,25 @@ git checkout master
 git merge --ff-only codex/native-keychain-credentials
 ```
 
-Expected:
+Observed:
 
 - `git status --short --branch` is clean before checkout.
-- `git remote -v` may be empty in this repository; if empty, do not run `git pull`.
-- Merge fast-forwards `master` to `59e28ec`.
+- `git remote -v` is empty in this repository, so no `git pull` was run.
+- Merge fast-forwards `master` to `42b9510`.
 
-- [ ] **Step 3: Verify merged master**
+- [x] **Step 3: Verify merged master**
 
-Run from `/Users/zhangxiaolong/claude-dev/app/Voco/native`:
+Completed from `/Users/zhangxiaolong/claude-dev/app/Voco/native`:
 
 ```bash
 swift test
 ```
 
-Expected: XCTest executes 69 tests with 0 failures.
+Observed: XCTest executed 69 tests with 0 failures.
 
-- [ ] **Step 4: Cleanup feature worktree and branch**
+- [x] **Step 4: Cleanup feature worktree and branch**
 
-Run from `/Users/zhangxiaolong/claude-dev/app/Voco`:
+Completed from `/Users/zhangxiaolong/claude-dev/app/Voco`:
 
 ```bash
 git worktree remove /private/tmp/voco-native-keychain-credentials
@@ -126,11 +128,18 @@ git branch -d codex/native-keychain-credentials
 git status --short --branch
 ```
 
-Expected:
+Observed:
 
 - Worktree is removed.
 - Branch is deleted.
 - `master` is clean.
+
+Completion notes:
+
+- Fast-forward merged `codex/native-keychain-credentials` into `master`.
+- Verified merged `master` with `swift test`: 69 tests, 0 failures.
+- Removed `/private/tmp/voco-native-keychain-credentials` and deleted `codex/native-keychain-credentials`.
+- Final `master` status was clean at `42b9510 docs(native): plan remaining native roadmap`.
 
 ## Task 2: Real Doubao ASR Provider and Streaming Transcript
 
