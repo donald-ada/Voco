@@ -54,6 +54,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var transcriptionCredentials: TranscriptionCredentialSnapshot
     @Published public private(set) var onboarding: OnboardingSnapshot
     @Published public private(set) var installLocation: InstallLocationSnapshot
+    @Published public private(set) var legacyInstall: LegacyInstallSnapshot
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
@@ -66,6 +67,7 @@ public final class AppCoordinator: ObservableObject {
     private let hotkeyProvider: any HotkeyProviding
     private let transcriptionCredentialStore: any TranscriptionCredentialStoring
     private let installLocationProvider: any InstallLocationProviding
+    private let legacyInstallProvider: any LegacyInstallProviding
     public let hotkeyBinding: HotkeyBinding
     public let hotkeyMode: HotkeyMode
     private var hasSkippedLaunchAtLoginForOnboarding: Bool
@@ -82,6 +84,7 @@ public final class AppCoordinator: ObservableObject {
         recordingWorkflow: any RecordingWorkflowing = StaticRecordingWorkflow(),
         hotkeyProvider: any HotkeyProviding = StaticHotkeyProvider(),
         installLocationProvider: any InstallLocationProviding = StaticInstallLocationProvider(),
+        legacyInstallProvider: any LegacyInstallProviding = StaticLegacyInstallProvider(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -89,6 +92,11 @@ public final class AppCoordinator: ObservableObject {
         let initialLaunchAtLoginState = launchAtLoginEnabled ? LaunchAtLoginState.enabled : launchAtLoginProvider.currentState()
         let initialTranscriptionCredentials = transcriptionCredentialStore.currentSnapshot()
         let initialInstallLocation = installLocationProvider.currentInstallLocation()
+        let initialLegacyInstall = LegacyInstallSnapshot.notFound(
+            launchAgentURL: LegacyInstallSnapshot.knownLaunchAgentURL(
+                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            )
+        )
 
         self.status = .launching
         self.lastErrorMessage = nil
@@ -100,6 +108,7 @@ public final class AppCoordinator: ObservableObject {
         self.hotkeyProvider = hotkeyProvider
         self.transcriptionCredentialStore = transcriptionCredentialStore
         self.installLocationProvider = installLocationProvider
+        self.legacyInstallProvider = legacyInstallProvider
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
         self.permissions = initialPermissions
@@ -108,6 +117,7 @@ public final class AppCoordinator: ObservableObject {
         self.transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         self.transcriptionCredentials = initialTranscriptionCredentials
         self.installLocation = initialInstallLocation
+        self.legacyInstall = initialLegacyInstall
         self.onboarding = OnboardingSnapshot.make(
             permissions: initialPermissions,
             transcriptionCredentials: initialTranscriptionCredentials,
@@ -157,6 +167,7 @@ public final class AppCoordinator: ObservableObject {
             asrStatus: transcriptionProviderStatus,
             credentials: transcriptionCredentials,
             installLocation: installLocation,
+            legacyInstall: legacyInstall,
             transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage
@@ -175,6 +186,7 @@ public final class AppCoordinator: ObservableObject {
             asrStatus: transcriptionProviderStatus,
             credentials: transcriptionCredentials,
             installLocation: installLocation,
+            legacyInstall: legacyInstall,
             transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage,
@@ -260,6 +272,7 @@ public final class AppCoordinator: ObservableObject {
     public func finishLaunching() {
         lastErrorMessage = nil
         installLocation = installLocationProvider.currentInstallLocation()
+        refreshLegacyInstall()
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
@@ -286,8 +299,13 @@ public final class AppCoordinator: ObservableObject {
 
     public func prepareForSettingsPresentation() {
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
+        refreshLegacyInstall()
         refreshTranscriptionCredentials()
         refreshPermissions()
+    }
+
+    public func refreshLegacyInstall() {
+        legacyInstall = legacyInstallProvider.currentSnapshot()
     }
 
     public func refreshTranscriptionCredentials() {
@@ -383,6 +401,17 @@ public final class AppCoordinator: ObservableObject {
             lastErrorMessage = message
         }
         refreshOnboardingState()
+    }
+
+    public func removeLegacyLaunchAgentFromUserAction() async {
+        do {
+            legacyInstall = try await legacyInstallProvider.removeKnownLaunchAgent()
+            lastErrorMessage = nil
+        } catch {
+            let message = error.localizedDescription
+            legacyInstall = .failed(launchAgentURL: legacyInstall.launchAgentURL, message: message)
+            lastErrorMessage = message
+        }
     }
 
     public func refreshOnboardingState() {

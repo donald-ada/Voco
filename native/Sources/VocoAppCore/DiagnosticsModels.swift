@@ -3,6 +3,7 @@ import Foundation
 public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
     case permission
     case installLocation
+    case legacyInstall
     case audio
     case hotkey
     case asr
@@ -19,6 +20,8 @@ public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identi
             "权限"
         case .installLocation:
             "安装位置"
+        case .legacyInstall:
+            "旧版迁移"
         case .audio:
             "音频"
         case .hotkey:
@@ -38,6 +41,8 @@ public enum DiagnosticCategory: String, CaseIterable, Codable, Equatable, Identi
             "lock.shield"
         case .installLocation:
             "externaldrive"
+        case .legacyInstall:
+            "arrow.triangle.2.circlepath"
         case .audio:
             "waveform"
         case .hotkey:
@@ -142,6 +147,7 @@ public struct DiagnosticsSnapshot: Equatable, Sendable {
         asrStatus: TranscriptionProviderStatus,
         credentials: TranscriptionCredentialSnapshot,
         installLocation: InstallLocationSnapshot? = nil,
+        legacyInstall: LegacyInstallSnapshot? = nil,
         transcript: TranscriptSnapshot?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?,
@@ -159,6 +165,7 @@ public struct DiagnosticsSnapshot: Equatable, Sendable {
                 asrStatus: asrStatus,
                 credentials: credentials,
                 installLocation: installLocation,
+                legacyInstall: legacyInstall,
                 transcript: transcript,
                 injection: injection,
                 lastErrorMessage: lastErrorMessage
@@ -232,6 +239,7 @@ public enum DiagnosticEventFactory {
         asrStatus: TranscriptionProviderStatus,
         credentials: TranscriptionCredentialSnapshot,
         installLocation: InstallLocationSnapshot? = nil,
+        legacyInstall: LegacyInstallSnapshot? = nil,
         transcript: TranscriptSnapshot?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?
@@ -239,6 +247,9 @@ public enum DiagnosticEventFactory {
         var events = permissionEvents(permissions)
         if let installLocationEvent = installLocationEvent(installLocation) {
             events.append(installLocationEvent)
+        }
+        if let legacyInstallEvent = legacyInstallEvent(legacyInstall) {
+            events.append(legacyInstallEvent)
         }
         events.append(audioEvent(audio))
         events.append(hotkeyEvent(state: hotkeyState, binding: hotkeyBinding, mode: hotkeyMode))
@@ -298,6 +309,31 @@ public enum DiagnosticEventFactory {
             title: snapshot.warningTitle ?? snapshot.title,
             detail: snapshot.warningDetail ?? snapshot.detail
         )
+    }
+
+    private static func legacyInstallEvent(_ snapshot: LegacyInstallSnapshot?) -> DiagnosticEvent? {
+        guard let snapshot else {
+            return nil
+        }
+
+        switch snapshot.status {
+        case .notFound:
+            return nil
+        case .detected:
+            return DiagnosticEvent(
+                category: .legacyInstall,
+                severity: .warning,
+                title: snapshot.title,
+                detail: snapshot.detail
+            )
+        case .removalFailed:
+            return DiagnosticEvent(
+                category: .legacyInstall,
+                severity: .error,
+                title: snapshot.title,
+                detail: snapshot.detail
+            )
+        }
     }
 
     private static func audioEvent(_ audio: CapturedAudioSnapshot?) -> DiagnosticEvent {
