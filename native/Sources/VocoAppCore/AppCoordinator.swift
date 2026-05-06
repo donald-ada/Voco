@@ -324,7 +324,9 @@ public final class AppCoordinator: ObservableObject {
         status = .transcribing
 
         do {
-            let result = try await recordingWorkflow.stopRecording()
+            let result = try await recordingWorkflow.stopRecording { [weak self] partial in
+                self?.publishTranscriptPartial(partial)
+            }
             lastAudio = result.audio
             lastTranscript = result.transcript
             lastInjection = result.injection
@@ -351,6 +353,16 @@ public final class AppCoordinator: ObservableObject {
         } else {
             status = .error
         }
+    }
+
+    private func publishTranscriptPartial(_ partial: TranscriptPartialSnapshot) {
+        let baseTranscript = lastTranscript ?? TranscriptSnapshot(
+            finalText: "",
+            partials: [],
+            providerName: partial.providerName,
+            latencyMilliseconds: nil
+        )
+        lastTranscript = baseTranscript.appendingPartial(partial)
     }
 }
 

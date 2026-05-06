@@ -334,6 +334,34 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesPartialTranscriptToHUDWhileTranscribing() async {
+        let partial = TranscriptPartialSnapshot(
+            text: "live words",
+            stablePrefixLength: 0,
+            providerName: "Fake ASR"
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(
+            partialsToEmit: [partial],
+            pauseAfterPartials: true
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        let stopTask = Task {
+            await coordinator.toggleRecordingFromUserAction()
+        }
+        await recordingWorkflow.waitUntilPartialsEmitted()
+
+        XCTAssertEqual(coordinator.status, .transcribing)
+        XCTAssertEqual(coordinator.lastTranscript?.partials, ["live words"])
+        XCTAssertEqual(coordinator.hudSnapshot.transcriptPreview, "live words")
+
+        recordingWorkflow.resumeStop()
+        await stopTask.value
+    }
+
+    @MainActor
     func testRecordingWorkflowStartFailureSurfacesError() async {
         let recordingWorkflow = FakeRecordingWorkflow(startError: RecordingWorkflowError("microphone unavailable"))
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
@@ -571,6 +599,11 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     let transcriptionStatus: TranscriptionProviderStatus
     let startError: Error?
     let stopError: Error?
+    let partialsToEmit: [TranscriptPartialSnapshot]
+    let pauseAfterPartials: Bool
+    private var didEmitPartials = false
+    private var partialsEmittedContinuation: CheckedContinuation<Void, Never>?
+    private var stopContinuation: CheckedContinuation<Void, Never>?
 
     init(
         result: RecordingWorkflowResult = RecordingWorkflowResult(
@@ -580,12 +613,16 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         ),
         transcriptionStatus: TranscriptionProviderStatus = .ready(providerName: "Fake ASR"),
         startError: Error? = nil,
-        stopError: Error? = nil
+        stopError: Error? = nil,
+        partialsToEmit: [TranscriptPartialSnapshot] = [],
+        pauseAfterPartials: Bool = false
     ) {
         self.result = result
         self.transcriptionStatus = transcriptionStatus
         self.startError = startError
         self.stopError = stopError
+        self.partialsToEmit = partialsToEmit
+        self.pauseAfterPartials = pauseAfterPartials
     }
 
     func startRecording() async throws {
@@ -596,14 +633,42 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         }
     }
 
-    func stopRecording() async throws -> RecordingWorkflowResult {
+    func stopRecording(progress: TranscriptionProgressHandler? = nil) async throws -> RecordingWorkflowResult {
         stopCount += 1
 
         if let stopError {
             throw stopError
         }
 
+        for partial in partialsToEmit {
+            progress?(partial)
+        }
+        didEmitPartials = true
+        partialsEmittedContinuation?.resume()
+        partialsEmittedContinuation = nil
+
+        if pauseAfterPartials {
+            await withCheckedContinuation { continuation in
+                stopContinuation = continuation
+            }
+        }
+
         return result
+    }
+
+    func waitUntilPartialsEmitted() async {
+        if didEmitPartials {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            partialsEmittedContinuation = continuation
+        }
+    }
+
+    func resumeStop() {
+        stopContinuation?.resume()
+        stopContinuation = nil
     }
 }
 

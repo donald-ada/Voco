@@ -77,7 +77,16 @@ public protocol AudioCaptureProviding {
 @MainActor
 public protocol TranscriptionProviding {
     var status: TranscriptionProviderStatus { get }
-    func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot
+    func transcribe(
+        _ audio: CapturedAudioSnapshot,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> TranscriptSnapshot
+}
+
+public extension TranscriptionProviding {
+    func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        try await transcribe(audio, progress: nil)
+    }
 }
 
 @MainActor
@@ -89,7 +98,13 @@ public protocol TextInjectionProviding {
 public protocol RecordingWorkflowing: AnyObject {
     var transcriptionStatus: TranscriptionProviderStatus { get }
     func startRecording() async throws
-    func stopRecording() async throws -> RecordingWorkflowResult
+    func stopRecording(progress: TranscriptionProgressHandler?) async throws -> RecordingWorkflowResult
+}
+
+public extension RecordingWorkflowing {
+    func stopRecording() async throws -> RecordingWorkflowResult {
+        try await stopRecording(progress: nil)
+    }
 }
 
 public final class NativeRecordingWorkflow: RecordingWorkflowing {
@@ -115,9 +130,9 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         try await audioCapture.startCapture()
     }
 
-    public func stopRecording() async throws -> RecordingWorkflowResult {
+    public func stopRecording(progress: TranscriptionProgressHandler? = nil) async throws -> RecordingWorkflowResult {
         let audio = try await audioCapture.stopCapture()
-        let transcript = try await transcription.transcribe(audio)
+        let transcript = try await transcription.transcribe(audio, progress: progress)
         let insertion = try await insertionSnapshot(for: transcript)
 
         return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)
@@ -151,7 +166,10 @@ public final class StaticTranscriptionProvider: TranscriptionProviding {
         .ready(providerName: transcript.providerName)
     }
 
-    public func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+    public func transcribe(
+        _ audio: CapturedAudioSnapshot,
+        progress: TranscriptionProgressHandler? = nil
+    ) async throws -> TranscriptSnapshot {
         transcript
     }
 }
@@ -163,7 +181,10 @@ public final class UnavailableTranscriptionProvider: TranscriptionProviding {
         .notConfigured
     }
 
-    public func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+    public func transcribe(
+        _ audio: CapturedAudioSnapshot,
+        progress: TranscriptionProgressHandler? = nil
+    ) async throws -> TranscriptSnapshot {
         throw TranscriptionProviderError.notConfigured
     }
 }
@@ -208,7 +229,7 @@ public final class StaticRecordingWorkflow: RecordingWorkflowing {
         }
     }
 
-    public func stopRecording() async throws -> RecordingWorkflowResult {
+    public func stopRecording(progress: TranscriptionProgressHandler? = nil) async throws -> RecordingWorkflowResult {
         if let stopError {
             throw stopError
         }

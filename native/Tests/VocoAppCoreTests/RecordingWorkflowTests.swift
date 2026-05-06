@@ -76,6 +76,36 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testStopRecordingForwardsPartialProgress() async throws {
+        let partial = TranscriptPartialSnapshot(
+            text: "hello",
+            stablePrefixLength: 0,
+            providerName: "Fake ASR"
+        )
+        let transcription = FakeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "hello world",
+                partials: ["hello"],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 9
+            ),
+            partialsToEmit: [partial]
+        )
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: FakeAudioCaptureEngine(),
+            transcription: transcription,
+            textInjection: FakeTextInjectionEngine()
+        )
+        var received: [TranscriptPartialSnapshot] = []
+
+        _ = try await workflow.stopRecording { progress in
+            received.append(progress)
+        }
+
+        XCTAssertEqual(received, [partial])
+    }
+
+    @MainActor
     func testStartRecordingFailureIsThrownWithDescriptiveMessage() async {
         let audio = FakeAudioCaptureEngine()
         audio.startError = RecordingWorkflowError("microphone unavailable")
@@ -177,6 +207,7 @@ private final class FakeTranscriptionEngine: TranscriptionProviding {
     var inputs: [CapturedAudioSnapshot] = []
     var error: Error?
     let transcript: TranscriptSnapshot
+    let partialsToEmit: [TranscriptPartialSnapshot]
     var status: TranscriptionProviderStatus {
         .ready(providerName: transcript.providerName)
     }
@@ -187,16 +218,25 @@ private final class FakeTranscriptionEngine: TranscriptionProviding {
             partials: [],
             providerName: "Fake ASR",
             latencyMilliseconds: nil
-        )
+        ),
+        partialsToEmit: [TranscriptPartialSnapshot] = []
     ) {
         self.transcript = transcript
+        self.partialsToEmit = partialsToEmit
     }
 
-    func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+    func transcribe(
+        _ audio: CapturedAudioSnapshot,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> TranscriptSnapshot {
         inputs.append(audio)
 
         if let error {
             throw error
+        }
+
+        for partial in partialsToEmit {
+            progress?(partial)
         }
 
         return transcript
