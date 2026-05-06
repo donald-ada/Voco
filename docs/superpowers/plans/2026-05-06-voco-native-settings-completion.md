@@ -606,3 +606,10 @@ git commit -m "docs(native): mark settings completion verification"
 - Privacy section shows Keychain status, transcript retention policy, and logs policy.
 - Existing launch-at-login, hotkey, transcription credential, recording diagnostic, and permission UI remains present.
 - Full verification commands in Task 7 have fresh observed results.
+
+## Verification Notes
+
+- `cd native && swift test`: PASS. Build completed and XCTest reported `Executed 99 tests, with 1 test skipped and 0 failures (0 unexpected)`.
+- `packaging/tests/native_app_bundle_smoke.sh`: PASS. Key output included `ok: built native Swift app: debug`, `ok: generated native app icon: target/native/Voco.app/Contents/Resources/Voco.icns`, `ok: verified native Voco.app bundle: target/native/Voco.app`, and `ok: native Voco.app bundle smoke passed`.
+- `git diff --check`: PASS. No whitespace errors and no output.
+- `codesign --verify --deep --strict target/native/Voco.app`: PASS. No output.
