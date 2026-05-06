@@ -34,7 +34,7 @@ public struct HUDSnapshot: Equatable, Sendable {
                 title: "正在听",
                 detail: "松开或再次按下快捷键结束录音",
                 systemImage: "waveform.circle.fill",
-                transcriptPreview: nil,
+                transcriptPreview: hudTranscriptPreview(from: lastTranscript),
                 autoHideAfterSeconds: nil
             )
         case .transcribing:

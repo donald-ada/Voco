@@ -9,6 +9,10 @@ final class MacAudioCaptureEngine: AudioCaptureProviding {
     private var isCapturing = false
 
     func startCapture() async throws {
+        try await startCapture(audioChunkHandler: nil)
+    }
+
+    func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws {
         guard !isCapturing else {
             throw RecordingWorkflowError("audio capture already running")
         }
@@ -26,7 +30,10 @@ final class MacAudioCaptureEngine: AudioCaptureProviding {
             onBus: 0,
             bufferSize: bufferSize,
             format: format,
-            block: Self.makeAudioTapBlock(store: store)
+            block: Self.makeAudioTapBlock(
+                store: store,
+                audioChunkHandler: audioChunkHandler
+            )
         )
 
         do {
@@ -51,10 +58,11 @@ final class MacAudioCaptureEngine: AudioCaptureProviding {
     }
 
     nonisolated static func makeAudioTapBlock(
-        store: LockedAudioCaptureStore
+        store: LockedAudioCaptureStore,
+        audioChunkHandler: AudioCaptureChunkHandler? = nil
     ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
         { buffer, _ in
-            store.append(buffer)
+            store.append(buffer, audioChunkHandler: audioChunkHandler)
         }
     }
 }
@@ -71,7 +79,7 @@ final class LockedAudioCaptureStore: @unchecked Sendable {
         lock.unlock()
     }
 
-    func append(_ buffer: AVAudioPCMBuffer) {
+    func append(_ buffer: AVAudioPCMBuffer, audioChunkHandler: AudioCaptureChunkHandler? = nil) {
         let frameCount = Int(buffer.frameLength)
         guard frameCount > 0 else {
             return
@@ -97,11 +105,15 @@ final class LockedAudioCaptureStore: @unchecked Sendable {
         }
 
         lock.lock()
-        audioBuffer.appendNonInterleavedFloat32(
+        let appendedSamples = audioBuffer.appendNonInterleavedFloat32(
             channels,
             sourceSampleRate: buffer.format.sampleRate
         )
         lock.unlock()
+
+        if !appendedSamples.isEmpty {
+            audioChunkHandler?(appendedSamples)
+        }
     }
 
     func snapshot() throws -> CapturedAudioSnapshot {

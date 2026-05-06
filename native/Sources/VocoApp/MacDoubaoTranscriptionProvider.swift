@@ -2,7 +2,7 @@ import Foundation
 import VocoAppCore
 
 @MainActor
-final class MacDoubaoTranscriptionProvider: TranscriptionProviding {
+final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTranscriptionProviding {
     private let credentialStore: any TranscriptionCredentialStoring
     private let transport: any DoubaoTranscriptionTransporting
     private let legacyConfigURL: URL?
@@ -61,6 +61,32 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding {
         let request = try DoubaoTranscriptionRequest.make(apiKey: apiKey, audio: audio)
         return try await transport.transcribe(request: request, progress: progress)
     }
+
+    func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession {
+        if let legacyConfig = try LegacyDoubaoConfig.load(from: legacyConfigURL) {
+            let request = try DoubaoTranscriptionSessionRequest.make(
+                auth: .appIDAccessToken(
+                    appID: legacyConfig.appID,
+                    accessToken: legacyConfig.accessToken
+                ),
+                resourceID: legacyConfig.resourceID
+            )
+            return try await transport.startStreaming(request: request, progress: progress)
+        }
+
+        let apiKey: String?
+        do {
+            apiKey = try await credentialStore.apiKey(for: .doubao)
+        } catch {
+            throw TranscriptionProviderError.authentication(
+                providerName: doubaoTranscriptionProviderName,
+                message: error.localizedDescription
+            )
+        }
+
+        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: apiKey)
+        return try await transport.startStreaming(request: request, progress: progress)
+    }
 }
 
 @MainActor
@@ -76,11 +102,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
         request: DoubaoTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
-        var urlRequest = URLRequest(url: request.endpoint)
-        for (name, value) in request.headers {
-            urlRequest.setValue(value, forHTTPHeaderField: name)
-        }
-
+        let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
         let task = session.webSocketTask(with: urlRequest)
         task.resume()
 
@@ -120,6 +142,36 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
         }
     }
 
+    func startStreaming(
+        request: DoubaoTranscriptionSessionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> any RealtimeTranscriptionSession {
+        let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
+        let task = session.webSocketTask(with: urlRequest)
+        task.resume()
+
+        do {
+            try await task.send(.data(try DoubaoWireProtocol.buildFullClientRequestFrame()))
+            return URLSessionDoubaoStreamingTranscriptionSession(
+                task: task,
+                endpoint: request.endpoint,
+                progress: progress,
+                startedAt: Date()
+            )
+        } catch {
+            task.cancel(with: .goingAway, reason: nil)
+            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
+        }
+    }
+
+    private static func urlRequest(endpoint: URL, headers: [String: String]) -> URLRequest {
+        var urlRequest = URLRequest(url: endpoint)
+        for (name, value) in headers {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+        return urlRequest
+    }
+
     private func receiveTranscript(
         from task: any DoubaoWebSocketTasking,
         progress: TranscriptionProgressHandler?,
@@ -144,11 +196,6 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
             case .error(let code, let message):
                 throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
             case .response(let flags, let payload):
-                if let partial = try DoubaoServerResponse.parsePartial(payload) {
-                    partials.append(partial.text)
-                    progress?(partial)
-                }
-
                 if flags.isLast {
                     finalText = try DoubaoServerResponse.parseFinalText(payload)
                     let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
@@ -158,6 +205,177 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
                         providerName: doubaoTranscriptionProviderName,
                         latencyMilliseconds: latency
                     )
+                }
+
+                if let partial = try DoubaoServerResponse.parsePartial(payload) {
+                    partials.append(partial.text)
+                    progress?(partial)
+                }
+            }
+        }
+    }
+}
+
+private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscriptionSession {
+    private static let frameSampleCount = 3_200
+
+    private let task: any DoubaoWebSocketTasking
+    private let endpoint: URL
+    private let receiveTask: Task<TranscriptSnapshot, Error>
+    private var pendingError: TranscriptionProviderError?
+    private var isFinished = false
+    private var sentAnyAudio = false
+    private var pendingAudioSamples: [Int16] = []
+
+    init(
+        task: any DoubaoWebSocketTasking,
+        endpoint: URL,
+        progress: TranscriptionProgressHandler?,
+        startedAt: Date
+    ) {
+        self.task = task
+        self.endpoint = endpoint
+        self.receiveTask = Task {
+            try await Self.receiveTranscript(
+                from: task,
+                progress: progress,
+                startedAt: startedAt
+            )
+        }
+    }
+
+    func acceptAudioChunk(_ pcm16Samples: [Int16]) async {
+        guard !isFinished, !pcm16Samples.isEmpty, pendingError == nil else {
+            return
+        }
+
+        pendingAudioSamples.append(contentsOf: pcm16Samples)
+
+        do {
+            while pendingAudioSamples.count >= Self.frameSampleCount {
+                let frameSamples = Array(pendingAudioSamples.prefix(Self.frameSampleCount))
+                pendingAudioSamples.removeFirst(Self.frameSampleCount)
+                try await task.send(
+                    .data(
+                        try DoubaoWireProtocol.buildAudioFrame(
+                            pcm16Samples: frameSamples,
+                            last: false
+                        )
+                    )
+                )
+                sentAnyAudio = true
+            }
+        } catch let providerError as TranscriptionProviderError {
+            pendingError = providerError
+            receiveTask.cancel()
+            await cancelTask()
+        } catch {
+            pendingError = DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+            receiveTask.cancel()
+            await cancelTask()
+        }
+    }
+
+    func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        if let pendingError {
+            throw pendingError
+        }
+
+        isFinished = true
+
+        do {
+            if !pendingAudioSamples.isEmpty {
+                let tailSamples = pendingAudioSamples
+                pendingAudioSamples.removeAll(keepingCapacity: false)
+                try await task.send(
+                    .data(
+                        try DoubaoWireProtocol.buildAudioFrame(
+                            pcm16Samples: tailSamples,
+                            last: true
+                        )
+                    )
+                )
+            } else if !sentAnyAudio, !audio.pcm16Samples.isEmpty {
+                try await task.send(
+                    .data(
+                        try DoubaoWireProtocol.buildAudioFrame(
+                            pcm16Samples: audio.pcm16Samples,
+                            last: true
+                        )
+                    )
+                )
+            } else {
+                try await task.send(
+                    .data(
+                        try DoubaoWireProtocol.buildAudioFrame(
+                            pcm16Samples: [],
+                            last: true
+                        )
+                    )
+                )
+            }
+
+            let transcript = try await receiveTask.value
+            await cancelTask()
+            return transcript
+        } catch let providerError as TranscriptionProviderError {
+            await cancelTask()
+            throw providerError
+        } catch {
+            await cancelTask()
+            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+        }
+    }
+
+    func cancel() async {
+        isFinished = true
+        receiveTask.cancel()
+        await cancelTask()
+    }
+
+    private func cancelTask() async {
+        await MainActor.run {
+            task.cancel(with: .goingAway, reason: nil)
+        }
+    }
+
+    private static func receiveTranscript(
+        from task: any DoubaoWebSocketTasking,
+        progress: TranscriptionProgressHandler?,
+        startedAt: Date
+    ) async throws -> TranscriptSnapshot {
+        var partials: [String] = []
+
+        while true {
+            let message = try await task.receive()
+            let data: Data
+            switch message {
+            case .data(let frameData):
+                data = frameData
+            case .string:
+                continue
+            @unknown default:
+                continue
+            }
+
+            switch try DoubaoWireProtocol.parseServerFrame(data) {
+            case .error(let code, let message):
+                throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
+            case .response(let flags, let payload):
+                if flags.isLast {
+                    let finalText = try DoubaoServerResponse.parseFinalText(payload)
+                    let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                    return TranscriptSnapshot(
+                        finalText: finalText,
+                        partials: partials,
+                        providerName: doubaoTranscriptionProviderName,
+                        latencyMilliseconds: latency
+                    )
+                }
+
+                if let partial = try DoubaoServerResponse.parsePartial(payload) {
+                    partials.append(partial.text)
+                    await progress?(partial)
                 }
             }
         }
@@ -170,7 +388,7 @@ protocol DoubaoWebSocketSessioning {
 }
 
 @MainActor
-protocol DoubaoWebSocketTasking: AnyObject {
+protocol DoubaoWebSocketTasking: AnyObject, Sendable {
     func resume()
     func send(_ message: URLSessionWebSocketTask.Message) async throws
     func receive() async throws -> URLSessionWebSocketTask.Message
@@ -182,6 +400,8 @@ extension URLSession: DoubaoWebSocketSessioning {
         webSocketTask(with: request) as URLSessionWebSocketTask
     }
 }
+
+extension URLSessionWebSocketTask: @unchecked Sendable {}
 
 extension URLSessionWebSocketTask: DoubaoWebSocketTasking {
     func send(_ message: URLSessionWebSocketTask.Message) async throws {

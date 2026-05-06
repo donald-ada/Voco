@@ -58,6 +58,64 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
         endpoint: String = doubaoDefaultEndpoint,
         resourceID: String = doubaoDefaultResourceID
     ) throws -> DoubaoTranscriptionRequest {
+        let sessionRequest = try DoubaoTranscriptionSessionRequest.make(
+            auth: auth,
+            endpoint: endpoint,
+            resourceID: resourceID
+        )
+
+        guard !audio.pcm16Samples.isEmpty else {
+            throw TranscriptionProviderError.emptyAudio
+        }
+
+        let safeDebugDescription = [
+            "endpoint=\(sessionRequest.endpoint.absoluteString)",
+            "resourceID=\(resourceID)",
+            "headers=\(sessionRequest.headers.keys.sorted().joined(separator: ","))",
+            "samples=\(audio.pcm16Samples.count)"
+        ].joined(separator: " ")
+
+        return DoubaoTranscriptionRequest(
+            endpoint: sessionRequest.endpoint,
+            resourceID: resourceID,
+            headers: sessionRequest.headers,
+            audio: audio,
+            safeDebugDescription: safeDebugDescription
+        )
+    }
+}
+
+public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
+    public let endpoint: URL
+    public let resourceID: String
+    public let headers: [String: String]
+    public let safeDebugDescription: String
+
+    public static func make(
+        apiKey: String?,
+        endpoint: String = doubaoDefaultEndpoint,
+        resourceID: String = doubaoDefaultResourceID
+    ) throws -> DoubaoTranscriptionSessionRequest {
+        let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedAPIKey.isEmpty else {
+            throw TranscriptionProviderError.authentication(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Keychain 中没有保存 Doubao API Key。"
+            )
+        }
+
+        return try make(
+            auth: .apiKey(trimmedAPIKey),
+            endpoint: endpoint,
+            resourceID: resourceID
+        )
+    }
+
+    public static func make(
+        auth: DoubaoTranscriptionAuth,
+        endpoint: String = doubaoDefaultEndpoint,
+        resourceID: String = doubaoDefaultResourceID
+    ) throws -> DoubaoTranscriptionSessionRequest {
         let headers: [String: String]
         switch auth {
         case .apiKey(let apiKey):
@@ -92,10 +150,6 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
             ]
         }
 
-        guard !audio.pcm16Samples.isEmpty else {
-            throw TranscriptionProviderError.emptyAudio
-        }
-
         guard let endpointURL = URL(string: endpoint), endpointURL.scheme?.hasPrefix("ws") == true else {
             throw TranscriptionProviderError.provider(
                 providerName: doubaoTranscriptionProviderName,
@@ -106,15 +160,13 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
         let safeDebugDescription = [
             "endpoint=\(endpointURL.absoluteString)",
             "resourceID=\(resourceID)",
-            "headers=\(headers.keys.sorted().joined(separator: ","))",
-            "samples=\(audio.pcm16Samples.count)"
+            "headers=\(headers.keys.sorted().joined(separator: ","))"
         ].joined(separator: " ")
 
-        return DoubaoTranscriptionRequest(
+        return DoubaoTranscriptionSessionRequest(
             endpoint: endpointURL,
             resourceID: resourceID,
             headers: headers,
-            audio: audio,
             safeDebugDescription: safeDebugDescription
         )
     }
@@ -248,6 +300,11 @@ public protocol DoubaoTranscriptionTransporting {
         request: DoubaoTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot
+
+    func startStreaming(
+        request: DoubaoTranscriptionSessionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> any RealtimeTranscriptionSession
 }
 
 private struct DoubaoServerResponsePayload: Decodable {

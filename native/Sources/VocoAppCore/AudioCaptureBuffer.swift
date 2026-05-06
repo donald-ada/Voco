@@ -20,16 +20,17 @@ public struct AudioCaptureBuffer: Sendable {
         peakAmplitude = 0
     }
 
-    public mutating func appendNonInterleavedFloat32(_ channels: [[Float]], sourceSampleRate: Double) {
+    @discardableResult
+    public mutating func appendNonInterleavedFloat32(_ channels: [[Float]], sourceSampleRate: Double) -> [Int16] {
         guard sourceSampleRate > 0, let firstChannel = channels.first, !firstChannel.isEmpty else {
-            return
+            return []
         }
 
         let frameCount = firstChannel.count
         var mono = Array(repeating: Float(0), count: frameCount)
         let usableChannels = channels.filter { $0.count >= frameCount }
         guard !usableChannels.isEmpty else {
-            return
+            return []
         }
 
         for channel in usableChannels {
@@ -39,12 +40,13 @@ public struct AudioCaptureBuffer: Sendable {
         }
 
         let divisor = Float(usableChannels.count)
-        appendMonoFloat32(mono.map { $0 / divisor }, sourceSampleRate: sourceSampleRate)
+        return appendMonoFloat32(mono.map { $0 / divisor }, sourceSampleRate: sourceSampleRate)
     }
 
-    public mutating func appendMonoFloat32(_ samples: [Float], sourceSampleRate: Double) {
+    @discardableResult
+    public mutating func appendMonoFloat32(_ samples: [Float], sourceSampleRate: Double) -> [Int16] {
         guard sourceSampleRate > 0, !samples.isEmpty else {
-            return
+            return []
         }
 
         let resampled = resampler.resample(
@@ -52,12 +54,16 @@ public struct AudioCaptureBuffer: Sendable {
             sourceSampleRate: sourceSampleRate,
             targetSampleRate: targetSampleRate
         )
+        var appended: [Int16] = []
+        appended.reserveCapacity(resampled.count)
         for sample in resampled {
             let clipped = Self.clipped(sample)
             let pcm = Self.floatToInt16(clipped)
             pcm16Samples.append(pcm)
+            appended.append(pcm)
             peakAmplitude = max(peakAmplitude, Double(abs(clipped)))
         }
+        return appended
     }
 
     public func snapshot() -> CapturedAudioSnapshot {

@@ -106,6 +106,44 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testStartRecordingStreamsAudioChunksToRealtimeTranscription() async throws {
+        let partial = TranscriptPartialSnapshot(
+            text: "live recording",
+            stablePrefixLength: 0,
+            providerName: "Fake ASR"
+        )
+        let audioCapture = FakeAudioCaptureEngine()
+        let transcription = FakeRealtimeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "live recording final",
+                partials: ["live recording"],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 7
+            ),
+            partialsToEmitAfterAudio: [partial]
+        )
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: FakeTextInjectionEngine()
+        )
+        var received: [TranscriptPartialSnapshot] = []
+
+        try await workflow.startRecording { progress in
+            received.append(progress)
+        }
+        audioCapture.emitAudioChunk([1, 2, 3])
+        await transcription.waitUntilAudioChunksReceived()
+        let result = try await workflow.stopRecording()
+        let audioChunks = await transcription.streamingSession?.audioChunksSnapshot()
+
+        XCTAssertEqual(received, [partial])
+        XCTAssertEqual(audioChunks, [[1, 2, 3]])
+        XCTAssertTrue(transcription.inputs.isEmpty)
+        XCTAssertEqual(result.transcript.finalText, "live recording final")
+    }
+
+    @MainActor
     func testStartRecordingFailureIsThrownWithDescriptiveMessage() async {
         let audio = FakeAudioCaptureEngine()
         audio.startError = RecordingWorkflowError("microphone unavailable")
@@ -179,13 +217,19 @@ private final class FakeAudioCaptureEngine: AudioCaptureProviding {
     var startError: Error?
     var stopError: Error?
     let capturedAudio: CapturedAudioSnapshot
+    private var audioChunkHandler: AudioCaptureChunkHandler?
 
     init(capturedAudio: CapturedAudioSnapshot = CapturedAudioSnapshot(durationSeconds: 0.5, sampleRate: 16_000, peakAmplitude: 0.4)) {
         self.capturedAudio = capturedAudio
     }
 
     func startCapture() async throws {
+        try await startCapture(audioChunkHandler: nil)
+    }
+
+    func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws {
         startCount += 1
+        self.audioChunkHandler = audioChunkHandler
 
         if let startError {
             throw startError
@@ -200,6 +244,10 @@ private final class FakeAudioCaptureEngine: AudioCaptureProviding {
         }
 
         return capturedAudio
+    }
+
+    func emitAudioChunk(_ samples: [Int16]) {
+        audioChunkHandler?(samples)
     }
 }
 
@@ -240,6 +288,99 @@ private final class FakeTranscriptionEngine: TranscriptionProviding {
         }
 
         return transcript
+    }
+}
+
+private final class FakeRealtimeTranscriptionEngine: TranscriptionProviding, RealtimeTranscriptionProviding {
+    var inputs: [CapturedAudioSnapshot] = []
+    let transcript: TranscriptSnapshot
+    let partialsToEmitAfterAudio: [TranscriptPartialSnapshot]
+    private(set) var streamingSession: FakeRealtimeTranscriptionSession?
+    var status: TranscriptionProviderStatus {
+        .ready(providerName: transcript.providerName)
+    }
+
+    init(
+        transcript: TranscriptSnapshot,
+        partialsToEmitAfterAudio: [TranscriptPartialSnapshot]
+    ) {
+        self.transcript = transcript
+        self.partialsToEmitAfterAudio = partialsToEmitAfterAudio
+    }
+
+    func transcribe(
+        _ audio: CapturedAudioSnapshot,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> TranscriptSnapshot {
+        inputs.append(audio)
+        return transcript
+    }
+
+    func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession {
+        let session = FakeRealtimeTranscriptionSession(
+            transcript: transcript,
+            partialsToEmitAfterAudio: partialsToEmitAfterAudio,
+            progress: progress
+        )
+        streamingSession = session
+        return session
+    }
+
+    func waitUntilAudioChunksReceived() async {
+        await streamingSession?.waitUntilAudioChunksReceived()
+    }
+}
+
+private actor FakeRealtimeTranscriptionSession: RealtimeTranscriptionSession {
+    private var audioChunks: [[Int16]] = []
+    private let transcript: TranscriptSnapshot
+    private let partialsToEmitAfterAudio: [TranscriptPartialSnapshot]
+    private let progress: TranscriptionProgressHandler?
+    private var didEmitPartials = false
+    private var audioChunksContinuation: CheckedContinuation<Void, Never>?
+
+    init(
+        transcript: TranscriptSnapshot,
+        partialsToEmitAfterAudio: [TranscriptPartialSnapshot],
+        progress: TranscriptionProgressHandler?
+    ) {
+        self.transcript = transcript
+        self.partialsToEmitAfterAudio = partialsToEmitAfterAudio
+        self.progress = progress
+    }
+
+    func acceptAudioChunk(_ pcm16Samples: [Int16]) async {
+        audioChunks.append(pcm16Samples)
+
+        if !didEmitPartials {
+            didEmitPartials = true
+            for partial in partialsToEmitAfterAudio {
+                await progress?(partial)
+            }
+        }
+
+        audioChunksContinuation?.resume()
+        audioChunksContinuation = nil
+    }
+
+    func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        transcript
+    }
+
+    func cancel() async {}
+
+    func audioChunksSnapshot() -> [[Int16]] {
+        audioChunks
+    }
+
+    func waitUntilAudioChunksReceived() async {
+        if !audioChunks.isEmpty {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            audioChunksContinuation = continuation
+        }
     }
 }
 

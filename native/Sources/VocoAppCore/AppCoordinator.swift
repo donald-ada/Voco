@@ -548,10 +548,15 @@ public final class AppCoordinator: ObservableObject {
         lastTranscript = nil
         lastInjection = nil
         status = .recording
+        let transcriptionSessionID = UUID()
+        activeTranscriptionSessionID = transcriptionSessionID
 
         do {
-            try await recordingWorkflow.startRecording()
+            try await recordingWorkflow.startRecording { [weak self] partial in
+                self?.publishTranscriptPartial(partial, sessionID: transcriptionSessionID)
+            }
         } catch {
+            activeTranscriptionSessionID = nil
             failFromWorkflowError(error)
         }
     }
@@ -562,7 +567,7 @@ public final class AppCoordinator: ObservableObject {
         }
 
         status = .transcribing
-        let transcriptionSessionID = UUID()
+        let transcriptionSessionID = activeTranscriptionSessionID ?? UUID()
         activeTranscriptionSessionID = transcriptionSessionID
 
         do {
@@ -600,7 +605,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func publishTranscriptPartial(_ partial: TranscriptPartialSnapshot, sessionID: UUID) {
-        guard status == .transcribing, activeTranscriptionSessionID == sessionID else {
+        guard (status == .recording || status == .transcribing), activeTranscriptionSessionID == sessionID else {
             return
         }
 

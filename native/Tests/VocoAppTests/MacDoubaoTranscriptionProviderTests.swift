@@ -113,6 +113,29 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertNil(transport.requests.first?.headers["X-Api-Key"])
     }
 
+    func testProviderStartsStreamingFromLegacyConfigCredentials() async throws {
+        let legacyConfigURL = try makeLegacyDoubaoConfig(
+            appID: "3145608744",
+            accessToken: "legacy-token",
+            resourceID: "volc.seedasr.sauc.duration"
+        )
+        defer { try? FileManager.default.removeItem(at: legacyConfigURL.deletingLastPathComponent()) }
+
+        let transport = FakeDoubaoTransport()
+        let provider = MacDoubaoTranscriptionProvider(
+            credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "wrong-api-key"),
+            transport: transport,
+            legacyConfigURL: legacyConfigURL
+        )
+
+        _ = try await provider.startStreaming(progress: nil)
+
+        XCTAssertEqual(transport.streamingRequests.count, 1)
+        XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-App-Key"], "3145608744")
+        XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-Access-Key"], "legacy-token")
+        XCTAssertNil(transport.streamingRequests.first?.headers["X-Api-Key"])
+    }
+
     func testURLSessionTransportStreamsBinaryFramesAndReturnsFinalTranscript() async throws {
         let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
@@ -138,6 +161,89 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
         XCTAssertEqual(task.resumeCount, 1)
         XCTAssertEqual(task.sentMessages.count, 2)
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    func testURLSessionTransportStreamingSendsAudioChunksAndReturnsFinalTranscript() async throws {
+        let partialFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello","utterances":[{"text":"hello","start_time":0,"end_time":400,"definite":false}]}}"#,
+            last: false
+        )
+        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
+            last: true
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        var received: [TranscriptPartialSnapshot] = []
+
+        let streamingSession = try await transport.startStreaming(request: request) { progress in
+            received.append(progress)
+        }
+        await streamingSession.acceptAudioChunk([1, 2, 3])
+        XCTAssertEqual(task.sentMessages.count, 1)
+        let transcript = try await streamingSession.finish(
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2, 3]
+            )
+        )
+
+        XCTAssertEqual(transcript.finalText, "hello world")
+        XCTAssertEqual(received.map(\.text), ["hello"])
+        XCTAssertEqual(session.requests.count, 1)
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
+        XCTAssertEqual(task.resumeCount, 1)
+        XCTAssertEqual(task.sentMessages.count, 2)
+        guard case .data(let lastFrame) = task.sentMessages.last else {
+            XCTFail("Expected final audio frame")
+            return
+        }
+        XCTAssertEqual(Array(lastFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    func testURLSessionTransportStreamingFlushesFullAudioFramesBeforeFinish() async throws {
+        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
+            last: true
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let frameSamples = Array(repeating: Int16(1), count: 3_200)
+
+        let streamingSession = try await transport.startStreaming(request: request, progress: nil)
+        await streamingSession.acceptAudioChunk(frameSamples)
+
+        XCTAssertEqual(task.sentMessages.count, 2)
+        guard case .data(let audioFrame) = task.sentMessages.last else {
+            XCTFail("Expected streaming audio frame")
+            return
+        }
+        XCTAssertEqual(Array(audioFrame.prefix(4)), [0x11, 0x20, 0x01, 0x00])
+
+        let transcript = try await streamingSession.finish(
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 0.2,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: frameSamples
+            )
+        )
+
+        XCTAssertEqual(transcript.finalText, "hello world")
+        XCTAssertEqual(task.sentMessages.count, 3)
+        guard case .data(let lastFrame) = task.sentMessages.last else {
+            XCTFail("Expected final audio frame")
+            return
+        }
+        XCTAssertEqual(Array(lastFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
@@ -229,6 +335,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
 @MainActor
 private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
     private(set) var requests: [DoubaoTranscriptionRequest] = []
+    private(set) var streamingRequests: [DoubaoTranscriptionSessionRequest] = []
     let transcript: TranscriptSnapshot
     let partialsToEmit: [TranscriptPartialSnapshot]
     var error: Error?
@@ -262,6 +369,47 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
 
         return transcript
     }
+
+    func startStreaming(
+        request: DoubaoTranscriptionSessionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> any RealtimeTranscriptionSession {
+        streamingRequests.append(request)
+
+        if let error {
+            throw error
+        }
+
+        return FakeDoubaoStreamingSession(transcript: transcript, partialsToEmit: partialsToEmit, progress: progress)
+    }
+}
+
+private actor FakeDoubaoStreamingSession: RealtimeTranscriptionSession {
+    let transcript: TranscriptSnapshot
+    let partialsToEmit: [TranscriptPartialSnapshot]
+    let progress: TranscriptionProgressHandler?
+
+    init(
+        transcript: TranscriptSnapshot,
+        partialsToEmit: [TranscriptPartialSnapshot],
+        progress: TranscriptionProgressHandler?
+    ) {
+        self.transcript = transcript
+        self.partialsToEmit = partialsToEmit
+        self.progress = progress
+    }
+
+    func acceptAudioChunk(_ pcm16Samples: [Int16]) async {
+        for partial in partialsToEmit {
+            await progress?(partial)
+        }
+    }
+
+    func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        transcript
+    }
+
+    func cancel() async {}
 }
 
 @MainActor
@@ -280,7 +428,7 @@ private final class FakeDoubaoWebSocketSession: DoubaoWebSocketSessioning {
 }
 
 @MainActor
-private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking {
+private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking, @unchecked Sendable {
     private let sendError: Error?
     private var receiveMessages: [URLSessionWebSocketTask.Message]
     private(set) var resumeCount = 0

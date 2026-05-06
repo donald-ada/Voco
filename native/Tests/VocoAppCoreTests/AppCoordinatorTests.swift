@@ -362,6 +362,24 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesPartialTranscriptToHUDWhileRecording() async {
+        let partial = TranscriptPartialSnapshot(
+            text: "recording words",
+            stablePrefixLength: 0,
+            providerName: "Fake ASR"
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(partialsToEmitOnStart: [partial])
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(coordinator.lastTranscript?.partials, ["recording words"])
+        XCTAssertEqual(coordinator.hudSnapshot.transcriptPreview, "recording words")
+    }
+
+    @MainActor
     func testLatePartialAfterStopCompletionDoesNotChangeTranscriptOrHUD() async {
         let result = RecordingWorkflowResult(
             audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
@@ -881,6 +899,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     var transcriptionStatus: TranscriptionProviderStatus
     let startError: Error?
     let stopError: Error?
+    let partialsToEmitOnStart: [TranscriptPartialSnapshot]
     let partialsToEmit: [TranscriptPartialSnapshot]
     let pauseAfterPartials: Bool
     private var storedProgress: TranscriptionProgressHandler?
@@ -897,6 +916,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         transcriptionStatus: TranscriptionProviderStatus = .ready(providerName: "Fake ASR"),
         startError: Error? = nil,
         stopError: Error? = nil,
+        partialsToEmitOnStart: [TranscriptPartialSnapshot] = [],
         partialsToEmit: [TranscriptPartialSnapshot] = [],
         pauseAfterPartials: Bool = false
     ) {
@@ -904,15 +924,24 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         self.transcriptionStatus = transcriptionStatus
         self.startError = startError
         self.stopError = stopError
+        self.partialsToEmitOnStart = partialsToEmitOnStart
         self.partialsToEmit = partialsToEmit
         self.pauseAfterPartials = pauseAfterPartials
     }
 
     func startRecording() async throws {
+        try await startRecording(progress: nil)
+    }
+
+    func startRecording(progress: TranscriptionProgressHandler? = nil) async throws {
         startCount += 1
 
         if let startError {
             throw startError
+        }
+
+        for partial in partialsToEmitOnStart {
+            progress?(partial)
         }
     }
 

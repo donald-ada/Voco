@@ -1,5 +1,7 @@
 import Foundation
 
+public typealias AudioCaptureChunkHandler = @Sendable ([Int16]) -> Void
+
 public struct CapturedAudioSnapshot: Equatable, Sendable {
     public let durationSeconds: Double
     public let sampleRate: Double
@@ -71,7 +73,14 @@ public struct RecordingWorkflowError: LocalizedError, Equatable, Sendable {
 @MainActor
 public protocol AudioCaptureProviding {
     func startCapture() async throws
+    func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws
     func stopCapture() async throws -> CapturedAudioSnapshot
+}
+
+public extension AudioCaptureProviding {
+    func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws {
+        try await startCapture()
+    }
 }
 
 @MainActor
@@ -89,6 +98,17 @@ public extension TranscriptionProviding {
     }
 }
 
+public protocol RealtimeTranscriptionSession: Sendable {
+    func acceptAudioChunk(_ pcm16Samples: [Int16]) async
+    func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot
+    func cancel() async
+}
+
+@MainActor
+public protocol RealtimeTranscriptionProviding: TranscriptionProviding {
+    func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession
+}
+
 @MainActor
 public protocol TextInjectionProviding {
     func insert(_ text: String) async throws -> TextInjectionSnapshot
@@ -98,10 +118,15 @@ public protocol TextInjectionProviding {
 public protocol RecordingWorkflowing: AnyObject {
     var transcriptionStatus: TranscriptionProviderStatus { get }
     func startRecording() async throws
+    func startRecording(progress: TranscriptionProgressHandler?) async throws
     func stopRecording(progress: TranscriptionProgressHandler?) async throws -> RecordingWorkflowResult
 }
 
 public extension RecordingWorkflowing {
+    func startRecording(progress: TranscriptionProgressHandler?) async throws {
+        try await startRecording()
+    }
+
     func stopRecording() async throws -> RecordingWorkflowResult {
         try await stopRecording(progress: nil)
     }
@@ -111,6 +136,7 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     private let audioCapture: any AudioCaptureProviding
     private let transcription: any TranscriptionProviding
     private let textInjection: any TextInjectionProviding
+    private var currentStreamingSession: (any RealtimeTranscriptionSession)?
 
     public init(
         audioCapture: any AudioCaptureProviding,
@@ -127,12 +153,53 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     }
 
     public func startRecording() async throws {
-        try await audioCapture.startCapture()
+        try await startRecording(progress: nil)
+    }
+
+    public func startRecording(progress: TranscriptionProgressHandler? = nil) async throws {
+        guard currentStreamingSession == nil else {
+            throw RecordingWorkflowError("transcription stream already running")
+        }
+
+        if let realtimeTranscription = transcription as? any RealtimeTranscriptionProviding {
+            let streamingSession = try await realtimeTranscription.startStreaming(progress: progress)
+            currentStreamingSession = streamingSession
+
+            do {
+                try await audioCapture.startCapture { samples in
+                    Task {
+                        await streamingSession.acceptAudioChunk(samples)
+                    }
+                }
+            } catch {
+                currentStreamingSession = nil
+                await streamingSession.cancel()
+                throw error
+            }
+        } else {
+            try await audioCapture.startCapture()
+        }
     }
 
     public func stopRecording(progress: TranscriptionProgressHandler? = nil) async throws -> RecordingWorkflowResult {
-        let audio = try await audioCapture.stopCapture()
-        let transcript = try await transcription.transcribe(audio, progress: progress)
+        let audio: CapturedAudioSnapshot
+        do {
+            audio = try await audioCapture.stopCapture()
+        } catch {
+            if let streamingSession = currentStreamingSession {
+                currentStreamingSession = nil
+                await streamingSession.cancel()
+            }
+            throw error
+        }
+
+        let transcript: TranscriptSnapshot
+        if let streamingSession = currentStreamingSession {
+            currentStreamingSession = nil
+            transcript = try await streamingSession.finish(audio: audio)
+        } else {
+            transcript = try await transcription.transcribe(audio, progress: progress)
+        }
         let insertion = try await insertionSnapshot(for: transcript)
 
         return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)

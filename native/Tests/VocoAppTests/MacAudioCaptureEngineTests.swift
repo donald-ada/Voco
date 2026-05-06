@@ -26,6 +26,22 @@ final class MacAudioCaptureEngineTests: XCTestCase {
         XCTAssertEqual(snapshot.peakAmplitude, 0.5, accuracy: 0.001)
     }
 
+    func testTapBlockForwardsResampledPCMChunks() throws {
+        let store = LockedAudioCaptureStore()
+        let chunks = LockedPCMChunks()
+        let tapBlock = MacAudioCaptureEngine.makeAudioTapBlock(store: store) { samples in
+            chunks.append(samples)
+        }
+
+        let buffer = try Self.makeMonoBuffer(samples: [0.5, -0.25, 0.0, 0.25])
+        tapBlock(buffer, AVAudioTime(sampleTime: 0, atRate: 16_000))
+
+        let capturedChunks = chunks.snapshot()
+        XCTAssertEqual(capturedChunks.count, 1)
+        XCTAssertEqual(capturedChunks.first?.count, 4)
+        XCTAssertEqual(capturedChunks.first?.first, 16_383)
+    }
+
     nonisolated private static func makeMonoBuffer(samples: [Float]) throws -> AVAudioPCMBuffer {
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -53,5 +69,23 @@ final class MacAudioCaptureEngineTests: XCTestCase {
         }
 
         return buffer
+    }
+}
+
+private final class LockedPCMChunks: @unchecked Sendable {
+    private let lock = NSLock()
+    private var chunks: [[Int16]] = []
+
+    func append(_ samples: [Int16]) {
+        lock.lock()
+        chunks.append(samples)
+        lock.unlock()
+    }
+
+    func snapshot() -> [[Int16]] {
+        lock.lock()
+        let result = chunks
+        lock.unlock()
+        return result
     }
 }
