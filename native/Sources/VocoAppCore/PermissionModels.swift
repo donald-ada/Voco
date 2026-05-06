@@ -27,7 +27,7 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
         case .accessibility:
             "用于把转写文本插入当前正在输入的 App。"
         case .inputMonitoring:
-            "用于可靠监听全局快捷键的按下和松开。"
+            "仅用于诊断低层键盘监听能力；默认快捷键不需要。"
         }
     }
 
@@ -130,7 +130,7 @@ public struct PermissionSnapshot: Equatable, Sendable, Identifiable {
         PermissionSnapshot(kind: .accessibility, state: state, isRequired: isRequired)
     }
 
-    public static func inputMonitoring(_ state: PermissionGrantState, isRequired: Bool = true) -> PermissionSnapshot {
+    public static func inputMonitoring(_ state: PermissionGrantState, isRequired: Bool = false) -> PermissionSnapshot {
         PermissionSnapshot(kind: .inputMonitoring, state: state, isRequired: isRequired)
     }
 }

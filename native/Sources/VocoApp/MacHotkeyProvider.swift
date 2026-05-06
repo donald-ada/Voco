@@ -1,10 +1,10 @@
-import CoreGraphics
+import AppKit
 import Foundation
 import VocoAppCore
 
 @MainActor
 final class MacHotkeyProvider: HotkeyProviding {
-    private var worker: HotkeyEventTapWorker?
+    private var monitor: HotkeyNSEventMonitor?
 
     func start(
         binding: HotkeyBinding,
@@ -13,10 +13,10 @@ final class MacHotkeyProvider: HotkeyProviding {
     ) -> HotkeyRuntimeState {
         stop()
 
-        let worker = HotkeyEventTapWorker(binding: binding, mode: mode, onAction: onAction)
-        switch worker.start() {
+        let monitor = HotkeyNSEventMonitor(binding: binding, mode: mode, onAction: onAction)
+        switch monitor.start() {
         case .success:
-            self.worker = worker
+            self.monitor = monitor
             return .listening
         case .failure(let message):
             return .failed(message)
@@ -24,102 +24,55 @@ final class MacHotkeyProvider: HotkeyProviding {
     }
 
     func stop() {
-        worker?.stop()
-        worker = nil
+        monitor?.stop()
+        monitor = nil
     }
 }
 
-private final class HotkeyEventTapWorker: @unchecked Sendable {
-    private let state: HotkeyEventTapState
-    private var thread: Thread?
-    private var runLoop: CFRunLoop?
+private final class HotkeyNSEventMonitor: @unchecked Sendable {
+    private static let eventMask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
+
+    private let state: HotkeyNSEventState
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
 
     init(
         binding: HotkeyBinding,
         mode: HotkeyMode,
         onAction: @escaping @MainActor @Sendable (HotkeyAction) -> Void
     ) {
-        self.state = HotkeyEventTapState(binding: binding, mode: mode, onAction: onAction)
+        self.state = HotkeyNSEventState(binding: binding, mode: mode, onAction: onAction)
     }
 
-    func start() -> HotkeyEventTapStartResult {
-        let semaphore = DispatchSemaphore(value: 0)
-        let result = LockedStartResult()
-
-        let thread = Thread { [weak self] in
-            self?.run(semaphore: semaphore, result: result)
+    func start() -> HotkeyMonitorStartResult {
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: Self.eventMask) { [state] event in
+            state.handle(event)
         }
-        thread.name = "VocoHotkeyEventTap"
-        self.thread = thread
-        thread.start()
-
-        if semaphore.wait(timeout: .now() + 2) == .timedOut {
-            stop()
-            return .failure("hotkey event tap startup timed out")
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: Self.eventMask) { [state] event in
+            state.handle(event)
+            return event
         }
 
-        return result.value
+        guard globalMonitor != nil || localMonitor != nil else {
+            return .failure("failed to install NSEvent hotkey monitor; grant Accessibility")
+        }
+
+        return .success
     }
 
     func stop() {
-        if let runLoop {
-            CFRunLoopStop(runLoop)
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
         }
-        runLoop = nil
-        thread = nil
-    }
-
-    private func run(semaphore: DispatchSemaphore, result: LockedStartResult) {
-        let eventMask =
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
-
-        let callback: CGEventTapCallBack = { _, type, event, userInfo in
-            guard let userInfo else {
-                return Unmanaged.passUnretained(event)
-            }
-
-            let state = Unmanaged<HotkeyEventTapState>.fromOpaque(userInfo).takeUnretainedValue()
-            state.handle(type: type, event: event)
-            return Unmanaged.passUnretained(event)
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
         }
-
-        let userInfo = Unmanaged.passUnretained(state).toOpaque()
-        guard let eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: callback,
-            userInfo: userInfo
-        ) else {
-            result.value = .failure("CGEventTapCreate returned nil; grant Accessibility and Input Monitoring")
-            semaphore.signal()
-            return
-        }
-
-        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0) else {
-            result.value = .failure("failed to create hotkey event tap run loop source")
-            semaphore.signal()
-            return
-        }
-
-        let currentRunLoop = CFRunLoopGetCurrent()
-        runLoop = currentRunLoop
-        CFRunLoopAddSource(currentRunLoop, source, .commonModes)
-        CGEvent.tapEnable(tap: eventTap, enable: true)
-
-        result.value = .success
-        semaphore.signal()
-        CFRunLoopRun()
-
-        CGEvent.tapEnable(tap: eventTap, enable: false)
-        CFRunLoopRemoveSource(currentRunLoop, source, .commonModes)
+        globalMonitor = nil
+        localMonitor = nil
     }
 }
 
-private final class HotkeyEventTapState: @unchecked Sendable {
+private final class HotkeyNSEventState: @unchecked Sendable {
     private let lock = NSLock()
     private var matcher: HotkeyMatcher
     private let onAction: @MainActor @Sendable (HotkeyAction) -> Void
@@ -133,13 +86,13 @@ private final class HotkeyEventTapState: @unchecked Sendable {
         self.onAction = onAction
     }
 
-    func handle(type: CGEventType, event: CGEvent) {
-        guard let kind = HotkeyInputEventKind(type: type) else {
+    func handle(_ event: NSEvent) {
+        guard let kind = HotkeyInputEventKind(eventType: event.type) else {
             return
         }
 
-        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-        let flags = event.flags.rawValue
+        let keyCode = event.keyCode
+        let flags = UInt64(event.modifierFlags.rawValue)
         let input = HotkeyInputEvent(kind: kind, keyCode: keyCode, modifierFlags: flags)
 
         lock.lock()
@@ -155,8 +108,8 @@ private final class HotkeyEventTapState: @unchecked Sendable {
 }
 
 private extension HotkeyInputEventKind {
-    init?(type: CGEventType) {
-        switch type {
+    init?(eventType: NSEvent.EventType) {
+        switch eventType {
         case .keyDown:
             self = .keyDown
         case .keyUp:
@@ -169,25 +122,7 @@ private extension HotkeyInputEventKind {
     }
 }
 
-private enum HotkeyEventTapStartResult {
+private enum HotkeyMonitorStartResult {
     case success
     case failure(String)
-}
-
-private final class LockedStartResult: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValue: HotkeyEventTapStartResult = .failure("hotkey event tap did not start")
-
-    var value: HotkeyEventTapStartResult {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return storedValue
-        }
-        set {
-            lock.lock()
-            storedValue = newValue
-            lock.unlock()
-        }
-    }
 }

@@ -101,10 +101,9 @@ The first-run window guides the user through:
 
 1. microphone permission;
 2. accessibility permission;
-3. input monitoring permission if the selected hotkey mode requires it;
-4. ASR provider setup;
-5. launch-at-login preference;
-6. hotkey test.
+3. ASR provider setup;
+4. launch-at-login preference;
+5. hotkey test.
 
 Each step has a visible status, a retry action, and a direct button to open the
 relevant System Settings pane when macOS requires manual approval.
@@ -193,7 +192,7 @@ from service objects. It should not contain platform API details directly.
 
 - microphone authorization through native media capture APIs;
 - accessibility trust checks for text insertion and event posting;
-- input monitoring checks if event taps are required;
+- optional input monitoring diagnostics for legacy event-tap paths;
 - System Settings deep links where macOS requires manual action.
 
 Permission failures are first-class app states, not log-only warnings.
@@ -387,7 +386,7 @@ Then verify:
 - first launch shows menu bar item and no Dock icon;
 - settings window opens only when requested;
 - microphone permission prompt appears with Voco branding;
-- accessibility/input monitoring recovery links work;
+- accessibility recovery links work;
 - global hotkey starts recording without focusing Voco;
 - HUD appears without stealing focus;
 - final text inserts into TextEdit, Safari, Notes, and a terminal editor;

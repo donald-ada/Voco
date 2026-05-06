@@ -8,7 +8,6 @@ final class OnboardingModelsTests: XCTestCase {
             [
                 .microphone,
                 .accessibility,
-                .inputMonitoring,
                 .asrSetup,
                 .launchAtLogin,
                 .hotkeyTest
@@ -32,7 +31,7 @@ final class OnboardingModelsTests: XCTestCase {
             hasVerifiedHotkey: true
         )
 
-        for stepID in [OnboardingStepID.microphone, .accessibility, .inputMonitoring] {
+        for stepID in [OnboardingStepID.microphone, .accessibility] {
             let step = try XCTUnwrap(snapshot.step(id: stepID))
             XCTAssertFalse(step.title.isEmpty)
             XCTAssertFalse(step.detail.isEmpty)
@@ -45,6 +44,7 @@ final class OnboardingModelsTests: XCTestCase {
 
         XCTAssertEqual(snapshot.step(id: .microphone)?.retryAction?.title, "请求麦克风权限")
         XCTAssertEqual(snapshot.step(id: .accessibility)?.retryAction?.title, "重新检查权限")
+        XCTAssertNil(snapshot.step(id: .inputMonitoring))
     }
 
     func testASRLaunchAtLoginAndHotkeyStepsReflectRuntimeState() {
@@ -105,14 +105,33 @@ final class OnboardingModelsTests: XCTestCase {
             transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
             launchAtLoginState: .enabled,
             hasSkippedLaunchAtLogin: false,
-            hotkeyRuntimeState: .failed("event tap failed"),
+            hotkeyRuntimeState: .failed("event monitor failed"),
             hotkeyBinding: .default,
             hotkeyMode: .pressAndHold,
             hasVerifiedHotkey: false
         )
 
         XCTAssertEqual(failedRuntimeSnapshot.step(id: .hotkeyTest)?.status, .blocked)
-        XCTAssertTrue(failedRuntimeSnapshot.step(id: .hotkeyTest)?.statusDetail.contains("event tap failed") == true)
+        XCTAssertTrue(failedRuntimeSnapshot.step(id: .hotkeyTest)?.statusDetail.contains("event monitor failed") == true)
+    }
+
+    func testInputMonitoringDeniedDoesNotBlockHotkeyStep() {
+        let snapshot = OnboardingSnapshot.make(
+            permissions: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.denied)
+            ],
+            transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            launchAtLoginState: .enabled,
+            hasSkippedLaunchAtLogin: false,
+            hotkeyRuntimeState: .listening,
+            hotkeyBinding: .default,
+            hotkeyMode: .pressAndHold,
+            hasVerifiedHotkey: false
+        )
+
+        XCTAssertEqual(snapshot.step(id: .hotkeyTest)?.status, .actionNeeded)
     }
 
     func testInstallLocationDetectsMountedImagesAndFinalLocations() {

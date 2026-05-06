@@ -61,7 +61,7 @@ public enum HotkeyRuntimeState: Equatable, Sendable {
         case .listening:
             "Voco 正在监听全局快捷键。"
         case .permissionNeeded:
-            "需要辅助功能和输入监控权限才能监听全局快捷键。"
+            "需要辅助功能权限才能监听全局快捷键。"
         case .failed(let message):
             message
         }

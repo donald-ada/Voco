@@ -31,7 +31,6 @@ Manual UX checks in this file are not claimed as passed because this agent run d
 | --- | --- | --- | --- | --- |
 | microphone prompt | BLOCKED | Not executed with fresh TCC state in a clean account | Permission prompts require real app launch and UI/TCC interaction | FU-TCC-01 |
 | accessibility recovery link | BLOCKED | Not executed with denied or missing Accessibility permission | System Settings recovery links require UI interaction | FU-TCC-01 |
-| input monitoring recovery link | BLOCKED | Not executed with denied or missing Input Monitoring permission | System Settings recovery links require UI interaction | FU-TCC-01 |
 
 ## Recording
 
@@ -83,7 +82,7 @@ Manual UX checks in this file are not claimed as passed because this agent run d
 | ID | Status | Scope | Required before release |
 | --- | --- | --- | --- |
 | FU-MANUAL-01 | BLOCKED | First launch menu bar, Dock, Settings, and DMG location warning | Create or use a clean macOS account, launch `/private/tmp/voco-native-manual-ux-verification/dist/Voco.app` and the mounted DMG, record screenshots or notes for every First Launch row, then update this checklist from `BLOCKED` to `PASS` or `FAIL`. |
-| FU-TCC-01 | BLOCKED | Microphone prompt and permission recovery links | Use a fresh TCC state or clean account, trigger Voco permission flows, verify Microphone, Accessibility, and Input Monitoring prompts/recovery links, then update every Permissions row. |
+| FU-TCC-01 | BLOCKED | Microphone prompt and permission recovery links | Use a fresh TCC state or clean account, trigger Voco permission flows, verify Microphone and Accessibility prompts/recovery links, then update every Permissions row. |
 | FU-MANUAL-02 | BLOCKED | Hotkey recording and focus retention | With permissions granted, focus TextEdit or Safari, press the configured global hotkey, verify recording starts and focus remains on the target app, then update Recording rows. |
 | FU-MANUAL-03 | BLOCKED | HUD placement and focus behavior | On the MacBookPro18,1 display, start recording and verify HUD placement near notch/top center without focus theft, then update HUD rows. |
 | FU-MANUAL-04 | BLOCKED | Text insertion targets | Verify final transcript insertion independently in TextEdit, Safari, Notes, and a terminal editor, then update each target row. |

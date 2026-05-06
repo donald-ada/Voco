@@ -655,6 +655,34 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testInputMonitoringPermissionDoesNotBlockHotkeyInstall() {
+        let permissionProvider = FakePermissionProvider(
+            current: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.denied)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.denied)
+            ]
+        )
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            permissionProvider: permissionProvider,
+            hotkeyProvider: hotkeyProvider
+        )
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
+        XCTAssertEqual(hotkeyProvider.startRequests.count, 1)
+        XCTAssertEqual(coordinator.status, .ready)
+    }
+
+    @MainActor
     func testFinishingLaunchPublishesOnboardingSnapshotWhenSetupIsIncomplete() {
         let permissionProvider = FakePermissionProvider(
             current: [

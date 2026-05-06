@@ -11,7 +11,6 @@ public enum OnboardingStepID: String, CaseIterable, Identifiable, Sendable {
     public static let ordered: [OnboardingStepID] = [
         .microphone,
         .accessibility,
-        .inputMonitoring,
         .asrSetup,
         .launchAtLogin,
         .hotkeyTest
@@ -174,8 +173,7 @@ public struct OnboardingSnapshot: Equatable, Sendable {
     ) -> OnboardingSnapshot {
         let permissionSteps = [
             permissionStep(for: .microphone, permissions: permissions),
-            permissionStep(for: .accessibility, permissions: permissions),
-            permissionStep(for: .inputMonitoring, permissions: permissions)
+            permissionStep(for: .accessibility, permissions: permissions)
         ]
 
         return OnboardingSnapshot(
@@ -331,7 +329,7 @@ public struct OnboardingSnapshot: Equatable, Sendable {
         mode: HotkeyMode,
         hasVerifiedHotkey: Bool
     ) -> OnboardingStepSnapshot {
-        let hasRequiredHotkeyPermissions = [PermissionKind.accessibility, .inputMonitoring].allSatisfy { kind in
+        let hasRequiredHotkeyPermissions = [PermissionKind.accessibility].allSatisfy { kind in
             permissions.first(where: { $0.kind == kind && $0.isRequired })?.state.isGranted == true
         }
         let status: OnboardingStepStatus
@@ -339,7 +337,7 @@ public struct OnboardingSnapshot: Equatable, Sendable {
 
         if !hasRequiredHotkeyPermissions {
             status = .blocked
-            statusDetail = "需要辅助功能和输入监控权限才能测试 \(binding.displayName)。"
+            statusDetail = "需要辅助功能权限才能测试 \(binding.displayName)。"
         } else {
             switch runtimeState {
             case .listening:

@@ -9,7 +9,7 @@ struct MacPermissionProvider: PermissionProviding {
         [
             .microphone(microphoneState()),
             .accessibility(accessibilityState()),
-            .inputMonitoring(inputMonitoringState())
+            .inputMonitoring(inputMonitoringState(), isRequired: false)
         ]
     }
 

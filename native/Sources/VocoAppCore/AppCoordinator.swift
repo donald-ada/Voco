@@ -513,7 +513,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private var hotkeyPermissionsGranted: Bool {
-        for kind in [PermissionKind.accessibility, .inputMonitoring] {
+        for kind in [PermissionKind.accessibility] {
             if permissions.first(where: { $0.kind == kind && $0.isRequired })?.state.isGranted != true {
                 return false
             }
