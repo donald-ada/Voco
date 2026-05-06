@@ -92,7 +92,7 @@ Expected:
 
 - [ ] **Step 1: Reset or use fresh TCC state**
 
-Use a clean account or explicitly reset permissions before launch:
+Warning: these commands modify the current macOS user's TCC/privacy state for Voco. Run them only in a clean/disposable test account, or after confirming the current user can accept resetting Voco's permission state.
 
 ```bash
 tccutil reset Microphone com.voco.app
@@ -276,7 +276,7 @@ Expected:
 Run:
 
 ```bash
-cd native && swift test
+swift test --package-path native
 packaging/tests/native_app_bundle_smoke.sh
 packaging/tests/native_dmg_smoke.sh
 git diff --check
@@ -321,7 +321,7 @@ BLOCKED=20
 Automated acceptance gate:
 
 ```text
-cd native && swift test
+swift test --package-path native
 PASS: XCTest reported 140 tests executed, 1 test skipped, 0 failures.
 
 packaging/tests/native_app_bundle_smoke.sh
