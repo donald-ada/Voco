@@ -64,14 +64,14 @@
   <rect x="214" y="192" width="596" height="176" rx="88" stroke="white" stroke-opacity="0.1" stroke-width="4"/>
 
   <g opacity="0.96" clip-path="url(#waveCapsuleClip)">
-    <rect x="302" y="275" width="24" height="58" rx="12" fill="#FFD84E"/>
-    <rect x="354" y="246" width="24" height="116" rx="12" fill="#FFD84E"/>
-    <rect x="406" y="222" width="24" height="148" rx="12" fill="#FFD84E"/>
-    <rect x="458" y="258" width="24" height="92" rx="12" fill="#FFD84E"/>
-    <rect x="542" y="244" width="24" height="120" rx="12" fill="#2DF59B"/>
-    <rect x="594" y="220" width="24" height="148" rx="12" fill="#2DF59B"/>
-    <rect x="646" y="258" width="24" height="92" rx="12" fill="#2DF59B"/>
-    <rect x="698" y="280" width="24" height="48" rx="12" fill="#2DF59B"/>
+    <rect x="302" y="251" width="24" height="58" rx="12" fill="#FFD84E"/>
+    <rect x="354" y="222" width="24" height="116" rx="12" fill="#FFD84E"/>
+    <rect x="406" y="206" width="24" height="148" rx="12" fill="#FFD84E"/>
+    <rect x="458" y="234" width="24" height="92" rx="12" fill="#FFD84E"/>
+    <rect x="542" y="220" width="24" height="120" rx="12" fill="#2DF59B"/>
+    <rect x="594" y="206" width="24" height="148" rx="12" fill="#2DF59B"/>
+    <rect x="646" y="234" width="24" height="92" rx="12" fill="#2DF59B"/>
+    <rect x="698" y="256" width="24" height="48" rx="12" fill="#2DF59B"/>
   </g>
 
   <g filter="url(#strokeGlow)">
