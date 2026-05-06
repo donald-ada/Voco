@@ -51,4 +51,15 @@ if [[ -z "${MIC_USAGE}" ]]; then
   exit 1
 fi
 
+"${MACOS_DIR}/Voco" &
+APP_PID="$!"
+sleep 1
+if ! kill -0 "${APP_PID}" 2>/dev/null; then
+  wait "${APP_PID}" || true
+  echo "native app exited during launch" >&2
+  exit 1
+fi
+kill "${APP_PID}" 2>/dev/null || true
+wait "${APP_PID}" 2>/dev/null || true
+
 echo "ok: native Voco.app bundle smoke passed"

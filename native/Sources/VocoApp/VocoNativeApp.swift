@@ -40,7 +40,7 @@ struct VocoNativeApp: App {
     }
 
     init() {
-        NSApp.setActivationPolicy(.accessory)
+        NSApplication.shared.setActivationPolicy(.accessory)
         let appCoordinator = AppCoordinator()
         appCoordinator.finishLaunching()
         _coordinator = StateObject(wrappedValue: appCoordinator)
