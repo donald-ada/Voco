@@ -48,24 +48,35 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var lastErrorMessage: String?
     @Published public private(set) var launchAtLoginState: LaunchAtLoginState
     @Published public private(set) var permissions: [PermissionSnapshot]
+    @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
 
     private let hasCompletedOnboarding: Bool
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
+    private let hotkeyProvider: any HotkeyProviding
+    public let hotkeyBinding: HotkeyBinding
+    public let hotkeyMode: HotkeyMode
 
     public init(
         hasCompletedOnboarding: Bool = false,
         launchAtLoginEnabled: Bool = false,
         permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted,
-        launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider()
+        launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider(),
+        hotkeyProvider: any HotkeyProviding = StaticHotkeyProvider(),
+        hotkeyBinding: HotkeyBinding = .default,
+        hotkeyMode: HotkeyMode = .toggle
     ) {
         self.status = .launching
         self.lastErrorMessage = nil
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.permissionProvider = permissionProvider
         self.launchAtLoginProvider = launchAtLoginProvider
+        self.hotkeyProvider = hotkeyProvider
+        self.hotkeyBinding = hotkeyBinding
+        self.hotkeyMode = hotkeyMode
         self.permissions = permissionProvider.currentSnapshots()
         self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
+        self.hotkeyRuntimeState = .inactive
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -96,6 +107,7 @@ public final class AppCoordinator: ObservableObject {
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
         status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
+        refreshHotkeyRuntime()
     }
 
     public func refreshPermissions() {
@@ -107,6 +119,7 @@ public final class AppCoordinator: ObservableObject {
         }
 
         status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
+        refreshHotkeyRuntime()
     }
 
     public func prepareForSettingsPresentation() {
@@ -122,6 +135,7 @@ public final class AppCoordinator: ObservableObject {
         } else {
             status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
         }
+        refreshHotkeyRuntime()
     }
 
     public func toggleRecordingFromMenu() {
@@ -160,6 +174,60 @@ public final class AppCoordinator: ObservableObject {
     public func fail(_ message: String) {
         lastErrorMessage = message
         status = .error
+    }
+
+    private func refreshHotkeyRuntime() {
+        guard hotkeyPermissionsGranted else {
+            hotkeyProvider.stop()
+            hotkeyRuntimeState = .permissionNeeded
+            return
+        }
+
+        guard status == .ready || status == .recording || status == .transcribing else {
+            hotkeyProvider.stop()
+            hotkeyRuntimeState = .inactive
+            return
+        }
+
+        if hotkeyRuntimeState == .listening {
+            return
+        }
+
+        hotkeyRuntimeState = hotkeyProvider.start(
+            binding: hotkeyBinding,
+            mode: hotkeyMode
+        ) { [weak self] action in
+            self?.handleHotkeyAction(action)
+        }
+
+        if case .failed(let message) = hotkeyRuntimeState {
+            lastErrorMessage = message
+        }
+    }
+
+    private var hotkeyPermissionsGranted: Bool {
+        for kind in [PermissionKind.accessibility, .inputMonitoring] {
+            if permissions.first(where: { $0.kind == kind && $0.isRequired })?.state.isGranted == false {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func handleHotkeyAction(_ action: HotkeyAction) {
+        switch action {
+        case .toggleRecording:
+            toggleRecordingFromMenu()
+        case .startRecording:
+            if status == .ready {
+                lastErrorMessage = nil
+                status = .recording
+            }
+        case .stopRecording:
+            if status == .recording {
+                status = .transcribing
+            }
+        }
     }
 }
 

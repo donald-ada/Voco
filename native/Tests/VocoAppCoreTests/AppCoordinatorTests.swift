@@ -17,11 +17,14 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testFinishingLaunchWithOnboardingShowsReadyState() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
 
         coordinator.finishLaunching()
 
         XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
+        XCTAssertEqual(hotkeyProvider.startRequests.count, 1)
         XCTAssertEqual(coordinator.snapshot.title, "就绪")
         XCTAssertEqual(coordinator.snapshot.systemImage, "waveform")
         XCTAssertTrue(coordinator.snapshot.isRecordingActionEnabled)
@@ -205,6 +208,63 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.permissions, provider.current)
         XCTAssertEqual(coordinator.status, .permissionNeeded)
     }
+
+    @MainActor
+    func testHotkeyToggleMovesThroughRecordingAndTranscribing() {
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
+        coordinator.finishLaunching()
+
+        hotkeyProvider.emit(.toggleRecording)
+
+        XCTAssertEqual(coordinator.status, .recording)
+
+        hotkeyProvider.emit(.toggleRecording)
+
+        XCTAssertEqual(coordinator.status, .transcribing)
+    }
+
+    @MainActor
+    func testHotkeyPressAndHoldActionsStartAndStopRecording() {
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
+        coordinator.finishLaunching()
+
+        hotkeyProvider.emit(.startRecording)
+
+        XCTAssertEqual(coordinator.status, .recording)
+
+        hotkeyProvider.emit(.stopRecording)
+
+        XCTAssertEqual(coordinator.status, .transcribing)
+    }
+
+    @MainActor
+    func testMissingHotkeyPermissionsDoNotInstallHotkey() {
+        let permissionProvider = FakePermissionProvider(
+            current: [
+                .microphone(.granted),
+                .accessibility(.denied),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            permissionProvider: permissionProvider,
+            hotkeyProvider: hotkeyProvider
+        )
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.hotkeyRuntimeState, .permissionNeeded)
+        XCTAssertTrue(hotkeyProvider.startRequests.isEmpty)
+    }
 }
 
 private final class FakePermissionProvider: PermissionProviding {
@@ -255,5 +315,39 @@ private enum LaunchAtLoginTestError: LocalizedError {
 
     var errorDescription: String? {
         "failed"
+    }
+}
+
+private final class FakeHotkeyProvider: HotkeyProviding {
+    struct StartRequest: Equatable {
+        let binding: HotkeyBinding
+        let mode: HotkeyMode
+    }
+
+    let startState: HotkeyRuntimeState
+    private(set) var startRequests: [StartRequest] = []
+    private(set) var stopCount: Int = 0
+    private var onAction: (@MainActor @Sendable (HotkeyAction) -> Void)?
+
+    init(startState: HotkeyRuntimeState) {
+        self.startState = startState
+    }
+
+    func start(
+        binding: HotkeyBinding,
+        mode: HotkeyMode,
+        onAction: @escaping @MainActor @Sendable (HotkeyAction) -> Void
+    ) -> HotkeyRuntimeState {
+        startRequests.append(StartRequest(binding: binding, mode: mode))
+        self.onAction = onAction
+        return startState
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+
+    func emit(_ action: HotkeyAction) {
+        onAction?(action)
     }
 }
