@@ -57,7 +57,6 @@
       <rect x="64" y="64" width="896" height="896" fill="url(#topGlow)"/>
       <rect x="64" y="64" width="896" height="896" fill="url(#bottomGlow)"/>
       <path d="M172 174C254 109 380 88 514 92C709 98 864 195 936 362" stroke="white" stroke-opacity="0.12" stroke-width="3"/>
-      <path d="M122 782C248 898 454 936 640 888C774 854 878 764 950 632" stroke="#27F59B" stroke-opacity="0.1" stroke-width="5"/>
     </g>
     <rect x="68" y="68" width="888" height="888" rx="206" stroke="white" stroke-opacity="0.09" stroke-width="8"/>
   </g>
