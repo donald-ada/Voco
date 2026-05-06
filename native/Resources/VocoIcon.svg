@@ -46,6 +46,9 @@
     <clipPath id="squircle">
       <rect x="64" y="64" width="896" height="896" rx="210"/>
     </clipPath>
+    <clipPath id="waveCapsuleClip">
+      <rect x="226" y="204" width="572" height="152" rx="76"/>
+    </clipPath>
   </defs>
 
   <g filter="url(#softShadow)">
@@ -62,15 +65,15 @@
   <rect x="210" y="188" width="604" height="184" rx="92" fill="#05070A" fill-opacity="0.78"/>
   <rect x="214" y="192" width="596" height="176" rx="88" stroke="white" stroke-opacity="0.1" stroke-width="4"/>
 
-  <g opacity="0.96">
-    <rect x="302" y="277" width="26" height="54" rx="13" fill="#FFD84E"/>
-    <rect x="354" y="248" width="26" height="112" rx="13" fill="#FFD84E"/>
-    <rect x="406" y="222" width="26" height="164" rx="13" fill="#FFD84E"/>
-    <rect x="458" y="259" width="26" height="90" rx="13" fill="#FFD84E"/>
-    <rect x="540" y="242" width="26" height="124" rx="13" fill="#2DF59B"/>
-    <rect x="592" y="216" width="26" height="176" rx="13" fill="#2DF59B"/>
-    <rect x="644" y="260" width="26" height="90" rx="13" fill="#2DF59B"/>
-    <rect x="696" y="286" width="26" height="42" rx="13" fill="#2DF59B"/>
+  <g opacity="0.96" clip-path="url(#waveCapsuleClip)">
+    <rect x="302" y="275" width="24" height="58" rx="12" fill="#FFD84E"/>
+    <rect x="354" y="246" width="24" height="116" rx="12" fill="#FFD84E"/>
+    <rect x="406" y="222" width="24" height="148" rx="12" fill="#FFD84E"/>
+    <rect x="458" y="258" width="24" height="92" rx="12" fill="#FFD84E"/>
+    <rect x="542" y="244" width="24" height="120" rx="12" fill="#2DF59B"/>
+    <rect x="594" y="220" width="24" height="148" rx="12" fill="#2DF59B"/>
+    <rect x="646" y="258" width="24" height="92" rx="12" fill="#2DF59B"/>
+    <rect x="698" y="280" width="24" height="48" rx="12" fill="#2DF59B"/>
   </g>
 
   <g filter="url(#strokeGlow)">
