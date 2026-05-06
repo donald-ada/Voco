@@ -39,7 +39,7 @@ Observed before Task 1: PASS. XCTest executed 48 tests with 0 failures.
 - Create: `native/Sources/VocoAppCore/TextInjectionModels.swift`
 - Modify: `native/Sources/VocoAppCore/RecordingWorkflowModels.swift`
 
-- [ ] **Step 1: Write failing model tests**
+- [x] **Step 1: Write failing model tests**
 
 Create `native/Tests/VocoAppCoreTests/TextInjectionModelsTests.swift`:
 
@@ -111,7 +111,7 @@ final class TextInjectionModelsTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -121,7 +121,7 @@ cd native && swift test --filter TextInjectionModelsTests
 
 Expected: compile failure because `TextInjectionContext`, `TextInjectionError`, and `TextInjectionStrategy.unavailable` do not exist.
 
-- [ ] **Step 3: Implement text injection models**
+- [x] **Step 3: Implement text injection models**
 
 Create `native/Sources/VocoAppCore/TextInjectionModels.swift`:
 
@@ -245,7 +245,7 @@ public enum TextInjectionError: LocalizedError, Equatable, Sendable {
 
 Remove the old `TextInjectionStrategy` and `TextInjectionSnapshot` definitions from `native/Sources/VocoAppCore/RecordingWorkflowModels.swift`.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -255,7 +255,7 @@ cd native && swift test --filter TextInjectionModelsTests
 
 Expected: all `TextInjectionModelsTests` pass.
 
-- [ ] **Step 5: Commit models**
+- [x] **Step 5: Commit models**
 
 Run:
 

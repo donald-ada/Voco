@@ -28,49 +28,6 @@ public struct TranscriptSnapshot: Equatable, Sendable {
     }
 }
 
-public enum TextInjectionStrategy: Equatable, Sendable {
-    case directAccessibility
-    case unicodeEvent
-    case clipboardFallback
-    case skippedEmpty
-
-    public var title: String {
-        switch self {
-        case .directAccessibility:
-            "辅助功能直接插入"
-        case .unicodeEvent:
-            "Unicode 事件"
-        case .clipboardFallback:
-            "剪贴板回退"
-        case .skippedEmpty:
-            "空文本跳过"
-        }
-    }
-}
-
-public struct TextInjectionSnapshot: Equatable, Sendable {
-    public let targetAppName: String?
-    public let strategy: TextInjectionStrategy
-    public let succeeded: Bool
-    public let detail: String
-
-    public init(targetAppName: String?, strategy: TextInjectionStrategy, succeeded: Bool, detail: String) {
-        self.targetAppName = targetAppName
-        self.strategy = strategy
-        self.succeeded = succeeded
-        self.detail = detail
-    }
-
-    public static var skippedEmpty: TextInjectionSnapshot {
-        TextInjectionSnapshot(
-            targetAppName: nil,
-            strategy: .skippedEmpty,
-            succeeded: true,
-            detail: "Final transcript was empty; skipped text insertion."
-        )
-    }
-}
-
 public struct RecordingWorkflowResult: Equatable, Sendable {
     public let audio: CapturedAudioSnapshot
     public let transcript: TranscriptSnapshot
