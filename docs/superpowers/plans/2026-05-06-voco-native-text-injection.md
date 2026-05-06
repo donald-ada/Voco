@@ -537,7 +537,7 @@ git commit -m "feat(native): add text injection provider"
 - Create: `native/Sources/VocoApp/MacTextInjectionProvider.swift`
 - Modify: `native/Sources/VocoApp/VocoNativeApp.swift`
 
-- [ ] **Step 1: Implement macOS text insertion client**
+- [x] **Step 1: Implement macOS text insertion client**
 
 Create `native/Sources/VocoApp/MacTextInjectionProvider.swift` with these concrete behaviors:
 
@@ -570,7 +570,7 @@ In the same file, implement `MacTextInsertionClient: TextInsertionClient`:
 - Unicode event insertion posts key down/up `CGEvent`s for each UTF-16 code unit and throws `TextInjectionError.eventPostFailed` if event creation fails.
 - Clipboard fallback captures every pasteboard item's data by type, writes the transcript string, posts Command-V, waits briefly, restores the captured items, and throws `TextInjectionError.clipboardRestoreFailed` when restoration fails.
 
-- [ ] **Step 2: Wire native app to macOS provider**
+- [x] **Step 2: Wire native app to macOS provider**
 
 Modify `native/Sources/VocoApp/VocoNativeApp.swift`:
 
@@ -582,7 +582,7 @@ recordingWorkflow: NativeRecordingWorkflow(
 ),
 ```
 
-- [ ] **Step 3: Run app compile tests**
+- [x] **Step 3: Run app compile tests**
 
 Run:
 
@@ -592,7 +592,7 @@ cd native && swift test
 
 Expected: all native tests pass and the executable target compiles with `MacTextInjectionProvider`.
 
-- [ ] **Step 4: Commit macOS provider**
+- [x] **Step 4: Commit macOS provider**
 
 Run:
 

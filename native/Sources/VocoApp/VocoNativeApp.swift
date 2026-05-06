@@ -63,7 +63,7 @@ struct VocoNativeApp: App {
             recordingWorkflow: NativeRecordingWorkflow(
                 audioCapture: MacAudioCaptureEngine(),
                 transcription: UnavailableTranscriptionProvider(),
-                textInjection: StaticTextInjectionProvider()
+                textInjection: MacTextInjectionProvider()
             ),
             hotkeyProvider: MacHotkeyProvider()
         )
