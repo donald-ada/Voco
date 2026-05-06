@@ -15,8 +15,13 @@ public struct TranscriptPartialSnapshot: Equatable, Sendable {
 public typealias TranscriptionProgressHandler = @MainActor @Sendable (TranscriptPartialSnapshot) -> Void
 
 public let doubaoTranscriptionProviderName = "Doubao"
-public let doubaoDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+public let doubaoDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
 public let doubaoDefaultResourceID = "volc.seedasr.sauc.duration"
+
+public enum DoubaoTranscriptionAuth: Equatable, Sendable {
+    case apiKey(String)
+    case appIDAccessToken(appID: String, accessToken: String)
+}
 
 public struct DoubaoTranscriptionRequest: Equatable, Sendable {
     public let endpoint: URL
@@ -39,6 +44,54 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
             )
         }
 
+        return try make(
+            auth: .apiKey(trimmedAPIKey),
+            audio: audio,
+            endpoint: endpoint,
+            resourceID: resourceID
+        )
+    }
+
+    public static func make(
+        auth: DoubaoTranscriptionAuth,
+        audio: CapturedAudioSnapshot,
+        endpoint: String = doubaoDefaultEndpoint,
+        resourceID: String = doubaoDefaultResourceID
+    ) throws -> DoubaoTranscriptionRequest {
+        let headers: [String: String]
+        switch auth {
+        case .apiKey(let apiKey):
+            let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedAPIKey.isEmpty else {
+                throw TranscriptionProviderError.authentication(
+                    providerName: doubaoTranscriptionProviderName,
+                    message: "Keychain 中没有保存 Doubao API Key。"
+                )
+            }
+            headers = [
+                "X-Api-Key": trimmedAPIKey,
+                "X-Api-Resource-Id": resourceID,
+                "X-Api-Request-Id": UUID().uuidString,
+                "X-Api-Connect-Id": UUID().uuidString
+            ]
+        case .appIDAccessToken(let appID, let accessToken):
+            let trimmedAppID = appID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedAccessToken = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedAppID.isEmpty, !trimmedAccessToken.isEmpty else {
+                throw TranscriptionProviderError.authentication(
+                    providerName: doubaoTranscriptionProviderName,
+                    message: "Doubao 旧控制台凭证缺少 App ID 或 Access Token。"
+                )
+            }
+            headers = [
+                "X-Api-App-Key": trimmedAppID,
+                "X-Api-Access-Key": trimmedAccessToken,
+                "X-Api-Resource-Id": resourceID,
+                "X-Api-Request-Id": UUID().uuidString,
+                "X-Api-Connect-Id": UUID().uuidString
+            ]
+        }
+
         guard !audio.pcm16Samples.isEmpty else {
             throw TranscriptionProviderError.emptyAudio
         }
@@ -50,12 +103,6 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
             )
         }
 
-        let headers = [
-            "X-Api-Key": trimmedAPIKey,
-            "X-Api-Resource-Id": resourceID,
-            "X-Api-Request-Id": UUID().uuidString,
-            "X-Api-Connect-Id": UUID().uuidString
-        ]
         let safeDebugDescription = [
             "endpoint=\(endpointURL.absoluteString)",
             "resourceID=\(resourceID)",

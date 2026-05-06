@@ -11,7 +11,8 @@ let package = Package(
     targets: [
         .target(
             name: "VocoAppCore",
-            path: "Sources/VocoAppCore"
+            path: "Sources/VocoAppCore",
+            linkerSettings: [.linkedLibrary("z")]
         ),
         .executableTarget(
             name: "VocoApp",

@@ -1,13 +1,14 @@
 import XCTest
 @testable import VocoApp
-import VocoAppCore
+@testable import VocoAppCore
 
 @MainActor
 final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     func testProviderReportsAuthenticationRequiredWithoutStoredAPIKey() {
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
-            transport: FakeDoubaoTransport()
+            transport: FakeDoubaoTransport(),
+            legacyConfigURL: nil
         )
 
         XCTAssertEqual(provider.status, .authenticationRequired(providerName: "Doubao"))
@@ -17,7 +18,8 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let transport = FakeDoubaoTransport()
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
-            transport: transport
+            transport: transport,
+            legacyConfigURL: nil
         )
 
         do {
@@ -57,7 +59,8 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         )
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
-            transport: transport
+            transport: transport,
+            legacyConfigURL: nil
         )
         var received: [TranscriptPartialSnapshot] = []
 
@@ -80,8 +83,70 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertNil(transport.requests.first?.safeDebugDescription.range(of: "sk-test-secret"))
     }
 
-    func testURLSessionTransportFailsLoudlyAfterSuccessfulPingAndCancels() async throws {
-        let task = FakeDoubaoWebSocketTask()
+    func testProviderPrefersLegacyConfigAppIDAccessTokenCredentials() async throws {
+        let legacyConfigURL = try makeLegacyDoubaoConfig(
+            appID: "3145608744",
+            accessToken: "legacy-token",
+            resourceID: "volc.seedasr.sauc.duration"
+        )
+        defer { try? FileManager.default.removeItem(at: legacyConfigURL.deletingLastPathComponent()) }
+
+        let transport = FakeDoubaoTransport()
+        let provider = MacDoubaoTranscriptionProvider(
+            credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "wrong-api-key"),
+            transport: transport,
+            legacyConfigURL: legacyConfigURL
+        )
+
+        _ = try await provider.transcribe(
+            CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2]
+            )
+        )
+
+        XCTAssertEqual(transport.requests.count, 1)
+        XCTAssertEqual(transport.requests.first?.headers["X-Api-App-Key"], "3145608744")
+        XCTAssertEqual(transport.requests.first?.headers["X-Api-Access-Key"], "legacy-token")
+        XCTAssertNil(transport.requests.first?.headers["X-Api-Key"])
+    }
+
+    func testURLSessionTransportStreamsBinaryFramesAndReturnsFinalTranscript() async throws {
+        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
+            last: true
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionRequest.make(
+            apiKey: "sk-test-secret",
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1]
+            )
+        )
+
+        let transcript = try await transport.transcribe(request: request, progress: nil)
+
+        XCTAssertEqual(transcript.finalText, "hello world")
+        XCTAssertEqual(session.requests.count, 1)
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
+        XCTAssertEqual(task.resumeCount, 1)
+        XCTAssertEqual(task.sentMessages.count, 2)
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    func testURLSessionTransportPreservesServerErrorClassification() async throws {
+        let errorFrame = DoubaoWireProtocol.buildTestServerErrorFrame(
+            code: 45000002,
+            message: "empty audio"
+        )
+        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(errorFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
         let request = try DoubaoTranscriptionRequest.make(
@@ -96,26 +161,16 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
 
         do {
             _ = try await transport.transcribe(request: request, progress: nil)
-            XCTFail("Expected provider foundation to fail loudly after handshake")
+            XCTFail("Expected server error classification")
         } catch {
-            XCTAssertEqual(
-                error as? TranscriptionProviderError,
-                .provider(
-                    providerName: "Doubao",
-                    message: "Native Doubao WebSocket handshake succeeded, but binary audio streaming is not enabled in this build."
-                )
-            )
+            XCTAssertEqual(error as? TranscriptionProviderError, .emptyAudio)
         }
 
-        XCTAssertEqual(session.requests.count, 1)
-        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
-        XCTAssertEqual(task.resumeCount, 1)
-        XCTAssertEqual(task.sendPingCount, 1)
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
     func testURLSessionTransportMapsPingFailureAndCancels() async throws {
-        let task = FakeDoubaoWebSocketTask(pingError: URLError(.timedOut))
+        let task = FakeDoubaoWebSocketTask(sendError: URLError(.timedOut))
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
         let request = try DoubaoTranscriptionRequest.make(
@@ -144,8 +199,30 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         }
 
         XCTAssertEqual(task.resumeCount, 1)
-        XCTAssertEqual(task.sendPingCount, 1)
         XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    private func makeLegacyDoubaoConfig(
+        appID: String,
+        accessToken: String,
+        resourceID: String
+    ) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voco-native-doubao-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("config.toml")
+        let contents = """
+        backend = "doubao"
+
+        [doubao]
+        app_id = "\(appID)"
+        access_token = "\(accessToken)"
+        endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+        model_id = "bigmodel"
+        resource_id = "\(resourceID)"
+        """
+        try Data(contents.utf8).write(to: url)
+        return url
     }
 }
 
@@ -204,25 +281,37 @@ private final class FakeDoubaoWebSocketSession: DoubaoWebSocketSessioning {
 
 @MainActor
 private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking {
-    private let pingError: Error?
+    private let sendError: Error?
+    private var receiveMessages: [URLSessionWebSocketTask.Message]
     private(set) var resumeCount = 0
-    private(set) var sendPingCount = 0
+    private(set) var sentMessages: [URLSessionWebSocketTask.Message] = []
     private(set) var cancelCodes: [URLSessionWebSocketTask.CloseCode] = []
 
-    init(pingError: Error? = nil) {
-        self.pingError = pingError
+    init(
+        sendError: Error? = nil,
+        receiveMessages: [URLSessionWebSocketTask.Message] = []
+    ) {
+        self.sendError = sendError
+        self.receiveMessages = receiveMessages
     }
 
     func resume() {
         resumeCount += 1
     }
 
-    func sendPing() async throws {
-        sendPingCount += 1
-
-        if let pingError {
-            throw pingError
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        if let sendError {
+            throw sendError
         }
+        sentMessages.append(message)
+    }
+
+    func receive() async throws -> URLSessionWebSocketTask.Message {
+        guard !receiveMessages.isEmpty else {
+            throw URLError(.badServerResponse)
+        }
+
+        return receiveMessages.removeFirst()
     }
 
     func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {

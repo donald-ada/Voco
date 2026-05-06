@@ -73,13 +73,31 @@ final class TranscriptionModelsTests: XCTestCase {
 
         XCTAssertEqual(
             request.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
         )
         XCTAssertEqual(request.resourceID, "volc.seedasr.sauc.duration")
         XCTAssertEqual(request.headers["X-Api-Key"], "sk-test-secret")
         XCTAssertEqual(request.headers["X-Api-Resource-Id"], "volc.seedasr.sauc.duration")
         XCTAssertNil(request.safeDebugDescription.range(of: "sk-test-secret"))
         XCTAssertTrue(request.safeDebugDescription.contains("wss://openspeech.bytedance.com"))
+    }
+
+    func testDoubaoRequestBuilderSupportsLegacyAppIDAccessTokenCredentials() throws {
+        let request = try DoubaoTranscriptionRequest.make(
+            auth: .appIDAccessToken(appID: " 3145608744 ", accessToken: " old-token "),
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2]
+            )
+        )
+
+        XCTAssertEqual(request.headers["X-Api-App-Key"], "3145608744")
+        XCTAssertEqual(request.headers["X-Api-Access-Key"], "old-token")
+        XCTAssertNil(request.headers["X-Api-Key"])
+        XCTAssertNil(request.safeDebugDescription.range(of: "old-token"))
+        XCTAssertTrue(request.safeDebugDescription.contains("X-Api-Access-Key"))
     }
 
     func testDoubaoRequestBuilderRejectsMissingCredentialAndAudio() {
@@ -147,6 +165,31 @@ final class TranscriptionModelsTests: XCTestCase {
             )
         )
         XCTAssertEqual(final, "你好世界")
+    }
+
+    func testDoubaoWireProtocolBuildsClientFramesAndParsesFinalServerFrame() throws {
+        let fullClientRequest = try DoubaoWireProtocol.buildFullClientRequestFrame()
+        XCTAssertEqual(Array(fullClientRequest.prefix(4)), [0x11, 0x10, 0x11, 0x00])
+
+        let audioFrame = try DoubaoWireProtocol.buildAudioFrame(
+            pcm16Samples: [1, -2],
+            last: true
+        )
+        XCTAssertEqual(Array(audioFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
+
+        let serverFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+            json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
+            last: true
+        )
+
+        let parsed = try DoubaoWireProtocol.parseServerFrame(serverFrame)
+        guard case .response(let flags, let payload) = parsed else {
+            XCTFail("Expected response frame")
+            return
+        }
+
+        XCTAssertTrue(flags.isLast)
+        XCTAssertEqual(try DoubaoServerResponse.parseFinalText(payload), "hello world")
     }
 
     func testLiveDoubaoSmokeIsExplicitlyOptIn() throws {
