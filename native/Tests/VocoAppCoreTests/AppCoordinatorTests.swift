@@ -475,6 +475,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     let result: RecordingWorkflowResult
+    let transcriptionStatus: TranscriptionProviderStatus
     let startError: Error?
     let stopError: Error?
 
@@ -484,10 +485,12 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
             transcript: TranscriptSnapshot(finalText: "", partials: [], providerName: "Fake ASR", latencyMilliseconds: nil),
             injection: .skippedEmpty
         ),
+        transcriptionStatus: TranscriptionProviderStatus = .ready(providerName: "Fake ASR"),
         startError: Error? = nil,
         stopError: Error? = nil
     ) {
         self.result = result
+        self.transcriptionStatus = transcriptionStatus
         self.startError = startError
         self.stopError = stopError
     }

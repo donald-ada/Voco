@@ -109,6 +109,38 @@ final class RecordingWorkflowTests: XCTestCase {
         XCTAssertEqual(injection.strategy, .skippedEmpty)
         XCTAssertTrue(injection.succeeded)
     }
+
+    @MainActor
+    func testUnavailableTranscriptionProviderFailsLoudly() async {
+        let provider = UnavailableTranscriptionProvider()
+
+        do {
+            _ = try await provider.transcribe(
+                CapturedAudioSnapshot(
+                    durationSeconds: 1,
+                    sampleRate: 16_000,
+                    peakAmplitude: 0.2,
+                    pcm16Samples: [1]
+                )
+            )
+            XCTFail("Expected unavailable provider to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "转写服务未配置：请先在设置中配置 ASR provider。")
+        }
+
+        XCTAssertEqual(provider.status, .notConfigured)
+    }
+
+    @MainActor
+    func testNativeRecordingWorkflowExposesTranscriptionStatus() {
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: FakeAudioCaptureEngine(),
+            transcription: UnavailableTranscriptionProvider(),
+            textInjection: FakeTextInjectionEngine()
+        )
+
+        XCTAssertEqual(workflow.transcriptionStatus, .notConfigured)
+    }
 }
 
 private final class FakeAudioCaptureEngine: AudioCaptureProviding {
@@ -145,6 +177,9 @@ private final class FakeTranscriptionEngine: TranscriptionProviding {
     var inputs: [CapturedAudioSnapshot] = []
     var error: Error?
     let transcript: TranscriptSnapshot
+    var status: TranscriptionProviderStatus {
+        .ready(providerName: transcript.providerName)
+    }
 
     init(
         transcript: TranscriptSnapshot = TranscriptSnapshot(

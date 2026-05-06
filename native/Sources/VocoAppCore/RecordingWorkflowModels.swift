@@ -103,6 +103,7 @@ public protocol AudioCaptureProviding {
 
 @MainActor
 public protocol TranscriptionProviding {
+    var status: TranscriptionProviderStatus { get }
     func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot
 }
 
@@ -113,6 +114,7 @@ public protocol TextInjectionProviding {
 
 @MainActor
 public protocol RecordingWorkflowing: AnyObject {
+    var transcriptionStatus: TranscriptionProviderStatus { get }
     func startRecording() async throws
     func stopRecording() async throws -> RecordingWorkflowResult
 }
@@ -130,6 +132,10 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         self.audioCapture = audioCapture
         self.transcription = transcription
         self.textInjection = textInjection
+    }
+
+    public var transcriptionStatus: TranscriptionProviderStatus {
+        transcription.status
     }
 
     public func startRecording() async throws {
@@ -168,8 +174,24 @@ public final class StaticTranscriptionProvider: TranscriptionProviding {
         self.transcript = transcript
     }
 
+    public var status: TranscriptionProviderStatus {
+        .ready(providerName: transcript.providerName)
+    }
+
     public func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
         transcript
+    }
+}
+
+public final class UnavailableTranscriptionProvider: TranscriptionProviding {
+    public init() {}
+
+    public var status: TranscriptionProviderStatus {
+        .notConfigured
+    }
+
+    public func transcribe(_ audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
+        throw TranscriptionProviderError.notConfigured
     }
 }
 
@@ -186,6 +208,7 @@ public final class StaticTextInjectionProvider: TextInjectionProviding {
 }
 
 public final class StaticRecordingWorkflow: RecordingWorkflowing {
+    public let transcriptionStatus: TranscriptionProviderStatus
     private let result: RecordingWorkflowResult
     private let startError: Error?
     private let stopError: Error?
@@ -196,10 +219,12 @@ public final class StaticRecordingWorkflow: RecordingWorkflowing {
             transcript: TranscriptSnapshot(finalText: "", partials: [], providerName: "Unconfigured", latencyMilliseconds: nil),
             injection: .skippedEmpty
         ),
+        transcriptionStatus: TranscriptionProviderStatus = .notConfigured,
         startError: Error? = nil,
         stopError: Error? = nil
     ) {
         self.result = result
+        self.transcriptionStatus = transcriptionStatus
         self.startError = startError
         self.stopError = stopError
     }
