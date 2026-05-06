@@ -50,6 +50,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var launchAtLoginState: LaunchAtLoginState
     @Published public private(set) var permissions: [PermissionSnapshot]
     @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
+    @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
 
@@ -83,6 +84,7 @@ public final class AppCoordinator: ObservableObject {
         self.permissions = permissionProvider.currentSnapshots()
         self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
         self.hotkeyRuntimeState = .inactive
+        self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
     }
@@ -253,6 +255,7 @@ public final class AppCoordinator: ObservableObject {
         }
 
         lastErrorMessage = nil
+        lastAudio = nil
         lastTranscript = nil
         lastInjection = nil
         status = .recording
@@ -273,6 +276,7 @@ public final class AppCoordinator: ObservableObject {
 
         do {
             let result = try await recordingWorkflow.stopRecording()
+            lastAudio = result.audio
             lastTranscript = result.transcript
             lastInjection = result.injection
 

@@ -328,6 +328,7 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .ready)
         XCTAssertEqual(recordingWorkflow.startCount, 1)
         XCTAssertEqual(recordingWorkflow.stopCount, 1)
+        XCTAssertEqual(coordinator.lastAudio, result.audio)
         XCTAssertEqual(coordinator.lastTranscript, result.transcript)
         XCTAssertEqual(coordinator.lastInjection, result.injection)
     }

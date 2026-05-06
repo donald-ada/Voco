@@ -153,10 +153,24 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var recordingDiagnosticsSection: some View {
-        if coordinator.lastTranscript != nil || coordinator.lastInjection != nil || coordinator.lastErrorMessage != nil {
+        if coordinator.lastAudio != nil || coordinator.lastTranscript != nil || coordinator.lastInjection != nil || coordinator.lastErrorMessage != nil {
             VStack(alignment: .leading, spacing: 10) {
                 Text("录音诊断")
                     .font(.headline)
+
+                if let audio = coordinator.lastAudio {
+                    diagnosticRow(
+                        title: "音频",
+                        value: String(
+                            format: "%.2fs · %.0f Hz · %d samples · peak %.2f",
+                            audio.durationSeconds,
+                            audio.sampleRate,
+                            audio.pcm16Samples.count,
+                            audio.peakAmplitude
+                        ),
+                        systemImage: "waveform"
+                    )
+                }
 
                 if let transcript = coordinator.lastTranscript {
                     diagnosticRow(
