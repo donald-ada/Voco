@@ -6,6 +6,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DMG_PATH="${REPO_ROOT}/dist/Voco.dmg"
 DIST_APP="${REPO_ROOT}/dist/Voco.app"
 MOUNT_DIR="${REPO_ROOT}/target/native/dmg-smoke-mount"
+DANGEROUS_DMG_DIR="${REPO_ROOT}/target/native/dangerous-output.dmg"
+DANGEROUS_SENTINEL="${DANGEROUS_DMG_DIR}/sentinel.txt"
 MOUNTED=0
 
 cleanup() {
@@ -13,9 +15,36 @@ cleanup() {
     hdiutil detach "${MOUNT_DIR}" -quiet || hdiutil detach "${MOUNT_DIR}" -force -quiet || true
   fi
   rm -rf "${MOUNT_DIR}"
+  rm -rf "${DANGEROUS_DMG_DIR}"
 }
 
 trap cleanup EXIT
+
+rm -rf "${DANGEROUS_DMG_DIR}"
+mkdir -p "${DANGEROUS_DMG_DIR}"
+printf 'must survive rejected --dmg directory paths\n' > "${DANGEROUS_SENTINEL}"
+
+set +e
+DANGEROUS_OUTPUT="$("${REPO_ROOT}/packaging/build_native_dmg.sh" --profile debug --signing-style adhoc --dmg "${DANGEROUS_DMG_DIR}" 2>&1)"
+DANGEROUS_STATUS="$?"
+set -e
+
+if [[ "${DANGEROUS_STATUS}" -eq 0 ]]; then
+  echo "dangerous --dmg directory path was accepted: ${DANGEROUS_DMG_DIR}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${DANGEROUS_SENTINEL}" ]]; then
+  echo "dangerous --dmg directory path deleted existing directory contents: ${DANGEROUS_DMG_DIR}" >&2
+  printf '%s\n' "${DANGEROUS_OUTPUT}" >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "${DANGEROUS_OUTPUT}" | grep -q '\.dmg'; then
+  echo "dangerous --dmg rejection did not explain the .dmg path requirement" >&2
+  printf '%s\n' "${DANGEROUS_OUTPUT}" >&2
+  exit 1
+fi
 
 "${REPO_ROOT}/packaging/build_native_dmg.sh" --profile debug --signing-style adhoc
 
@@ -70,6 +99,13 @@ done
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${MOUNTED_APP}/Contents/Info.plist")"
 if [[ "${BUNDLE_ID}" != "com.voco.app" ]]; then
   echo "unexpected mounted CFBundleIdentifier: ${BUNDLE_ID}" >&2
+  exit 1
+fi
+
+UNTRACKED_DIST="$(git -C "${REPO_ROOT}" status --short --untracked-files=all -- dist)"
+if printf '%s\n' "${UNTRACKED_DIST}" | grep -q '^?? '; then
+  echo "native DMG smoke left untracked dist artifacts:" >&2
+  printf '%s\n' "${UNTRACKED_DIST}" >&2
   exit 1
 fi
 

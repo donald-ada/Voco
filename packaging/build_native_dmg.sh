@@ -35,6 +35,51 @@ require_tool() {
   fi
 }
 
+safe_remove_artifact_dir() {
+  local path="$1"
+  local label="$2"
+
+  if [[ -z "${path}" || "${path}" == "/" ]]; then
+    fail "refusing to remove unsafe ${label} path: ${path:-<empty>}"
+  fi
+
+  case "${path}" in
+    "${DIST_APP}"|"${STAGING_DIR}")
+      ;;
+    *)
+      fail "refusing to remove unexpected ${label} path: ${path}"
+      ;;
+  esac
+
+  case "${path}" in
+    "${ARTIFACT_DIR}/"*)
+      ;;
+    *)
+      fail "refusing to remove ${label} outside artifact directory: ${path}"
+      ;;
+  esac
+
+  rm -rf "${path}"
+}
+
+safe_remove_dmg_file() {
+  local path="$1"
+
+  if [[ -z "${path}" || "${path}" == "/" ]]; then
+    fail "refusing to remove unsafe DMG path: ${path:-<empty>}"
+  fi
+
+  if [[ "${path}" == */ || "${path}" != *.dmg ]]; then
+    fail "--dmg must be a non-directory .dmg file path: ${path}"
+  fi
+
+  if [[ -d "${path}" ]]; then
+    fail "--dmg must be a non-directory .dmg file path: ${path}"
+  fi
+
+  rm -f "${path}"
+}
+
 PROFILE="debug"
 SIGNING_STYLE="adhoc"
 APP_SIGNING_IDENTITY=""
@@ -131,11 +176,22 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ARTIFACT_DIR="${REPO_ROOT}/dist"
+DIST_APP="${ARTIFACT_DIR}/Voco.app"
+STAGING_DIR="${ARTIFACT_DIR}/dmg-root"
 
 if [[ -z "${DMG_PATH}" ]]; then
-  DMG_PATH="${REPO_ROOT}/dist/Voco.dmg"
+  DMG_PATH="${ARTIFACT_DIR}/Voco.dmg"
 elif [[ "${DMG_PATH}" != /* ]]; then
   DMG_PATH="${REPO_ROOT}/${DMG_PATH}"
+fi
+
+if [[ "${DMG_PATH}" == */ || "${DMG_PATH}" != *.dmg ]]; then
+  fail "--dmg must be a non-directory .dmg file path: ${DMG_PATH}"
+fi
+
+if [[ -d "${DMG_PATH}" ]]; then
+  fail "--dmg must be a non-directory .dmg file path: ${DMG_PATH}"
 fi
 
 if [[ "${SIGNING_STYLE}" == "developer-id" ]]; then
@@ -164,9 +220,7 @@ require_tool hdiutil
 
 BUILD_APP_SCRIPT="${REPO_ROOT}/packaging/build_native_app_bundle.sh"
 TARGET_APP="${REPO_ROOT}/target/native/Voco.app"
-DIST_DIR="$(dirname "${DMG_PATH}")"
-DIST_APP="${DIST_DIR}/Voco.app"
-STAGING_DIR="${DIST_DIR}/dmg-root"
+DMG_DIR="$(dirname "${DMG_PATH}")"
 
 if [[ ! -x "${BUILD_APP_SCRIPT}" ]]; then
   fail "missing executable build script: ${BUILD_APP_SCRIPT}"
@@ -184,8 +238,10 @@ if [[ ! -d "${TARGET_APP}" ]]; then
   fail "missing built app bundle: ${TARGET_APP}"
 fi
 
-rm -rf "${DIST_APP}" "${STAGING_DIR}" "${DMG_PATH}"
-mkdir -p "${DIST_DIR}" "${STAGING_DIR}"
+safe_remove_artifact_dir "${DIST_APP}" "distributable app"
+safe_remove_artifact_dir "${STAGING_DIR}" "DMG staging"
+safe_remove_dmg_file "${DMG_PATH}"
+mkdir -p "${ARTIFACT_DIR}" "${DMG_DIR}" "${STAGING_DIR}"
 
 if ! ditto "${TARGET_APP}" "${DIST_APP}"; then
   fail "failed to copy app bundle: ${TARGET_APP} -> ${DIST_APP}"

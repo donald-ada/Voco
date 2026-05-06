@@ -398,3 +398,36 @@ VOCO_NOTARYTOOL_PASSWORD=missing
 
 Release-only commands were skipped because the required Developer ID and
 notarytool credential env vars were not available in this worktree environment.
+
+## Review Fix Notes
+
+CHANGES_REQUIRED follow-up:
+
+```text
+P1: --dmg directory paths must be rejected before build and must not delete existing directories.
+P2: default DMG verification must not leave dist/ as untracked git output.
+```
+
+RED evidence:
+
+```text
+packaging/tests/native_dmg_smoke.sh
+exit 1:
+dangerous --dmg directory path deleted existing directory contents: /private/tmp/voco-native-release-packaging/target/native/dangerous-output.dmg
+
+packaging/tests/native_dmg_smoke.sh after adding DMG cleanup guards
+exit 1:
+native DMG smoke left untracked dist artifacts:
+?? dist/Voco.app/Contents/Info.plist
+?? dist/Voco.dmg
+?? dist/dmg-root/Applications
+```
+
+Fix summary:
+
+```text
+build_native_dmg.sh rejects directory and non-.dmg --dmg paths before building.
+build_native_dmg.sh removes DMG outputs with rm -f only.
+build_native_dmg.sh only recursively removes fixed dist/Voco.app and dist/dmg-root artifact dirs after guard checks.
+/dist/ is ignored so default verification artifacts do not dirty git status.
+```

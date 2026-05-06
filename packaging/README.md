@@ -50,6 +50,9 @@ dist/Voco.app
 dist/Voco.dmg
 ```
 
+`dist/` is generated output and is ignored by Git. Do not commit app bundles,
+disk images, staging directories, or signing/notarization credentials.
+
 Run the native DMG smoke test:
 
 ```bash
