@@ -10,7 +10,7 @@ final class TextInjectionModelsTests: XCTestCase {
         XCTAssertEqual(TextInjectionStrategy.skippedEmpty.title, "空文本跳过")
     }
 
-    func testContextSelectsPreferredAvailableStrategy() {
+    func testContextPrefersClipboardFallbackForCrossAppReliability() {
         let allAvailable = TextInjectionContext(
             targetAppName: "Notes",
             isAccessibilityTrusted: true,
@@ -18,16 +18,34 @@ final class TextInjectionModelsTests: XCTestCase {
             supportsUnicodeEvents: true,
             supportsClipboardFallback: true
         )
-        XCTAssertEqual(allAvailable.preferredStrategy, .directAccessibility)
+        XCTAssertEqual(allAvailable.preferredStrategy, .clipboardFallback)
 
-        let unicodeOnly = TextInjectionContext(
+        let clipboardPreferred = TextInjectionContext(
             targetAppName: "Notes",
             isAccessibilityTrusted: true,
             supportsDirectAccessibility: false,
             supportsUnicodeEvents: true,
             supportsClipboardFallback: true
         )
+        XCTAssertEqual(clipboardPreferred.preferredStrategy, .clipboardFallback)
+
+        let unicodeOnly = TextInjectionContext(
+            targetAppName: "Notes",
+            isAccessibilityTrusted: true,
+            supportsDirectAccessibility: false,
+            supportsUnicodeEvents: true,
+            supportsClipboardFallback: false
+        )
         XCTAssertEqual(unicodeOnly.preferredStrategy, .unicodeEvent)
+
+        let directOnly = TextInjectionContext(
+            targetAppName: "Notes",
+            isAccessibilityTrusted: true,
+            supportsDirectAccessibility: true,
+            supportsUnicodeEvents: false,
+            supportsClipboardFallback: false
+        )
+        XCTAssertEqual(directOnly.preferredStrategy, .directAccessibility)
 
         let clipboardOnly = TextInjectionContext(
             targetAppName: "Notes",

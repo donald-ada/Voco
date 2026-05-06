@@ -43,6 +43,7 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
                     accessToken: legacyConfig.accessToken
                 ),
                 audio: audio,
+                endpoint: legacyConfig.endpoint,
                 resourceID: legacyConfig.resourceID
             )
             return try await transport.transcribe(request: request, progress: progress)
@@ -69,6 +70,7 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
                     appID: legacyConfig.appID,
                     accessToken: legacyConfig.accessToken
                 ),
+                endpoint: legacyConfig.endpoint,
                 resourceID: legacyConfig.resourceID
             )
             return try await transport.startStreaming(request: request, progress: progress)
@@ -428,6 +430,7 @@ extension URLSessionWebSocketTask: DoubaoWebSocketTasking {
 private struct LegacyDoubaoConfig {
     let appID: String
     let accessToken: String
+    let endpoint: String
     let resourceID: String
 
     static func defaultURL() -> URL? {
@@ -480,9 +483,11 @@ private struct LegacyDoubaoConfig {
         }
 
         let resourceID = values["resource_id"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = values["endpoint"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         return LegacyDoubaoConfig(
             appID: appID,
             accessToken: accessToken,
+            endpoint: endpoint?.isEmpty == false ? endpoint! : doubaoDefaultEndpoint,
             resourceID: resourceID?.isEmpty == false ? resourceID! : doubaoDefaultResourceID
         )
     }

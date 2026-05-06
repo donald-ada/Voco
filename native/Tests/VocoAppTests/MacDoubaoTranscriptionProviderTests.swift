@@ -108,6 +108,10 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         )
 
         XCTAssertEqual(transport.requests.count, 1)
+        XCTAssertEqual(
+            transport.requests.first?.endpoint.absoluteString,
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+        )
         XCTAssertEqual(transport.requests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.requests.first?.headers["X-Api-Access-Key"], "legacy-token")
         XCTAssertNil(transport.requests.first?.headers["X-Api-Key"])
@@ -131,6 +135,10 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         _ = try await provider.startStreaming(progress: nil)
 
         XCTAssertEqual(transport.streamingRequests.count, 1)
+        XCTAssertEqual(
+            transport.streamingRequests.first?.endpoint.absoluteString,
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+        )
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-Access-Key"], "legacy-token")
         XCTAssertNil(transport.streamingRequests.first?.headers["X-Api-Key"])

@@ -15,23 +15,27 @@ final class TextInjectionProviderTests: XCTestCase {
     }
 
     @MainActor
-    func testProviderUsesDirectAccessibilityBeforeFallbacks() async throws {
+    func testProviderUsesClipboardFallbackBeforeDirectAccessibility() async throws {
         let client = FakeTextInsertionClient(context: .trusted(supportsDirectAccessibility: true))
         let provider = NativeTextInjectionProvider(client: client)
 
         let result = try await provider.insert("hello")
 
-        XCTAssertEqual(client.insertions, [InsertionRequest(text: "hello", strategy: .directAccessibility)])
+        XCTAssertEqual(client.insertions, [InsertionRequest(text: "hello", strategy: .clipboardFallback)])
         XCTAssertEqual(result.targetAppName, "Notes")
-        XCTAssertEqual(result.strategy, .directAccessibility)
+        XCTAssertEqual(result.strategy, .clipboardFallback)
         XCTAssertTrue(result.succeeded)
-        XCTAssertEqual(result.detail, "已通过辅助功能直接插入文本。")
+        XCTAssertEqual(result.detail, "已通过剪贴板回退插入文本并恢复剪贴板。")
     }
 
     @MainActor
-    func testProviderFallsBackToUnicodeThenClipboard() async throws {
+    func testProviderFallsBackToUnicodeThenDirectAccessibility() async throws {
         let unicodeClient = FakeTextInsertionClient(
-            context: .trusted(supportsDirectAccessibility: false, supportsUnicodeEvents: true)
+            context: .trusted(
+                supportsDirectAccessibility: false,
+                supportsUnicodeEvents: true,
+                supportsClipboardFallback: false
+            )
         )
         let unicodeProvider = NativeTextInjectionProvider(client: unicodeClient)
 
@@ -40,20 +44,20 @@ final class TextInjectionProviderTests: XCTestCase {
         XCTAssertEqual(unicodeClient.insertions, [InsertionRequest(text: "hello", strategy: .unicodeEvent)])
         XCTAssertEqual(unicodeResult.strategy, .unicodeEvent)
 
-        let clipboardClient = FakeTextInsertionClient(
+        let directClient = FakeTextInsertionClient(
             context: .trusted(
-                supportsDirectAccessibility: false,
+                supportsDirectAccessibility: true,
                 supportsUnicodeEvents: false,
-                supportsClipboardFallback: true
+                supportsClipboardFallback: false
             )
         )
-        let clipboardProvider = NativeTextInjectionProvider(client: clipboardClient)
+        let directProvider = NativeTextInjectionProvider(client: directClient)
 
-        let clipboardResult = try await clipboardProvider.insert("hello")
+        let directResult = try await directProvider.insert("hello")
 
-        XCTAssertEqual(clipboardClient.insertions, [InsertionRequest(text: "hello", strategy: .clipboardFallback)])
-        XCTAssertEqual(clipboardResult.strategy, .clipboardFallback)
-        XCTAssertEqual(clipboardResult.detail, "已通过剪贴板回退插入文本并恢复剪贴板。")
+        XCTAssertEqual(directClient.insertions, [InsertionRequest(text: "hello", strategy: .directAccessibility)])
+        XCTAssertEqual(directResult.strategy, .directAccessibility)
+        XCTAssertEqual(directResult.detail, "已通过辅助功能直接插入文本。")
     }
 
     @MainActor
@@ -71,7 +75,13 @@ final class TextInjectionProviderTests: XCTestCase {
 
     @MainActor
     func testProviderReturnsFailedSnapshotWhenInsertionFails() async throws {
-        let client = FakeTextInsertionClient(context: .trusted(supportsDirectAccessibility: true))
+        let client = FakeTextInsertionClient(
+            context: .trusted(
+                supportsDirectAccessibility: true,
+                supportsUnicodeEvents: false,
+                supportsClipboardFallback: false
+            )
+        )
         client.error = TextInjectionError.insertionFailed(strategy: .directAccessibility, message: "AX error -25204")
         let provider = NativeTextInjectionProvider(client: client)
 

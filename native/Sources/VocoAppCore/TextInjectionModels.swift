@@ -72,16 +72,16 @@ public struct TextInjectionContext: Equatable, Sendable {
             return nil
         }
 
-        if supportsDirectAccessibility {
-            return .directAccessibility
+        if supportsClipboardFallback {
+            return .clipboardFallback
         }
 
         if supportsUnicodeEvents {
             return .unicodeEvent
         }
 
-        if supportsClipboardFallback {
-            return .clipboardFallback
+        if supportsDirectAccessibility {
+            return .directAccessibility
         }
 
         return nil
