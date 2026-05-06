@@ -458,3 +458,25 @@ git commit -m "docs(native): mark transcription provider verification"
 - Prevents the current static empty transcript behavior from silently skipping insertion when ASR is not configured.
 - Leaves real Doubao/WebSocket transport, Keychain credential storage, streaming partials, text injection, HUD overlay, and release packaging as separate executable slices.
 
+## Verification Results
+
+Completed on 2026-05-06:
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 48 tests with 0 failures across `AppCoordinatorTests`, `AudioCaptureBufferTests`, `HotkeyModelsTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, `RecordingWorkflowTests`, `SettingsSectionTests`, and `TranscriptionModelsTests`.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built the native debug app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced the ad-hoc signature, verified the bundle, launched it for smoke validation, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. No whitespace errors were reported and the generated app bundle passed strict codesign verification.
