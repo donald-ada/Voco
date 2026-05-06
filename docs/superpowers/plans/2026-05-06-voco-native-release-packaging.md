@@ -314,3 +314,87 @@ Developer ID/notarization verification status
 ```
 
 Expected: the task can be audited from the plan without generated artifacts committed.
+
+---
+
+## Completion Notes
+
+Implementation commits created before this verification note:
+
+```text
+77fc90d docs(native): plan release packaging
+47c37d0 feat(packaging): build native dmg
+a71c093 feat(packaging): verify native release artifacts
+```
+
+This verification note is committed separately as:
+
+```text
+docs(native): mark release packaging verification
+```
+
+RED evidence:
+
+```text
+packaging/tests/native_dmg_smoke.sh
+exit 127: zsh:1: no such file or directory: packaging/tests/native_dmg_smoke.sh
+
+packaging/tests/native_dmg_smoke.sh after adding the smoke test only
+exit 1: packaging/build_native_dmg.sh: No such file or directory
+
+packaging/notarize_native_dmg.sh --dmg dist/Voco.dmg
+exit 127: zsh:1: no such file or directory: packaging/notarize_native_dmg.sh
+```
+
+Credential failure evidence:
+
+```text
+env -u VOCO_DEVELOPER_ID_APPLICATION packaging/build_native_app_bundle.sh --profile release --signing-style developer-id
+exit 65:
+missing Developer ID Application signing identity
+set VOCO_DEVELOPER_ID_APPLICATION or pass --signing-identity "Developer ID Application: ..."
+
+env -u VOCO_DEVELOPER_ID_DMG -u VOCO_DEVELOPER_ID_APPLICATION packaging/build_native_dmg.sh --profile release --signing-style developer-id
+exit 65:
+missing Developer ID signing identity for native DMG build
+set VOCO_DEVELOPER_ID_APPLICATION for app signing
+optionally set VOCO_DEVELOPER_ID_DMG for DMG signing
+or pass --app-signing-identity and --dmg-signing-identity explicitly
+
+env -u VOCO_NOTARYTOOL_PROFILE -u VOCO_NOTARYTOOL_APPLE_ID -u VOCO_NOTARYTOOL_TEAM_ID -u VOCO_NOTARYTOOL_PASSWORD packaging/notarize_native_dmg.sh --dmg dist/Voco.dmg
+exit 65:
+missing notarization credentials
+set VOCO_NOTARYTOOL_PROFILE for an xcrun notarytool keychain profile
+or set all of VOCO_NOTARYTOOL_APPLE_ID, VOCO_NOTARYTOOL_TEAM_ID, and VOCO_NOTARYTOOL_PASSWORD
+```
+
+GREEN evidence:
+
+```text
+packaging/build_native_app_bundle.sh --profile release --signing-style adhoc
+ok: verified native Voco.app bundle: target/native/Voco.app
+
+packaging/tests/native_app_bundle_smoke.sh
+ok: native Voco.app bundle smoke passed
+
+packaging/tests/native_dmg_smoke.sh
+hdiutil: verify: checksum of "/private/tmp/voco-native-release-packaging/dist/Voco.dmg" is VALID
+ok: native Voco.dmg smoke passed
+
+git diff --check
+exit 0
+```
+
+Developer ID and notarization verification status:
+
+```text
+VOCO_DEVELOPER_ID_APPLICATION=missing
+VOCO_DEVELOPER_ID_DMG=missing
+VOCO_NOTARYTOOL_PROFILE=missing
+VOCO_NOTARYTOOL_APPLE_ID=missing
+VOCO_NOTARYTOOL_TEAM_ID=missing
+VOCO_NOTARYTOOL_PASSWORD=missing
+```
+
+Release-only commands were skipped because the required Developer ID and
+notarytool credential env vars were not available in this worktree environment.
