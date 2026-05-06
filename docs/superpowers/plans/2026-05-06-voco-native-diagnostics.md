@@ -465,3 +465,10 @@ git commit -m "docs(native): mark diagnostics verification"
 - `packaging/tests/native_app_bundle_smoke.sh`: PASS. Built native Swift app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced existing signature, verified bundle, and reported `ok: native Voco.app bundle smoke passed`.
 - `git diff --check`: PASS. Command exited 0 with no output.
 - `codesign --verify --deep --strict target/native/Voco.app`: PASS. Command exited 0 with no output.
+
+## Review Fix Verification Notes
+
+- `cd native && swift test`: PASS. XCTest executed 110 tests, 1 skipped, 0 failures.
+- `packaging/tests/native_app_bundle_smoke.sh`: PASS. Built native Swift app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced existing signature, verified bundle, and reported `ok: native Voco.app bundle smoke passed`.
+- `git diff --check`: PASS. Command exited 0 with no output.
+- `codesign --verify --deep --strict target/native/Voco.app`: PASS. Command exited 0 with no output.

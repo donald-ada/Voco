@@ -165,6 +165,28 @@ public final class AppCoordinator: ObservableObject {
         try DiagnosticBundleExporter.write(bundle: diagnosticBundle(), to: url)
     }
 
+    @discardableResult
+    public func exportDiagnosticBundleToTemporaryDirectory(
+        generatedAt: Date = Date(),
+        id: UUID = UUID(),
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        let exportURL = fileManager.temporaryDirectory
+            .appendingPathComponent("voco-diagnostics-\(Int(generatedAt.timeIntervalSince1970))-\(id.uuidString).json")
+
+        do {
+            let writtenURL = try DiagnosticBundleExporter.write(
+                bundle: diagnosticBundle(generatedAt: generatedAt),
+                to: exportURL
+            )
+            lastErrorMessage = nil
+            return writtenURL
+        } catch {
+            fail(error.localizedDescription)
+            throw error
+        }
+    }
+
     public var audioSettingsSnapshot: AudioSettingsSnapshot {
         AudioSettingsSnapshot(lastAudio: lastAudio)
     }

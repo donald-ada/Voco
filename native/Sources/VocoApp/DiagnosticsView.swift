@@ -110,16 +110,11 @@ struct DiagnosticsView: View {
     }
 
     private func exportDiagnostics() {
-        let exportURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("voco-diagnostics-\(Int(Date().timeIntervalSince1970)).json")
-
         do {
-            let writtenURL = try coordinator.exportDiagnosticBundle(to: exportURL)
+            let writtenURL = try coordinator.exportDiagnosticBundleToTemporaryDirectory()
             exportMessage = "已导出：\(writtenURL.path)"
         } catch {
-            let message = error.localizedDescription
-            exportMessage = message
-            coordinator.fail(message)
+            exportMessage = error.localizedDescription
         }
     }
 

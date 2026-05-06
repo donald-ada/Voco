@@ -191,7 +191,27 @@ public enum DiagnosticRedactor {
             redacted = redacted.replacingOccurrences(of: transcript, with: transcriptPlaceholder)
         }
 
-        return redacted
+        return redactAPIKeyLikePatterns(in: redacted)
+    }
+
+    private static func redactAPIKeyLikePatterns(in value: String) -> String {
+        let patterns = [
+            #"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{8,}\b"#,
+            #"(?i)\b(?:api[_-]?key|token|secret)\s*[:=]\s*["']?[A-Za-z0-9][A-Za-z0-9._-]{12,}["']?"#
+        ]
+
+        return patterns.reduce(value) { redacted, pattern in
+            guard let expression = try? NSRegularExpression(pattern: pattern) else {
+                return redacted
+            }
+
+            let range = NSRange(redacted.startIndex..<redacted.endIndex, in: redacted)
+            return expression.stringByReplacingMatches(
+                in: redacted,
+                range: range,
+                withTemplate: secretPlaceholder
+            )
+        }
     }
 }
 

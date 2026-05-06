@@ -57,10 +57,13 @@ public struct DiagnosticBundle: Codable, Equatable, Sendable {
 }
 
 public enum DiagnosticBundleExportError: LocalizedError, Equatable, Sendable {
+    case fileAlreadyExists(path: String)
     case writeFailed(path: String, message: String)
 
     public var errorDescription: String? {
         switch self {
+        case .fileAlreadyExists(let path):
+            "导出诊断包失败：目标文件已存在 \(path)"
         case .writeFailed(let path, let message):
             "导出诊断包失败：无法写入 \(path)：\(message)"
         }
@@ -70,6 +73,10 @@ public enum DiagnosticBundleExportError: LocalizedError, Equatable, Sendable {
 public enum DiagnosticBundleExporter {
     @discardableResult
     public static func write(bundle: DiagnosticBundle, to url: URL) throws -> URL {
+        guard !FileManager.default.fileExists(atPath: url.path) else {
+            throw DiagnosticBundleExportError.fileAlreadyExists(path: url.path)
+        }
+
         do {
             try bundle.jsonData().write(to: url, options: [.atomic])
             return url
