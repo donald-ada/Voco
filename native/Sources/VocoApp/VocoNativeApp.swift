@@ -17,11 +17,12 @@ struct VocoNativeApp: App {
             Divider()
 
             Button("打开设置") {
+                coordinator.prepareForSettingsPresentation()
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 
             Button("检查权限") {
-                coordinator.refreshPermissions()
+                coordinator.prepareForSettingsPresentation()
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 

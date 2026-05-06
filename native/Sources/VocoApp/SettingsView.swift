@@ -30,6 +30,12 @@ struct SettingsView: View {
             .padding(24)
             .frame(minWidth: 480, minHeight: 360, alignment: .topLeading)
         }
+        .onAppear {
+            coordinator.prepareForSettingsPresentation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            coordinator.refreshPermissions()
+        }
     }
 
     private var statusRow: some View {

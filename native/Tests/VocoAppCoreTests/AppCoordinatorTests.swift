@@ -157,6 +157,35 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.permissions, provider.requested)
         XCTAssertTrue(coordinator.permissionSummary.allRequiredGranted)
     }
+
+    @MainActor
+    func testPreparingSettingsPresentationRefreshesPermissionSnapshot() {
+        let provider = FakePermissionProvider(
+            current: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ],
+            requested: [
+                .microphone(.granted),
+                .accessibility(.granted),
+                .inputMonitoring(.granted)
+            ]
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        coordinator.finishLaunching()
+
+        provider.current = [
+            .microphone(.granted),
+            .accessibility(.denied),
+            .inputMonitoring(.denied)
+        ]
+
+        coordinator.prepareForSettingsPresentation()
+
+        XCTAssertEqual(coordinator.permissions, provider.current)
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
+    }
 }
 
 private final class FakePermissionProvider: PermissionProviding {

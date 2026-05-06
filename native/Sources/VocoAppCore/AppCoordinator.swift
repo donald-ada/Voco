@@ -101,6 +101,10 @@ public final class AppCoordinator: ObservableObject {
         status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
     }
 
+    public func prepareForSettingsPresentation() {
+        refreshPermissions()
+    }
+
     public func requestMicrophonePermission() async {
         let shouldUpdateRuntimeStatus = status == .ready || status == .permissionNeeded
         permissions = await permissionProvider.requestMicrophoneAccess()
