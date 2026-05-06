@@ -71,6 +71,32 @@ final class LegacyInstallModelsTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorIgnoresDuplicateLegacyRemovalWhileInFlight() async throws {
+        let launchAgent = URL(fileURLWithPath: "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist")
+        let provider = SlowLegacyInstallProvider(
+            current: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice")),
+            result: .notFound(launchAgentURL: launchAgent)
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, legacyInstallProvider: provider)
+
+        let firstRemoval = Task { await coordinator.removeLegacyLaunchAgentFromUserAction() }
+        await provider.waitForRemoveCount(1)
+        XCTAssertTrue(coordinator.isRemovingLegacyLaunchAgent)
+
+        let duplicateRemoval = Task { await coordinator.removeLegacyLaunchAgentFromUserAction() }
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(provider.removeCount, 1)
+
+        await firstRemoval.value
+        await duplicateRemoval.value
+
+        XCTAssertEqual(provider.removeCount, 1)
+        XCTAssertFalse(coordinator.isRemovingLegacyLaunchAgent)
+        XCTAssertEqual(coordinator.legacyInstall.status, .notFound)
+    }
+
+    @MainActor
     func testCoordinatorRemovalFailureSurfacesPathAndKeepsWarningVisible() async {
         let launchAgent = URL(fileURLWithPath: "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist")
         let underlying = NSError(
@@ -154,5 +180,43 @@ private final class FakeLegacyInstallProvider: LegacyInstallProviding {
             current = afterRemoval
         }
         return current
+    }
+}
+
+@MainActor
+private final class SlowLegacyInstallProvider: LegacyInstallProviding {
+    private var current: LegacyInstallSnapshot
+    private let result: LegacyInstallSnapshot
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private(set) var removeCount = 0
+
+    init(current: LegacyInstallSnapshot, result: LegacyInstallSnapshot) {
+        self.current = current
+        self.result = result
+    }
+
+    func currentSnapshot() -> LegacyInstallSnapshot {
+        current
+    }
+
+    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+        removeCount += 1
+        for waiter in waiters {
+            waiter.resume()
+        }
+        waiters.removeAll()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        current = result
+        return result
+    }
+
+    func waitForRemoveCount(_ expectedCount: Int) async {
+        if removeCount >= expectedCount {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
     }
 }

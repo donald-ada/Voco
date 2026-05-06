@@ -46,6 +46,36 @@ final class MacLegacyInstallProviderTests: XCTestCase {
     }
 
     @MainActor
+    func testProviderRefusesToRemoveLaunchAgentWhenParentDirectoryIsSymlink() async throws {
+        let home = try makeTemporaryHome()
+        let library = home.appendingPathComponent("Library", isDirectory: true)
+        let symlinkTarget = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voco-legacy-symlink-target-\(UUID().uuidString)", isDirectory: true)
+        let launchAgentsSymlink = library.appendingPathComponent("LaunchAgents", isDirectory: true)
+        let targetLaunchAgent = symlinkTarget.appendingPathComponent(LegacyInstallSnapshot.launchAgentFileName)
+        let launchAgent = LegacyInstallSnapshot.knownLaunchAgentURL(homeDirectory: home)
+        try FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: symlinkTarget, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: launchAgentsSymlink.path, withDestinationPath: symlinkTarget.path)
+        try Data("legacy in symlink target".utf8).write(to: targetLaunchAgent)
+        defer {
+            try? FileManager.default.removeItem(at: home)
+            try? FileManager.default.removeItem(at: symlinkTarget)
+        }
+
+        let provider = MacLegacyInstallProvider(homeDirectory: home)
+
+        do {
+            _ = try await provider.removeKnownLaunchAgent()
+            XCTFail("Expected symlink parent directory to be rejected")
+        } catch {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: targetLaunchAgent.path))
+            XCTAssertTrue(error.localizedDescription.contains(launchAgent.path))
+            XCTAssertTrue(error.localizedDescription.lowercased().contains("symlink"))
+        }
+    }
+
+    @MainActor
     func testProviderRemovalFailureIncludesExactPathAndOSError() async throws {
         let home = try makeTemporaryHome()
         let launchAgent = LegacyInstallSnapshot.knownLaunchAgentURL(homeDirectory: home)

@@ -55,6 +55,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var onboarding: OnboardingSnapshot
     @Published public private(set) var installLocation: InstallLocationSnapshot
     @Published public private(set) var legacyInstall: LegacyInstallSnapshot
+    @Published public private(set) var isRemovingLegacyLaunchAgent: Bool
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
@@ -118,6 +119,7 @@ public final class AppCoordinator: ObservableObject {
         self.transcriptionCredentials = initialTranscriptionCredentials
         self.installLocation = initialInstallLocation
         self.legacyInstall = initialLegacyInstall
+        self.isRemovingLegacyLaunchAgent = false
         self.onboarding = OnboardingSnapshot.make(
             permissions: initialPermissions,
             transcriptionCredentials: initialTranscriptionCredentials,
@@ -404,6 +406,15 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func removeLegacyLaunchAgentFromUserAction() async {
+        guard !isRemovingLegacyLaunchAgent else {
+            return
+        }
+
+        isRemovingLegacyLaunchAgent = true
+        defer {
+            isRemovingLegacyLaunchAgent = false
+        }
+
         do {
             legacyInstall = try await legacyInstallProvider.removeKnownLaunchAgent()
             lastErrorMessage = nil

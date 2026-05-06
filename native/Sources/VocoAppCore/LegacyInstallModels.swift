@@ -92,11 +92,14 @@ public struct LegacyInstallSnapshot: Equatable, Sendable {
 
 public enum LegacyInstallCleanupError: LocalizedError {
     case removeFailed(path: String, underlying: Error)
+    case unsafePath(path: String, detail: String)
 
     public var errorDescription: String? {
         switch self {
         case .removeFailed(let path, let underlying):
             "移除旧版 LaunchAgent 失败：\(path)；OS error: \(underlying.localizedDescription)"
+        case .unsafePath(let path, let detail):
+            "移除旧版 LaunchAgent 失败：\(path)；safety error: \(detail)"
         }
     }
 }

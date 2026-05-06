@@ -158,9 +158,13 @@ struct SettingsView: View {
                         await coordinator.removeLegacyLaunchAgentFromUserAction()
                     }
                 } label: {
-                    Label("移除旧版启动项", systemImage: "trash")
+                    Label(
+                        coordinator.isRemovingLegacyLaunchAgent ? "正在移除..." : "移除旧版启动项",
+                        systemImage: coordinator.isRemovingLegacyLaunchAgent ? "hourglass" : "trash"
+                    )
                 }
                 .controlSize(.small)
+                .disabled(coordinator.isRemovingLegacyLaunchAgent)
             }
             .padding(12)
             .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
