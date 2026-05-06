@@ -149,4 +149,23 @@ Append results under `## Verification Results`, then commit this plan file.
 
 ## Verification Results
 
-Not run yet.
+Completed on 2026-05-06:
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built `target/native/Voco.app`, generated `Voco.icns`, verified the bundle signature, checked app/menu icon resources, launched the app for smoke validation, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 19 tests with 0 failures across `AppCoordinatorTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, and `SettingsSectionTests`.
+
+```bash
+git diff --check
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. No whitespace errors were reported and the generated app bundle passed strict codesign verification.
