@@ -559,7 +559,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "系统默认输入")
         XCTAssertEqual(coordinator.injectionSettingsSnapshot.strategy.title, "等待插入")
-        XCTAssertEqual(coordinator.hudSettingsSnapshot.position.title, "顶部居中")
+        XCTAssertEqual(coordinator.hudSettingsSnapshot.position.title, "底部居中")
         XCTAssertEqual(coordinator.privacySettingsSnapshot.transcriptRetention.title, "不保留转写文本")
     }
 

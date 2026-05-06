@@ -36,7 +36,12 @@ final class HUDOverlayPresenter {
 
     private func createPanel(coordinator: AppCoordinator) {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 84),
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: HUDOverlayChrome.Layout.panelSize.width,
+                height: HUDOverlayChrome.Layout.panelSize.height
+            ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -75,12 +80,11 @@ final class HUDOverlayPresenter {
         }
 
         let screenFrame = NSScreen.main?.visibleFrame ?? NSScreen.screens.first?.visibleFrame ?? .zero
-        let panelSize = NSSize(width: 360, height: 84)
-        let origin = NSPoint(
-            x: screenFrame.midX - panelSize.width / 2,
-            y: screenFrame.maxY - panelSize.height - 24
+        let origin = HUDOverlayChrome.panelOrigin(visibleFrame: screenFrame)
+        panel.setFrame(
+            NSRect(origin: origin, size: HUDOverlayChrome.Layout.panelSize),
+            display: true
         )
-        panel.setFrame(NSRect(origin: origin, size: panelSize), display: true)
     }
 
     private func scheduleAutoHide(after seconds: Double, snapshot: HUDSnapshot) {
