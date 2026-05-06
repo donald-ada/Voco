@@ -118,6 +118,22 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
+    public var diagnosticsSnapshot: DiagnosticsSnapshot {
+        DiagnosticsSnapshot(
+            appStatusTitle: snapshot.title,
+            permissions: permissions,
+            audio: lastAudio,
+            hotkeyState: hotkeyRuntimeState,
+            hotkeyBinding: hotkeyBinding,
+            hotkeyMode: hotkeyMode,
+            asrStatus: transcriptionProviderStatus,
+            credentials: transcriptionCredentials,
+            transcript: lastTranscript,
+            injection: lastInjection,
+            lastErrorMessage: lastErrorMessage
+        )
+    }
+
     public var audioSettingsSnapshot: AudioSettingsSnapshot {
         AudioSettingsSnapshot(lastAudio: lastAudio)
     }
