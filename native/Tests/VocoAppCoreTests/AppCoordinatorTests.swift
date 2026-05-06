@@ -103,7 +103,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testFinishingLaunchWithMissingPermissionShowsOnboarding() {
+    func testFinishingLaunchWithMissingPermissionUsesPermissionRecoveryAfterCompletedOnboarding() {
         let provider = FakePermissionProvider(
             current: [
                 .microphone(.denied),
@@ -120,7 +120,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.finishLaunching()
 
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
         XCTAssertEqual(coordinator.permissionSummary.missingRequiredPermissions, [.microphone])
         XCTAssertFalse(coordinator.snapshot.isRecordingActionEnabled)
     }
@@ -171,7 +171,7 @@ final class AppCoordinatorTests: XCTestCase {
         )
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
         coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
 
         await coordinator.requestMicrophonePermission()
 
@@ -230,7 +230,7 @@ final class AppCoordinatorTests: XCTestCase {
             hotkeyProvider: hotkeyProvider
         )
         coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
+        XCTAssertEqual(coordinator.status, .permissionNeeded)
         XCTAssertEqual(coordinator.hotkeyRuntimeState, .permissionNeeded)
 
         permissionProvider.current = [

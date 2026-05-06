@@ -380,3 +380,18 @@ public struct OnboardingSnapshot: Equatable, Sendable {
         }
     }
 }
+
+public enum OnboardingCompletionMigration {
+    public static func resolvedCompletion(
+        storedValue: Bool?,
+        permissions: [PermissionSnapshot],
+        transcriptionCredentials: TranscriptionCredentialSnapshot
+    ) -> Bool {
+        if let storedValue {
+            return storedValue
+        }
+
+        return PermissionSummary(snapshots: permissions).allRequiredGranted &&
+            transcriptionCredentials.hasAPIKey
+    }
+}

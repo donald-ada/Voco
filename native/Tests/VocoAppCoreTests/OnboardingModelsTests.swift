@@ -136,6 +136,54 @@ final class OnboardingModelsTests: XCTestCase {
         XCTAssertTrue(unknown.detail.contains("/tmp/Voco.app"))
     }
 
+    func testCompletionMigrationUsesExplicitStoredDefaultsValue() {
+        XCTAssertTrue(
+            OnboardingCompletionMigration.resolvedCompletion(
+                storedValue: true,
+                permissions: [],
+                transcriptionCredentials: .missing(provider: .doubao)
+            )
+        )
+        XCTAssertFalse(
+            OnboardingCompletionMigration.resolvedCompletion(
+                storedValue: false,
+                permissions: grantedPermissions,
+                transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef")
+            )
+        )
+    }
+
+    func testCompletionMigrationPreservesConfiguredUpgradeWhenDefaultsKeyIsMissing() {
+        XCTAssertTrue(
+            OnboardingCompletionMigration.resolvedCompletion(
+                storedValue: nil,
+                permissions: grantedPermissions,
+                transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef")
+            )
+        )
+    }
+
+    func testCompletionMigrationKeepsFirstRunWhenDefaultsKeyIsMissingAndSetupIsIncomplete() {
+        XCTAssertFalse(
+            OnboardingCompletionMigration.resolvedCompletion(
+                storedValue: nil,
+                permissions: grantedPermissions,
+                transcriptionCredentials: .missing(provider: .doubao)
+            )
+        )
+        XCTAssertFalse(
+            OnboardingCompletionMigration.resolvedCompletion(
+                storedValue: nil,
+                permissions: [
+                    .microphone(.granted),
+                    .accessibility(.denied),
+                    .inputMonitoring(.granted)
+                ],
+                transcriptionCredentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef")
+            )
+        )
+    }
+
     private var grantedPermissions: [PermissionSnapshot] {
         [
             .microphone(.granted),

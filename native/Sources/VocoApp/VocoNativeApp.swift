@@ -68,15 +68,22 @@ struct VocoNativeApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
+        let permissionProvider = MacPermissionProvider()
         let credentialStore = MacKeychainCredentialStore()
         let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
         let defaults = UserDefaults.standard
+        let storedOnboardingCompletion = defaults.object(forKey: Self.onboardingCompletionDefaultsKey) as? Bool
+        let hasCompletedOnboarding = OnboardingCompletionMigration.resolvedCompletion(
+            storedValue: storedOnboardingCompletion,
+            permissions: permissionProvider.currentSnapshots(),
+            transcriptionCredentials: credentialStore.currentSnapshot()
+        )
         let appCoordinator = AppCoordinator(
-            hasCompletedOnboarding: defaults.bool(forKey: Self.onboardingCompletionDefaultsKey),
+            hasCompletedOnboarding: hasCompletedOnboarding,
             setHasCompletedOnboarding: { completed in
                 defaults.set(completed, forKey: Self.onboardingCompletionDefaultsKey)
             },
-            permissionProvider: MacPermissionProvider(),
+            permissionProvider: permissionProvider,
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: NativeRecordingWorkflow(

@@ -264,7 +264,7 @@ public final class AppCoordinator: ObservableObject {
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshTranscriptionCredentials()
-        status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
+        status = launchStatusAfterSetupCheck()
         refreshHotkeyRuntime()
         refreshOnboardingState()
     }
@@ -305,7 +305,7 @@ public final class AppCoordinator: ObservableObject {
         if shouldUpdateRuntimeStatus {
             status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
         } else {
-            status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
+            status = launchStatusAfterSetupCheck()
         }
         refreshHotkeyRuntime()
         refreshOnboardingState()
@@ -433,6 +433,14 @@ public final class AppCoordinator: ObservableObject {
     public func fail(_ message: String) {
         lastErrorMessage = message
         status = .error
+    }
+
+    private func launchStatusAfterSetupCheck() -> AppRuntimeStatus {
+        guard hasCompletedOnboarding else {
+            return .needsOnboarding
+        }
+
+        return permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
     }
 
     private func refreshHotkeyRuntime() {
