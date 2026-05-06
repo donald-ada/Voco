@@ -21,6 +21,7 @@ public struct MenuBarSnapshot: Equatable, Sendable {
     public let status: AppRuntimeStatus
     public let title: String
     public let systemImage: String
+    public let templateIconResourceName: String
     public let isRecordingActionEnabled: Bool
     public let canOpenSettings: Bool
 
@@ -28,12 +29,14 @@ public struct MenuBarSnapshot: Equatable, Sendable {
         status: AppRuntimeStatus,
         title: String,
         systemImage: String,
+        templateIconResourceName: String,
         isRecordingActionEnabled: Bool,
         canOpenSettings: Bool
     ) {
         self.status = status
         self.title = title
         self.systemImage = systemImage
+        self.templateIconResourceName = templateIconResourceName
         self.isRecordingActionEnabled = isRecordingActionEnabled
         self.canOpenSettings = canOpenSettings
     }
@@ -62,6 +65,7 @@ public final class AppCoordinator: ObservableObject {
             status: status,
             title: status.menuBarTitle,
             systemImage: status.systemImage,
+            templateIconResourceName: "VocoMenuBarIconTemplate",
             isRecordingActionEnabled: status == .ready,
             canOpenSettings: true
         )

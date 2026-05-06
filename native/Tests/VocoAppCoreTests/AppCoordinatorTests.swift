@@ -11,6 +11,7 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .needsOnboarding)
         XCTAssertEqual(coordinator.snapshot.title, "需要设置")
         XCTAssertEqual(coordinator.snapshot.systemImage, "exclamationmark.triangle")
+        XCTAssertEqual(coordinator.snapshot.templateIconResourceName, "VocoMenuBarIconTemplate")
         XCTAssertTrue(coordinator.snapshot.canOpenSettings)
     }
 

@@ -57,6 +57,7 @@ RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 INFO_PLIST="${CONTENTS_DIR}/Info.plist"
 PLIST_TEMPLATE="${NATIVE_DIR}/Resources/Info.plist"
 ICON_SOURCE="${NATIVE_DIR}/Resources/VocoIcon.svg"
+MENU_BAR_ICON_SOURCE="${NATIVE_DIR}/Resources/VocoMenuBarIconTemplate.svg"
 BINARY="${NATIVE_DIR}/.build/${SWIFT_CONFIG}/Voco"
 ICON_WORK_DIR="${REPO_ROOT}/target/native/icon-work"
 ICONSET_DIR="${ICON_WORK_DIR}/Voco.iconset"
@@ -69,6 +70,11 @@ fi
 
 if [[ ! -f "${ICON_SOURCE}" ]]; then
   echo "missing required file: ${ICON_SOURCE}" >&2
+  exit 66
+fi
+
+if [[ ! -f "${MENU_BAR_ICON_SOURCE}" ]]; then
+  echo "missing required file: ${MENU_BAR_ICON_SOURCE}" >&2
   exit 66
 fi
 
@@ -85,6 +91,7 @@ mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 cp "${PLIST_TEMPLATE}" "${INFO_PLIST}"
 cp "${BINARY}" "${MACOS_DIR}/Voco"
+cp "${MENU_BAR_ICON_SOURCE}" "${RESOURCES_DIR}/VocoMenuBarIconTemplate.svg"
 chmod 755 "${MACOS_DIR}/Voco"
 
 rm -rf "${ICON_WORK_DIR}"

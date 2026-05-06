@@ -34,7 +34,12 @@ struct VocoNativeApp: App {
                 NSApp.terminate(nil)
             }
         } label: {
-            Label(coordinator.snapshot.title, systemImage: coordinator.snapshot.systemImage)
+            MenuBarIcon(
+                resourceName: coordinator.snapshot.templateIconResourceName,
+                fallbackSystemImage: coordinator.snapshot.systemImage
+            )
+            .accessibilityLabel(Text("Voco \(coordinator.snapshot.title)"))
+            .help("Voco \(coordinator.snapshot.title)")
         }
         .menuBarExtraStyle(.menu)
     }
