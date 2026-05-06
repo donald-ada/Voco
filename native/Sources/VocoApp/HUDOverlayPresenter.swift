@@ -52,7 +52,7 @@ final class HUDOverlayPresenter {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
-        panel.level = .floating
+        panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         self.panel = panel
     }
@@ -79,8 +79,13 @@ final class HUDOverlayPresenter {
             return
         }
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSScreen.screens.first?.visibleFrame ?? .zero
-        let origin = HUDOverlayChrome.panelOrigin(visibleFrame: screenFrame)
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let screenFrame = screen?.frame ?? .zero
+        let visibleFrame = screen?.visibleFrame ?? screenFrame
+        let origin = HUDOverlayChrome.panelOrigin(
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame
+        )
         panel.setFrame(
             NSRect(origin: origin, size: HUDOverlayChrome.Layout.panelSize),
             display: true

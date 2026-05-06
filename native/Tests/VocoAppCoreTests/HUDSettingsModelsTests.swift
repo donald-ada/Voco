@@ -2,15 +2,15 @@ import XCTest
 @testable import VocoAppCore
 
 final class HUDSettingsModelsTests: XCTestCase {
-    func testDefaultHUDSettingsDescribeLegacyBottomCapsule() {
+    func testDefaultHUDSettingsAreTopCenterNotchAwareWithPreviewEnabled() {
         let snapshot = HUDSettingsSnapshot()
 
-        XCTAssertEqual(snapshot.position.title, "底部居中")
-        XCTAssertEqual(snapshot.position.detail, "HUD 使用旧版 compact 胶囊，固定在屏幕底部中央。")
-        XCTAssertEqual(snapshot.notchMode.title, "胶囊模式")
-        XCTAssertEqual(snapshot.notchMode.detail, "使用已调试的黑色胶囊 UI，不贴近 Dynamic Island。")
-        XCTAssertEqual(snapshot.transcriptPreview.title, "不显示转写预览")
-        XCTAssertEqual(snapshot.transcriptPreview.detail, "胶囊只显示语音输入状态和声波，避免展开成卡片。")
-        XCTAssertFalse(snapshot.transcriptPreview.isVisible)
+        XCTAssertEqual(snapshot.position.title, "顶部居中")
+        XCTAssertEqual(snapshot.position.detail, "HUD 固定显示在屏幕顶部中央。")
+        XCTAssertEqual(snapshot.notchMode.title, "刘海避让")
+        XCTAssertEqual(snapshot.notchMode.detail, "在带刘海屏幕上自动贴近 Dynamic Island 区域。")
+        XCTAssertEqual(snapshot.transcriptPreview.title, "显示转写预览")
+        XCTAssertEqual(snapshot.transcriptPreview.detail, "录音和插入过程中显示最多 80 个字符的实时文本。")
+        XCTAssertTrue(snapshot.transcriptPreview.isVisible)
     }
 }

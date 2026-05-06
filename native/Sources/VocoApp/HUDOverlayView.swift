@@ -7,75 +7,128 @@ struct HUDOverlayView: View {
     var body: some View {
         let snapshot = coordinator.hudSnapshot
 
-        HUDCapsuleOverlay(snapshot: snapshot)
+        HUDNotchIslandOverlay(snapshot: snapshot)
     }
 }
 
-private struct HUDCapsuleOverlay: View {
+private struct HUDNotchIslandOverlay: View {
     let snapshot: HUDSnapshot
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             let now = timeline.date.timeIntervalSinceReferenceDate
+            let preview = transcriptPreview
+            let hasTranscript = preview != nil
+            let width = hasTranscript
+                ? HUDOverlayChrome.Layout.notchExpandedWidth
+                : HUDOverlayChrome.Layout.notchCollapsedWidth
+            let height = hasTranscript
+                ? HUDOverlayChrome.Layout.notchExpandedHeight
+                : HUDOverlayChrome.Layout.notchCollapsedHeight
+            let cornerRadius = hasTranscript
+                ? 28.0
+                : HUDOverlayChrome.Layout.notchCollapsedHeight / 2.0
 
-            HStack(spacing: HUDOverlayChrome.Layout.contentSpacing) {
-                statusLabel(time: now)
-
-                if snapshot.phase == .transcribing || snapshot.phase == .injecting {
-                    HUDTranscribingSpinner(time: now)
-                } else {
-                    HUDWaveformBars(phase: snapshot.phase, time: now)
-                }
+            ZStack(alignment: .top) {
+                islandContent(time: now, transcriptPreview: preview)
+                    .padding(.horizontal, hasTranscript ? 20 : 16)
+                    .frame(width: width, height: height)
+                    .background {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(HUDOverlayChrome.ColorToken.notchCapsule.color)
+                            .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(
+                                HUDOverlayChrome.ColorToken.notchCapsuleBorder.color,
+                                lineWidth: 1
+                            )
+                    )
+                    .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hasTranscript)
+                    .padding(.top, HUDOverlayChrome.Layout.notchShadowPadding)
             }
-            .padding(.horizontal, 16)
-            .frame(
-                width: HUDOverlayChrome.Layout.capsuleWidth,
-                height: HUDOverlayChrome.Layout.capsuleHeight
-            )
-            .background {
-                Capsule()
-                    .fill(HUDOverlayChrome.ColorToken.capsule.color)
-                    .shadow(color: Color.black.opacity(0.34), radius: 12, y: 5)
-            }
-            .overlay(
-                Capsule().strokeBorder(
-                    HUDOverlayChrome.ColorToken.capsuleBorder.color,
-                    lineWidth: 1
-                )
-            )
             .opacity(snapshot.isVisible ? 1.0 : 0.0)
             .frame(
                 width: HUDOverlayChrome.Layout.panelSize.width,
-                height: HUDOverlayChrome.Layout.panelSize.height
+                height: HUDOverlayChrome.Layout.panelSize.height,
+                alignment: .top
             )
             .background(Color.clear)
         }
     }
 
-    private func statusLabel(time: TimeInterval) -> some View {
-        let isRecording = snapshot.phase == .recording
-        let pulse = isRecording ? 1.0 + (0.025 * normalizedSine(time, speed: 0.95, offset: 0)) : 1.0
+    @ViewBuilder
+    private func islandContent(time: TimeInterval, transcriptPreview: String?) -> some View {
+        if let transcriptPreview {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    statusLabel
+                    Spacer(minLength: 12)
+                    HUDMiniWaveform(phase: snapshot.phase, time: time)
+                }
+                transcriptLine(transcriptPreview)
+            }
+        } else {
+            HStack(spacing: HUDOverlayChrome.Layout.contentSpacing) {
+                statusLabel
+                Spacer(minLength: 6)
+                HUDMiniWaveform(phase: snapshot.phase, time: time)
+            }
+        }
+    }
+
+    private var statusLabel: some View {
         let color = snapshot.phase == .error
             ? HUDOverlayChrome.ColorToken.error.color
             : HUDOverlayChrome.ColorToken.recordingMic.color
 
-        return Text(HUDOverlayChrome.Layout.statusLabelText)
+        return Text(statusText)
             .font(.system(
-                size: HUDOverlayChrome.Layout.statusLabelFontSize,
+                size: HUDOverlayChrome.Layout.transcriptStatusFontSize,
                 weight: .semibold
             ))
             .foregroundStyle(color)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .scaleEffect(pulse)
             .shadow(
-                color: color.opacity(isRecording ? 0.38 : 0.22),
-                radius: isRecording ? 5 : 3
+                color: color.opacity(snapshot.phase == .error ? 0.34 : 0.24),
+                radius: 4
             )
+    }
+
+    private var statusText: String {
+        if snapshot.phase == .error {
+            return "输入失败"
+        }
+        return HUDOverlayChrome.Layout.statusLabelText
+    }
+
+    private var transcriptPreview: String? {
+        guard snapshot.phase != .error else {
+            return nil
+        }
+        let trimmed = snapshot.transcriptPreview?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private func transcriptLine(_ text: String) -> some View {
+        Text(text)
+            .font(.system(
+                size: HUDOverlayChrome.Layout.transcriptFontSize,
+                weight: .semibold
+            ))
+            .foregroundStyle(HUDOverlayChrome.ColorToken.transcriptLive.color)
+            .lineLimit(HUDOverlayChrome.Layout.transcriptLineLimit)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct HUDWaveformBars: View {
+private struct HUDMiniWaveform: View {
     let phase: HUDPhase
     let time: TimeInterval
 
@@ -97,7 +150,9 @@ private struct HUDWaveformBars: View {
     }
 
     private var color: Color {
-        phase == .error ? HUDOverlayChrome.ColorToken.error.color : HUDOverlayChrome.ColorToken.waveform.color
+        phase == .error
+            ? HUDOverlayChrome.ColorToken.error.color
+            : HUDOverlayChrome.ColorToken.waveform.color
     }
 
     private func barHeight(_ index: Int) -> CGFloat {
@@ -106,31 +161,11 @@ private struct HUDWaveformBars: View {
         switch phase {
         case .hidden:
             return 6
-        case .success:
-            return CGFloat(7.0 + pattern * 5.0)
-        case .error:
-            return CGFloat(8.0 + pattern * 9.0)
-        case .recording, .transcribing, .injecting:
+        case .recording, .transcribing, .injecting, .success, .error:
             let baseline = 3.0 + normalizedSine(time, speed: 0.78, offset: Double(index) * 0.65) * 5.0
             let boosted = pattern * 12.0
             return CGFloat(min(max(6.0 + baseline + boosted, 6.0), 26.0))
         }
-    }
-}
-
-private struct HUDTranscribingSpinner: View {
-    let time: TimeInterval
-
-    var body: some View {
-        Circle()
-            .trim(from: 0.18, to: 0.82)
-            .stroke(
-                HUDOverlayChrome.ColorToken.waveform.color,
-                style: StrokeStyle(lineWidth: 2.2, lineCap: .round)
-            )
-            .frame(width: 22, height: 22)
-            .rotationEffect(.degrees((time * 360.0).truncatingRemainder(dividingBy: 360.0)))
-            .shadow(color: HUDOverlayChrome.ColorToken.waveform.color.opacity(0.35), radius: 6)
     }
 }
 

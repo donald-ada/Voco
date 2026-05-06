@@ -6,9 +6,9 @@ public struct HUDSettingsSnapshot: Equatable, Sendable {
     public let transcriptPreview: HUDTranscriptPreviewSetting
 
     public init(
-        position: HUDPositionSetting = .bottomCenter,
-        notchMode: HUDNotchModeSetting = .legacyCapsule,
-        transcriptPreview: HUDTranscriptPreviewSetting = .hiddenInCapsule
+        position: HUDPositionSetting = .topCenter,
+        notchMode: HUDNotchModeSetting = .notchAware,
+        transcriptPreview: HUDTranscriptPreviewSetting = .enabled
     ) {
         self.position = position
         self.notchMode = notchMode
@@ -21,11 +21,11 @@ public struct HUDPositionSetting: Equatable, Sendable {
     public let detail: String
     public let systemImage: String
 
-    public static var bottomCenter: HUDPositionSetting {
+    public static var topCenter: HUDPositionSetting {
         HUDPositionSetting(
-            title: "底部居中",
-            detail: "HUD 使用旧版 compact 胶囊，固定在屏幕底部中央。",
-            systemImage: "arrow.down.to.line.compact"
+            title: "顶部居中",
+            detail: "HUD 固定显示在屏幕顶部中央。",
+            systemImage: "arrow.up.to.line.compact"
         )
     }
 }
@@ -35,11 +35,11 @@ public struct HUDNotchModeSetting: Equatable, Sendable {
     public let detail: String
     public let systemImage: String
 
-    public static var legacyCapsule: HUDNotchModeSetting {
+    public static var notchAware: HUDNotchModeSetting {
         HUDNotchModeSetting(
-            title: "胶囊模式",
-            detail: "使用已调试的黑色胶囊 UI，不贴近 Dynamic Island。",
-            systemImage: "capsule.fill"
+            title: "刘海避让",
+            detail: "在带刘海屏幕上自动贴近 Dynamic Island 区域。",
+            systemImage: "rectangle.topthird.inset.filled"
         )
     }
 }
@@ -50,12 +50,12 @@ public struct HUDTranscriptPreviewSetting: Equatable, Sendable {
     public let systemImage: String
     public let isVisible: Bool
 
-    public static var hiddenInCapsule: HUDTranscriptPreviewSetting {
+    public static var enabled: HUDTranscriptPreviewSetting {
         HUDTranscriptPreviewSetting(
-            title: "不显示转写预览",
-            detail: "胶囊只显示语音输入状态和声波，避免展开成卡片。",
+            title: "显示转写预览",
+            detail: "录音和插入过程中显示最多 80 个字符的实时文本。",
             systemImage: "text.bubble",
-            isVisible: false
+            isVisible: true
         )
     }
 }

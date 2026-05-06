@@ -3,22 +3,26 @@ import SwiftUI
 
 enum HUDOverlayChrome {
     enum Layout {
-        static let capsuleWidth: CGFloat = 184
-        static let capsuleHeight: CGFloat = 44
-        static let shadowPadding: CGFloat = 22
-        static let panelSize = CGSize(
-            width: capsuleWidth + shadowPadding * 2,
-            height: capsuleHeight + shadowPadding * 2
-        )
         static let statusLabelText = "语音输入"
-        static let statusLabelFontSize: CGFloat = 14
         static let waveformWidth: CGFloat = 48
         static let waveformHeight: CGFloat = 30
         static let waveformBarWidth: CGFloat = 2.4
         static let waveformBarSpacing: CGFloat = 3
         static let waveformBarCount = 7
         static let contentSpacing: CGFloat = 12
-        static let panelBottomOffset: CGFloat = 96
+        static let notchCollapsedWidth: CGFloat = 320
+        static let notchCollapsedHeight: CGFloat = 44
+        static let notchExpandedWidth: CGFloat = 520
+        static let notchExpandedHeight: CGFloat = 86
+        static let notchShadowPadding: CGFloat = 24
+        static let panelSize = CGSize(
+            width: notchExpandedWidth + notchShadowPadding * 2,
+            height: notchExpandedHeight + notchShadowPadding * 2
+        )
+        static let notchTopOffset: CGFloat = -1
+        static let transcriptFontSize: CGFloat = 17
+        static let transcriptStatusFontSize: CGFloat = 13
+        static let transcriptLineLimit = 2
     }
 
     struct ColorToken: Equatable, Sendable {
@@ -32,19 +36,19 @@ enum HUDOverlayChrome {
             Color(red: red, green: green, blue: blue).opacity(opacity)
         }
 
-        static let capsule = ColorToken(
-            hex: "#050607",
-            red: 5.0 / 255.0,
-            green: 6.0 / 255.0,
-            blue: 7.0 / 255.0,
-            opacity: 0.92
+        static let notchCapsule = ColorToken(
+            hex: "#000000",
+            red: 0.0,
+            green: 0.0,
+            blue: 0.0,
+            opacity: 1.0
         )
-        static let capsuleBorder = ColorToken(
-            hex: "#1B1F22",
-            red: 27.0 / 255.0,
-            green: 31.0 / 255.0,
-            blue: 34.0 / 255.0,
-            opacity: 0.95
+        static let notchCapsuleBorder = ColorToken(
+            hex: "#000000",
+            red: 0.0,
+            green: 0.0,
+            blue: 0.0,
+            opacity: 0.0
         )
         static let recordingMic = ColorToken(
             hex: "#FFCC4D",
@@ -60,6 +64,20 @@ enum HUDOverlayChrome {
             blue: 122.0 / 255.0,
             opacity: 1.0
         )
+        static let transcriptStable = ColorToken(
+            hex: "#F8F1D4",
+            red: 248.0 / 255.0,
+            green: 241.0 / 255.0,
+            blue: 212.0 / 255.0,
+            opacity: 1.0
+        )
+        static let transcriptLive = ColorToken(
+            hex: "#8DFFB5",
+            red: 141.0 / 255.0,
+            green: 255.0 / 255.0,
+            blue: 181.0 / 255.0,
+            opacity: 1.0
+        )
         static let error = ColorToken(
             hex: "#FF5E57",
             red: 255.0 / 255.0,
@@ -69,10 +87,13 @@ enum HUDOverlayChrome {
         )
     }
 
-    static func panelOrigin(visibleFrame: CGRect) -> CGPoint {
+    static func panelOrigin(screenFrame: CGRect, visibleFrame: CGRect) -> CGPoint {
         CGPoint(
             x: visibleFrame.midX - Layout.panelSize.width / 2,
-            y: visibleFrame.minY + Layout.panelBottomOffset - Layout.shadowPadding
+            y: screenFrame.maxY
+                - Layout.panelSize.height
+                + Layout.notchShadowPadding
+                - Layout.notchTopOffset
         )
     }
 }
