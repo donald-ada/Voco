@@ -39,7 +39,7 @@ Observed before Task 1: PASS. XCTest executed 62 tests with 0 failures.
 - Create: `native/Tests/VocoAppCoreTests/TranscriptionCredentialModelsTests.swift`
 - Create: `native/Sources/VocoAppCore/TranscriptionCredentialModels.swift`
 
-- [ ] **Step 1: Write failing credential model tests**
+- [x] **Step 1: Write failing credential model tests**
 
 Create `native/Tests/VocoAppCoreTests/TranscriptionCredentialModelsTests.swift`:
 
@@ -101,7 +101,7 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -111,7 +111,7 @@ cd native && swift test --filter TranscriptionCredentialModelsTests
 
 Expected: compile failure because credential models and store do not exist.
 
-- [ ] **Step 3: Implement credential models and in-memory store**
+- [x] **Step 3: Implement credential models and in-memory store**
 
 Create `native/Sources/VocoAppCore/TranscriptionCredentialModels.swift`:
 
@@ -264,7 +264,7 @@ private func maskAPIKey(_ apiKey: String) -> String {
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -274,7 +274,7 @@ cd native && swift test --filter TranscriptionCredentialModelsTests
 
 Expected: all credential model tests pass.
 
-- [ ] **Step 5: Commit credential models**
+- [x] **Step 5: Commit credential models**
 
 Run:
 
@@ -289,7 +289,7 @@ git commit -m "feat(native): add transcription credential models"
 - Modify: `native/Sources/VocoAppCore/AppCoordinator.swift`
 - Modify: `native/Tests/VocoAppCoreTests/AppCoordinatorTests.swift`
 
-- [ ] **Step 1: Write failing coordinator tests**
+- [x] **Step 1: Write failing coordinator tests**
 
 Add to `AppCoordinatorTests`:
 
@@ -322,7 +322,7 @@ func testCoordinatorSavesAndClearsTranscriptionCredentials() async {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -332,7 +332,7 @@ cd native && swift test --filter AppCoordinatorTests/testCoordinator
 
 Expected: compile failure because `AppCoordinator` has no credential store injection or credential methods.
 
-- [ ] **Step 3: Implement coordinator credential wiring**
+- [x] **Step 3: Implement coordinator credential wiring**
 
 In `AppCoordinator`:
 
@@ -374,7 +374,7 @@ public func clearTranscriptionCredentials() async {
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -384,7 +384,7 @@ cd native && swift test --filter AppCoordinatorTests/testCoordinator
 
 Expected: coordinator credential tests pass.
 
-- [ ] **Step 5: Commit coordinator state**
+- [x] **Step 5: Commit coordinator state**
 
 Run:
 
@@ -400,7 +400,7 @@ git commit -m "feat(native): publish transcription credentials"
 - Modify: `native/Sources/VocoApp/VocoNativeApp.swift`
 - Modify: `native/Sources/VocoApp/SettingsView.swift`
 
-- [ ] **Step 1: Add Keychain credential store**
+- [x] **Step 1: Add Keychain credential store**
 
 Create `native/Sources/VocoApp/MacKeychainCredentialStore.swift` with a `MacKeychainCredentialStore: TranscriptionCredentialStoring` that:
 
@@ -412,7 +412,7 @@ Create `native/Sources/VocoApp/MacKeychainCredentialStore.swift` with a `MacKeyc
 - throws `TranscriptionCredentialError.readFailed/storeFailed/deleteFailed` with `SecCopyErrorMessageString` plus OSStatus code;
 - returns `.failed(...)` from `currentSnapshot()` when a read error occurs.
 
-- [ ] **Step 2: Inject Keychain store**
+- [x] **Step 2: Inject Keychain store**
 
 Modify `native/Sources/VocoApp/VocoNativeApp.swift`:
 
@@ -431,7 +431,7 @@ let appCoordinator = AppCoordinator(
 )
 ```
 
-- [ ] **Step 3: Render credential controls in Settings**
+- [x] **Step 3: Render credential controls in Settings**
 
 In `SettingsView`, add `@State private var transcriptionAPIKey = ""` and extend `transcriptionSection` with:
 
@@ -476,7 +476,7 @@ HStack(spacing: 8) {
 }
 ```
 
-- [ ] **Step 4: Run app compile tests**
+- [x] **Step 4: Run app compile tests**
 
 Run:
 
@@ -486,7 +486,7 @@ cd native && swift test
 
 Expected: all native tests pass and the executable target compiles with Security framework imports.
 
-- [ ] **Step 5: Commit Keychain UI**
+- [x] **Step 5: Commit Keychain UI**
 
 Run:
 
@@ -500,7 +500,7 @@ git commit -m "feat(native): store transcription credentials in keychain"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-06-voco-native-keychain-credentials.md`
 
-- [ ] **Step 1: Run full native tests**
+- [x] **Step 1: Run full native tests**
 
 Run:
 
@@ -510,7 +510,7 @@ cd native && swift test
 
 Expected: all native tests pass.
 
-- [ ] **Step 2: Run native bundle smoke**
+- [x] **Step 2: Run native bundle smoke**
 
 Run from repository root:
 
@@ -520,7 +520,7 @@ packaging/tests/native_app_bundle_smoke.sh
 
 Expected: native bundle builds, signs, verifies, and launches for smoke validation.
 
-- [ ] **Step 3: Run diff and signature checks**
+- [x] **Step 3: Run diff and signature checks**
 
 Run:
 
@@ -531,11 +531,11 @@ codesign --verify --deep --strict target/native/Voco.app
 
 Expected: no whitespace errors and a valid ad-hoc signature on `target/native/Voco.app`.
 
-- [ ] **Step 4: Record verification results**
+- [x] **Step 4: Record verification results**
 
 Append a `Verification Results` section to this plan with exact command output summaries.
 
-- [ ] **Step 5: Commit verification notes**
+- [x] **Step 5: Commit verification notes**
 
 Run:
 
@@ -549,3 +549,29 @@ git commit -m "docs(native): mark keychain credential verification"
 - Covers the native rewrite requirement that provider credentials are stored in Keychain.
 - Surfaces Keychain status in Settings without displaying full secrets.
 - Keeps real Doubao/WebSocket transcription, streaming partials, diagnostics export, and release DMG notarization as separate slices.
+
+## Verification Results
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. XCTest executed 69 tests with 0 failures across `AppCoordinatorTests`, `AudioCaptureBufferTests`, `HUDModelsTests`, `HotkeyModelsTests`, `LaunchAtLoginModelsTests`, `PermissionModelsTests`, `RecordingWorkflowTests`, `SettingsSectionTests`, `TextInjectionModelsTests`, `TextInjectionProviderTests`, `TranscriptionCredentialModelsTests`, and `TranscriptionModelsTests`.
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. The command built the native debug app, generated `target/native/Voco.app/Contents/Resources/Voco.icns`, replaced the ad-hoc signature, verified the bundle, and exited with `ok: native Voco.app bundle smoke passed`.
+
+```bash
+git diff --check
+```
+
+Result: PASS. No whitespace errors.
+
+```bash
+codesign --verify --deep --strict target/native/Voco.app
+```
+
+Result: PASS. The ad-hoc signed native app bundle verified successfully.
