@@ -22,9 +22,12 @@ final class MacAudioCaptureEngine: AudioCaptureProviding {
         store.reset()
         let requestedFrames = Int(format.sampleRate * 0.02)
         let bufferSize = AVAudioFrameCount(max(160, min(1024, requestedFrames)))
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [store] buffer, _ in
-            store.append(buffer)
-        }
+        inputNode.installTap(
+            onBus: 0,
+            bufferSize: bufferSize,
+            format: format,
+            block: Self.makeAudioTapBlock(store: store)
+        )
 
         do {
             engine.prepare()
@@ -46,9 +49,17 @@ final class MacAudioCaptureEngine: AudioCaptureProviding {
         isCapturing = false
         return try store.snapshot()
     }
+
+    nonisolated static func makeAudioTapBlock(
+        store: LockedAudioCaptureStore
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
+        { buffer, _ in
+            store.append(buffer)
+        }
+    }
 }
 
-private final class LockedAudioCaptureStore: @unchecked Sendable {
+final class LockedAudioCaptureStore: @unchecked Sendable {
     private let lock = NSLock()
     private var audioBuffer = AudioCaptureBuffer()
     private var failureMessage: String?
