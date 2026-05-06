@@ -20,6 +20,11 @@ struct VocoNativeApp: App {
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 
+            Button("检查权限") {
+                coordinator.refreshPermissions()
+                SettingsWindowPresenter.shared.show(coordinator: coordinator)
+            }
+
             Toggle(
                 "登录时启动",
                 isOn: Binding(
@@ -46,7 +51,7 @@ struct VocoNativeApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
-        let appCoordinator = AppCoordinator()
+        let appCoordinator = AppCoordinator(permissionProvider: MacPermissionProvider())
         appCoordinator.finishLaunching()
         _coordinator = StateObject(wrappedValue: appCoordinator)
     }
