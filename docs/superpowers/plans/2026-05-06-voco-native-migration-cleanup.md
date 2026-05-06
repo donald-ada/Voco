@@ -480,3 +480,102 @@ git commit -m "docs(native): mark migration cleanup verification"
 - Spec coverage: Tasks 1-3 cover detection, warning, explicit cleanup, no sudo, scoped plist removal, and descriptive failures. Task 4 covers native bundle exclusion of CLI/daemon/helper binaries. Task 5 updates user-facing install docs. Task 6 records the no-delete feature-parity gate. Task 7 records final verification.
 - Placeholder scan: no task contains placeholder markers or an unspecified future implementation step.
 - Type consistency: `LegacyInstallSnapshot`, `LegacyInstallStatus`, `LegacyInstallProviding`, `LegacyInstallCleanupError`, `MacLegacyInstallProvider`, and `AppCoordinator.legacyInstall` are named consistently across tests, implementation, UI, and docs.
+
+## Implementation Results
+
+### RED Evidence
+
+Initial command before the test file existed:
+
+```bash
+cd native && swift test --filter LegacyInstallModelsTests
+```
+
+Result: PASS with `warning: No matching test cases were run` and `Executed 0 tests`. This was not accepted as RED evidence.
+
+After adding `native/Tests/VocoAppCoreTests/LegacyInstallModelsTests.swift` and fixing an existing `TranscriptionProviderStatus.notConfigured` test-shape typo, the same command failed correctly:
+
+```bash
+cd native && swift test --filter LegacyInstallModelsTests
+```
+
+Result: FAIL at compile time because `LegacyInstallProviding`, `LegacyInstallSnapshot`, `LegacyInstallCleanupError`, `AppCoordinator(legacyInstallProvider:)`, and `.legacyInstall` diagnostics category did not exist.
+
+Provider RED:
+
+```bash
+cd native && swift test --filter MacLegacyInstallProviderTests
+```
+
+Result: FAIL at compile time because `MacLegacyInstallProvider` did not exist.
+
+### GREEN Evidence
+
+Focused core tests:
+
+```bash
+cd native && swift test --filter LegacyInstallModelsTests
+```
+
+Result: PASS. Executed 7 tests, 0 failures.
+
+Focused macOS provider tests:
+
+```bash
+cd native && swift test --filter MacLegacyInstallProviderTests
+```
+
+Result: PASS. Executed 3 tests, 0 failures.
+
+### Final Verification
+
+Full native tests:
+
+```bash
+cd native && swift test
+```
+
+Result: PASS. Executed 138 XCTest tests, 1 skipped, 0 failures.
+
+Native app bundle smoke:
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+Result: PASS. Output ended with `ok: native Voco.app bundle smoke passed`; the smoke test checked `Contents/MacOS` and rejected `voco`, `voco-daemon`, and `voco-hud`.
+
+Native DMG smoke:
+
+```bash
+packaging/tests/native_dmg_smoke.sh
+```
+
+Result: PASS. Output ended with `ok: native Voco.dmg smoke passed`; the mounted DMG smoke test also rejected legacy `voco`, `voco-daemon`, and `voco-hud` executables.
+
+Whitespace check:
+
+```bash
+git diff --check
+```
+
+Result: PASS with no output.
+
+### Commits
+
+```text
+5a6e75e docs(native): plan migration cleanup
+b82f289 feat(native): detect legacy launch agent
+e74601e feat(native): surface legacy cleanup action
+cc21891 docs(native): update native install guidance
+```
+
+The final verification evidence is committed separately as:
+
+```text
+docs(native): mark migration cleanup verification
+```
+
+### Gate Decision
+
+Legacy asset removal deferred because Task 8 manual UX/feature-parity verification is still pending. This task intentionally left `crates/voco-cli`, `crates/voco-daemon`, `packaging/com.voco.daemon.plist.tmpl`, `packaging/build_app_bundle.sh`, and legacy HUD helper packaging intact.
