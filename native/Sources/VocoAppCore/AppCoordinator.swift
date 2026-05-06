@@ -102,6 +102,15 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
+    public var hudSnapshot: HUDSnapshot {
+        HUDSnapshot(
+            status: status,
+            lastTranscript: lastTranscript,
+            lastInjection: lastInjection,
+            lastErrorMessage: lastErrorMessage
+        )
+    }
+
     public var isRecording: Bool {
         status == .recording
     }

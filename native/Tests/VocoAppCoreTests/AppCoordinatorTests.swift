@@ -369,6 +369,30 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorPublishesRecordingHUDSnapshot() async {
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.hudSnapshot.phase, .recording)
+        XCTAssertTrue(coordinator.hudSnapshot.isVisible)
+    }
+
+    @MainActor
+    func testCoordinatorPublishesFailureHUDSnapshot() async {
+        let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.hudSnapshot.phase, .error)
+        XCTAssertEqual(coordinator.hudSnapshot.detail, "转写服务未配置：请先在设置中配置 ASR provider。")
+    }
+
+    @MainActor
     func testUnavailableTranscriptionFailureSurfacesProviderMessage() async {
         let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)

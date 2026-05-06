@@ -313,7 +313,7 @@ git commit -m "feat(native): add hud snapshot models"
 - Modify: `native/Sources/VocoAppCore/AppCoordinator.swift`
 - Modify: `native/Tests/VocoAppCoreTests/AppCoordinatorTests.swift`
 
-- [ ] **Step 1: Write failing coordinator tests**
+- [x] **Step 1: Write failing coordinator tests**
 
 Add to `AppCoordinatorTests`:
 
@@ -343,7 +343,7 @@ func testCoordinatorPublishesFailureHUDSnapshot() async {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -353,7 +353,7 @@ cd native && swift test --filter AppCoordinatorTests/testCoordinatorPublishes
 
 Expected: compile failure because `AppCoordinator.hudSnapshot` does not exist.
 
-- [ ] **Step 3: Add computed HUD snapshot**
+- [x] **Step 3: Add computed HUD snapshot**
 
 Add to `AppCoordinator` near `snapshot`:
 
@@ -368,7 +368,7 @@ public var hudSnapshot: HUDSnapshot {
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run:
 
@@ -378,7 +378,7 @@ cd native && swift test --filter AppCoordinatorTests/testCoordinatorPublishes
 
 Expected: new coordinator HUD tests pass.
 
-- [ ] **Step 5: Commit coordinator wiring**
+- [x] **Step 5: Commit coordinator wiring**
 
 Run:
 
