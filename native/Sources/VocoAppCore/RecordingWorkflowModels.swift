@@ -4,11 +4,13 @@ public struct CapturedAudioSnapshot: Equatable, Sendable {
     public let durationSeconds: Double
     public let sampleRate: Double
     public let peakAmplitude: Double
+    public let pcm16Samples: [Int16]
 
-    public init(durationSeconds: Double, sampleRate: Double, peakAmplitude: Double) {
+    public init(durationSeconds: Double, sampleRate: Double, peakAmplitude: Double, pcm16Samples: [Int16] = []) {
         self.durationSeconds = durationSeconds
         self.sampleRate = sampleRate
         self.peakAmplitude = peakAmplitude
+        self.pcm16Samples = pcm16Samples
     }
 }
 
