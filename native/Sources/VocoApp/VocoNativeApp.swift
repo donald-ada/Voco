@@ -56,14 +56,16 @@ struct VocoNativeApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
+        let credentialStore = MacKeychainCredentialStore()
+        let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
         let appCoordinator = AppCoordinator(
             hasCompletedOnboarding: true,
             permissionProvider: MacPermissionProvider(),
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
-            transcriptionCredentialStore: MacKeychainCredentialStore(),
+            transcriptionCredentialStore: credentialStore,
             recordingWorkflow: NativeRecordingWorkflow(
                 audioCapture: MacAudioCaptureEngine(),
-                transcription: UnavailableTranscriptionProvider(),
+                transcription: transcriptionProvider,
                 textInjection: MacTextInjectionProvider()
             ),
             hotkeyProvider: MacHotkeyProvider()

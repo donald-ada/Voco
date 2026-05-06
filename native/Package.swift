@@ -22,6 +22,11 @@ let package = Package(
             name: "VocoAppCoreTests",
             dependencies: ["VocoAppCore"],
             path: "Tests/VocoAppCoreTests"
+        ),
+        .testTarget(
+            name: "VocoAppTests",
+            dependencies: ["VocoApp", "VocoAppCore"],
+            path: "Tests/VocoAppTests"
         )
     ]
 )
