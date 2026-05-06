@@ -787,3 +787,14 @@ git commit -m "docs(native): mark doubao asr verification"
 - `VocoNativeApp` no longer wires `UnavailableTranscriptionProvider()` as the production transcription provider.
 - Live-provider smoke is opt-in with `VOCO_LIVE_DOUBAO_ASR=1` and does not leak raw API keys.
 - Final report uses status `DONE_WITH_CONCERNS` unless full binary audio streaming is implemented and verified with live Doubao credentials.
+
+## Verification Notes
+
+- Status: DONE_WITH_CONCERNS
+- `cd native && swift test`: PASS. XCTest reported `Executed 81 tests, with 1 test skipped and 0 failures (0 unexpected)`. The skipped test was `TranscriptionModelsTests/testLiveDoubaoSmokeIsExplicitlyOptIn`, which requires `VOCO_LIVE_DOUBAO_ASR=1`.
+- `packaging/tests/native_app_bundle_smoke.sh`: PASS. Key output: `ok: built native Swift app: debug`, `ok: generated native app icon: target/native/Voco.app/Contents/Resources/Voco.icns`, `ok: verified native Voco.app bundle: target/native/Voco.app`, `ok: native Voco.app bundle smoke passed`.
+- `git diff --check`: PASS with no output.
+- `codesign --verify --deep --strict target/native/Voco.app`: PASS with no output.
+- Live Doubao opt-in guard: default run `cd native && swift test --filter TranscriptionModelsTests/testLiveDoubaoSmokeIsExplicitlyOptIn` skipped with message `Set VOCO_LIVE_DOUBAO_ASR=1 to run the live Doubao native smoke test.` Opt-in without credentials failed clearly with `VOCO_LIVE_DOUBAO_ASR=1 requires VOCO_DOUBAO_API_KEY.`
+- Source guard: `rg "transcription: UnavailableTranscriptionProvider\\(\\)" native/Sources/VocoApp/VocoNativeApp.swift` exited non-zero, confirming the production app wiring no longer hard-codes the unavailable provider.
+- Live protocol concern: official Doubao docs were not directly readable in this environment because both official pages returned a JavaScript shell. The native Swift provider reads Keychain credentials, builds official-header WebSocket requests, classifies auth/config/network/provider errors, and uses an injectable transport, but it does not claim full binary audio streaming success. `URLSessionDoubaoTranscriptionTransport` performs the WebSocket handshake path and then throws a provider error after a successful handshake until the native binary frame/gzip audio protocol is completed or delegated to the already-tested Rust implementation.
