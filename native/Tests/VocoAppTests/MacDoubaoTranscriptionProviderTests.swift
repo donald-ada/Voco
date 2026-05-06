@@ -79,6 +79,74 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.headers["X-Api-Key"], "sk-test-secret")
         XCTAssertNil(transport.requests.first?.safeDebugDescription.range(of: "sk-test-secret"))
     }
+
+    func testURLSessionTransportFailsLoudlyAfterSuccessfulPingAndCancels() async throws {
+        let task = FakeDoubaoWebSocketTask()
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionRequest.make(
+            apiKey: "sk-test-secret",
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1]
+            )
+        )
+
+        do {
+            _ = try await transport.transcribe(request: request, progress: nil)
+            XCTFail("Expected provider foundation to fail loudly after handshake")
+        } catch {
+            XCTAssertEqual(
+                error as? TranscriptionProviderError,
+                .provider(
+                    providerName: "Doubao",
+                    message: "Native Doubao WebSocket handshake succeeded, but binary audio streaming is not enabled in this build."
+                )
+            )
+        }
+
+        XCTAssertEqual(session.requests.count, 1)
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
+        XCTAssertEqual(task.resumeCount, 1)
+        XCTAssertEqual(task.sendPingCount, 1)
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    func testURLSessionTransportMapsPingFailureAndCancels() async throws {
+        let task = FakeDoubaoWebSocketTask(pingError: URLError(.timedOut))
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
+        let request = try DoubaoTranscriptionRequest.make(
+            apiKey: "sk-test-secret",
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1]
+            )
+        )
+
+        do {
+            _ = try await transport.transcribe(request: request, progress: nil)
+            XCTFail("Expected transport failure")
+        } catch let providerError as TranscriptionProviderError {
+            guard case .transport(let providerName, let message, let retryable) = providerError else {
+                XCTFail("Expected transport error, got \(providerError)")
+                return
+            }
+            XCTAssertEqual(providerName, "Doubao")
+            XCTAssertTrue(message.contains("WebSocket connect to \(request.endpoint.absoluteString) failed"))
+            XCTAssertTrue(retryable)
+        } catch {
+            XCTFail("Expected TranscriptionProviderError, got \(error)")
+        }
+
+        XCTAssertEqual(task.resumeCount, 1)
+        XCTAssertEqual(task.sendPingCount, 1)
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
 }
 
 @MainActor
@@ -116,5 +184,48 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
         }
 
         return transcript
+    }
+}
+
+@MainActor
+private final class FakeDoubaoWebSocketSession: DoubaoWebSocketSessioning {
+    private let task: FakeDoubaoWebSocketTask
+    private(set) var requests: [URLRequest] = []
+
+    init(task: FakeDoubaoWebSocketTask) {
+        self.task = task
+    }
+
+    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking {
+        requests.append(request)
+        return task
+    }
+}
+
+@MainActor
+private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking {
+    private let pingError: Error?
+    private(set) var resumeCount = 0
+    private(set) var sendPingCount = 0
+    private(set) var cancelCodes: [URLSessionWebSocketTask.CloseCode] = []
+
+    init(pingError: Error? = nil) {
+        self.pingError = pingError
+    }
+
+    func resume() {
+        resumeCount += 1
+    }
+
+    func sendPing() async throws {
+        sendPingCount += 1
+
+        if let pingError {
+            throw pingError
+        }
+    }
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        cancelCodes.append(closeCode)
     }
 }

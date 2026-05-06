@@ -64,6 +64,7 @@ public final class AppCoordinator: ObservableObject {
     private let transcriptionCredentialStore: any TranscriptionCredentialStoring
     public let hotkeyBinding: HotkeyBinding
     public let hotkeyMode: HotkeyMode
+    private var activeTranscriptionSessionID: UUID?
 
     public init(
         hasCompletedOnboarding: Bool = false,
@@ -94,6 +95,7 @@ public final class AppCoordinator: ObservableObject {
         self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
+        self.activeTranscriptionSessionID = nil
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -219,6 +221,7 @@ public final class AppCoordinator: ObservableObject {
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
         do {
             transcriptionCredentials = try await transcriptionCredentialStore.saveAPIKey(apiKey, for: .doubao)
+            transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
             let message = error.localizedDescription
@@ -230,6 +233,7 @@ public final class AppCoordinator: ObservableObject {
     public func clearTranscriptionCredentials() async {
         do {
             transcriptionCredentials = try await transcriptionCredentialStore.deleteCredentials(for: .doubao)
+            transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
             let message = error.localizedDescription
@@ -322,11 +326,14 @@ public final class AppCoordinator: ObservableObject {
         }
 
         status = .transcribing
+        let transcriptionSessionID = UUID()
+        activeTranscriptionSessionID = transcriptionSessionID
 
         do {
             let result = try await recordingWorkflow.stopRecording { [weak self] partial in
-                self?.publishTranscriptPartial(partial)
+                self?.publishTranscriptPartial(partial, sessionID: transcriptionSessionID)
             }
+            activeTranscriptionSessionID = nil
             lastAudio = result.audio
             lastTranscript = result.transcript
             lastInjection = result.injection
@@ -342,6 +349,7 @@ public final class AppCoordinator: ObservableObject {
                 fail(result.injection.detail)
             }
         } catch {
+            activeTranscriptionSessionID = nil
             failFromWorkflowError(error)
         }
     }
@@ -355,7 +363,11 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    private func publishTranscriptPartial(_ partial: TranscriptPartialSnapshot) {
+    private func publishTranscriptPartial(_ partial: TranscriptPartialSnapshot, sessionID: UUID) {
+        guard status == .transcribing, activeTranscriptionSessionID == sessionID else {
+            return
+        }
+
         let baseTranscript = lastTranscript ?? TranscriptSnapshot(
             finalText: "",
             partials: [],

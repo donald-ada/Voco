@@ -46,9 +46,9 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding {
 
 @MainActor
 final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransporting {
-    private let session: URLSession
+    private let session: any DoubaoWebSocketSessioning
 
-    init(session: URLSession = .shared) {
+    init(session: any DoubaoWebSocketSessioning = URLSession.shared) {
         self.session = session
     }
 
@@ -65,7 +65,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
         task.resume()
 
         do {
-            try await sendHandshakePing(on: task)
+            try await task.sendPing()
         } catch {
             task.cancel(with: .goingAway, reason: nil)
             throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
@@ -78,9 +78,30 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
         )
     }
 
-    private func sendHandshakePing(on task: URLSessionWebSocketTask) async throws {
+}
+
+@MainActor
+protocol DoubaoWebSocketSessioning {
+    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking
+}
+
+@MainActor
+protocol DoubaoWebSocketTasking: AnyObject {
+    func resume()
+    func sendPing() async throws
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
+}
+
+extension URLSession: DoubaoWebSocketSessioning {
+    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking {
+        webSocketTask(with: request) as URLSessionWebSocketTask
+    }
+}
+
+extension URLSessionWebSocketTask: DoubaoWebSocketTasking {
+    func sendPing() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            task.sendPing { error in
+            sendPing { error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else {

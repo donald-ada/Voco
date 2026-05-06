@@ -798,3 +798,25 @@ git commit -m "docs(native): mark doubao asr verification"
 - Live Doubao opt-in guard: default run `cd native && swift test --filter TranscriptionModelsTests/testLiveDoubaoSmokeIsExplicitlyOptIn` skipped with message `Set VOCO_LIVE_DOUBAO_ASR=1 to run the live Doubao native smoke test.` Opt-in without credentials failed clearly with `VOCO_LIVE_DOUBAO_ASR=1 requires VOCO_DOUBAO_API_KEY.`
 - Source guard: `rg "transcription: UnavailableTranscriptionProvider\\(\\)" native/Sources/VocoApp/VocoNativeApp.swift` exited non-zero, confirming the production app wiring no longer hard-codes the unavailable provider.
 - Live protocol concern: official Doubao docs were not directly readable in this environment because both official pages returned a JavaScript shell. The native Swift provider reads Keychain credentials, builds official-header WebSocket requests, classifies auth/config/network/provider errors, and uses an injectable transport, but it does not claim full binary audio streaming success. `URLSessionDoubaoTranscriptionTransport` performs the WebSocket handshake path and then throws a provider error after a successful handshake until the native binary frame/gzip audio protocol is completed or delegated to the already-tested Rust implementation.
+
+## Code Review Fix Verification Notes
+
+- Status: DONE_WITH_CONCERNS
+- RED evidence:
+  - `cd native && swift test --filter AppCoordinatorTests/testLatePartialAfterStopCompletionDoesNotChangeTranscriptOrHUD`: failed because late partial appended `"late partial"` to `lastTranscript.partials` and changed HUD preview from `"final partial"` to `"late partial"`.
+  - `cd native && swift test --filter AppCoordinatorTests/testSavingTranscriptionCredentialRefreshesProviderStatus`: failed because provider status stayed `authenticationRequired(providerName: "Doubao")` after save.
+  - `cd native && swift test --filter AppCoordinatorTests/testClearingTranscriptionCredentialRefreshesProviderStatus`: failed because provider status stayed `ready(providerName: "Doubao")` after clear.
+  - `cd native && swift test --filter MacDoubaoTranscriptionProviderTests/testURLSessionTransport`: failed to compile because `DoubaoWebSocketSessioning` / `DoubaoWebSocketTasking` did not exist and `URLSessionDoubaoTranscriptionTransport` only accepted `URLSession`.
+- GREEN evidence:
+  - `cd native && swift test --filter AppCoordinatorTests/testLatePartialAfterStopCompletionDoesNotChangeTranscriptOrHUD`: PASS, 1 test, 0 failures.
+  - `cd native && swift test --filter AppCoordinatorTests/testSavingTranscriptionCredentialRefreshesProviderStatus`: PASS, 1 test, 0 failures.
+  - `cd native && swift test --filter AppCoordinatorTests/testClearingTranscriptionCredentialRefreshesProviderStatus`: PASS, 1 test, 0 failures.
+  - `cd native && swift test --filter MacDoubaoTranscriptionProviderTests/testURLSessionTransport`: PASS, 2 tests, 0 failures.
+  - `cd native && swift test --filter AppCoordinatorTests`: PASS, 29 tests, 0 failures.
+  - `cd native && swift test --filter MacDoubaoTranscriptionProviderTests`: PASS, 5 tests, 0 failures.
+- Full verification:
+  - `cd native && swift test`: PASS. XCTest reported `Executed 86 tests, with 1 test skipped and 0 failures (0 unexpected)`.
+  - `cd native && swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warn-concurrency`: PASS. XCTest reported `Executed 86 tests, with 1 test skipped and 0 failures (0 unexpected)`.
+  - `packaging/tests/native_app_bundle_smoke.sh`: PASS. Key output: `ok: verified native Voco.app bundle: target/native/Voco.app`, `ok: native Voco.app bundle smoke passed`.
+  - `git diff --check`: PASS with no output.
+  - `codesign --verify --deep --strict target/native/Voco.app`: PASS with no output.

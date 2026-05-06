@@ -362,6 +362,53 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testLatePartialAfterStopCompletionDoesNotChangeTranscriptOrHUD() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
+            transcript: TranscriptSnapshot(
+                finalText: "",
+                partials: ["final partial"],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 33
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted through unicode events"
+            )
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(
+            result: result,
+            partialsToEmit: [
+                TranscriptPartialSnapshot(
+                    text: "live partial",
+                    stablePrefixLength: 0,
+                    providerName: "Fake ASR"
+                )
+            ]
+        )
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+        let transcriptAfterCompletion = coordinator.lastTranscript
+        let hudAfterCompletion = coordinator.hudSnapshot
+
+        recordingWorkflow.emitStoredPartial(
+            TranscriptPartialSnapshot(
+                text: "late partial",
+                stablePrefixLength: 0,
+                providerName: "Fake ASR"
+            )
+        )
+
+        XCTAssertEqual(coordinator.lastTranscript, transcriptAfterCompletion)
+        XCTAssertEqual(coordinator.hudSnapshot, hudAfterCompletion)
+    }
+
+    @MainActor
     func testRecordingWorkflowStartFailureSurfacesError() async {
         let recordingWorkflow = FakeRecordingWorkflow(startError: RecordingWorkflowError("microphone unavailable"))
         let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
@@ -426,6 +473,46 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.lastErrorMessage)
         let clearedAPIKey = try await credentialStore.apiKey(for: .doubao)
         XCTAssertNil(clearedAPIKey)
+    }
+
+    @MainActor
+    func testSavingTranscriptionCredentialRefreshesProviderStatus() async {
+        let credentialStore = InMemoryTranscriptionCredentialStore()
+        let recordingWorkflow = FakeRecordingWorkflow(
+            transcriptionStatus: .authenticationRequired(providerName: "Doubao")
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            transcriptionCredentialStore: credentialStore,
+            recordingWorkflow: recordingWorkflow
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
+
+        recordingWorkflow.transcriptionStatus = .ready(providerName: "Doubao")
+        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
+
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "Doubao"))
+    }
+
+    @MainActor
+    func testClearingTranscriptionCredentialRefreshesProviderStatus() async {
+        let credentialStore = InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
+        let recordingWorkflow = FakeRecordingWorkflow(
+            transcriptionStatus: .ready(providerName: "Doubao")
+        )
+        let coordinator = AppCoordinator(
+            hasCompletedOnboarding: true,
+            transcriptionCredentialStore: credentialStore,
+            recordingWorkflow: recordingWorkflow
+        )
+        coordinator.finishLaunching()
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "Doubao"))
+
+        recordingWorkflow.transcriptionStatus = .authenticationRequired(providerName: "Doubao")
+        await coordinator.clearTranscriptionCredentials()
+
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
     }
 
     @MainActor
@@ -596,11 +683,12 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     let result: RecordingWorkflowResult
-    let transcriptionStatus: TranscriptionProviderStatus
+    var transcriptionStatus: TranscriptionProviderStatus
     let startError: Error?
     let stopError: Error?
     let partialsToEmit: [TranscriptPartialSnapshot]
     let pauseAfterPartials: Bool
+    private var storedProgress: TranscriptionProgressHandler?
     private var didEmitPartials = false
     private var partialsEmittedContinuation: CheckedContinuation<Void, Never>?
     private var stopContinuation: CheckedContinuation<Void, Never>?
@@ -635,6 +723,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
 
     func stopRecording(progress: TranscriptionProgressHandler? = nil) async throws -> RecordingWorkflowResult {
         stopCount += 1
+        storedProgress = progress
 
         if let stopError {
             throw stopError
@@ -669,6 +758,10 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     func resumeStop() {
         stopContinuation?.resume()
         stopContinuation = nil
+    }
+
+    func emitStoredPartial(_ partial: TranscriptPartialSnapshot) {
+        storedProgress?(partial)
     }
 }
 
