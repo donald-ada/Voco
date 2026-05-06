@@ -30,7 +30,11 @@ struct VocoNativeApp: App {
                 "登录时启动",
                 isOn: Binding(
                     get: { coordinator.launchAtLoginEnabled },
-                    set: { coordinator.setLaunchAtLoginEnabled($0) }
+                    set: { enabled in
+                        Task {
+                            await coordinator.setLaunchAtLoginEnabled(enabled)
+                        }
+                    }
                 )
             )
 

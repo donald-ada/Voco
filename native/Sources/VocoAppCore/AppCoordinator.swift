@@ -46,23 +46,26 @@ public struct MenuBarSnapshot: Equatable, Sendable {
 public final class AppCoordinator: ObservableObject {
     @Published public private(set) var status: AppRuntimeStatus
     @Published public private(set) var lastErrorMessage: String?
-    @Published public private(set) var launchAtLoginEnabled: Bool
+    @Published public private(set) var launchAtLoginState: LaunchAtLoginState
     @Published public private(set) var permissions: [PermissionSnapshot]
 
     private let hasCompletedOnboarding: Bool
     private let permissionProvider: any PermissionProviding
+    private let launchAtLoginProvider: any LaunchAtLoginProviding
 
     public init(
         hasCompletedOnboarding: Bool = false,
         launchAtLoginEnabled: Bool = false,
-        permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted
+        permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted,
+        launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider()
     ) {
         self.status = .launching
         self.lastErrorMessage = nil
-        self.launchAtLoginEnabled = launchAtLoginEnabled
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.permissionProvider = permissionProvider
+        self.launchAtLoginProvider = launchAtLoginProvider
         self.permissions = permissionProvider.currentSnapshots()
+        self.launchAtLoginState = launchAtLoginEnabled ? .enabled : launchAtLoginProvider.currentState()
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -84,9 +87,14 @@ public final class AppCoordinator: ObservableObject {
         PermissionSummary(snapshots: permissions)
     }
 
+    public var launchAtLoginEnabled: Bool {
+        launchAtLoginState.isEnabled
+    }
+
     public func finishLaunching() {
         lastErrorMessage = nil
         permissions = permissionProvider.currentSnapshots()
+        launchAtLoginState = launchAtLoginProvider.currentState()
         status = hasCompletedOnboarding && permissionSummary.allRequiredGranted ? .ready : .needsOnboarding
     }
 
@@ -138,8 +146,15 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    public func setLaunchAtLoginEnabled(_ enabled: Bool) {
-        launchAtLoginEnabled = enabled
+    public func setLaunchAtLoginEnabled(_ enabled: Bool) async {
+        do {
+            launchAtLoginState = try await launchAtLoginProvider.setEnabled(enabled)
+            lastErrorMessage = nil
+        } catch {
+            let message = error.localizedDescription
+            launchAtLoginState = .failed(message)
+            lastErrorMessage = "登录时启动设置失败：\(message)"
+        }
     }
 
     public func fail(_ message: String) {

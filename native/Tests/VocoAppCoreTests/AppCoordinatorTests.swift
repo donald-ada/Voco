@@ -66,18 +66,37 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchAtLoginToggleIsStatefulForTheShell() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+    func testLaunchAtLoginToggleUsesProviderState() async {
+        let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, launchAtLoginProvider: launchProvider)
 
         XCTAssertFalse(coordinator.launchAtLoginEnabled)
+        XCTAssertEqual(coordinator.launchAtLoginState, .disabled)
 
-        coordinator.setLaunchAtLoginEnabled(true)
+        await coordinator.setLaunchAtLoginEnabled(true)
 
         XCTAssertTrue(coordinator.launchAtLoginEnabled)
+        XCTAssertEqual(coordinator.launchAtLoginState, .enabled)
+        XCTAssertEqual(launchProvider.requests, [true])
 
-        coordinator.setLaunchAtLoginEnabled(false)
+        await coordinator.setLaunchAtLoginEnabled(false)
 
         XCTAssertFalse(coordinator.launchAtLoginEnabled)
+        XCTAssertEqual(coordinator.launchAtLoginState, .disabled)
+        XCTAssertEqual(launchProvider.requests, [true, false])
+    }
+
+    @MainActor
+    func testLaunchAtLoginFailureSurfacesErrorAndRestoresProviderState() async {
+        let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
+        launchProvider.error = LaunchAtLoginTestError.failed
+        let coordinator = AppCoordinator(hasCompletedOnboarding: true, launchAtLoginProvider: launchProvider)
+
+        await coordinator.setLaunchAtLoginEnabled(true)
+
+        XCTAssertFalse(coordinator.launchAtLoginEnabled)
+        XCTAssertEqual(coordinator.launchAtLoginState, .failed("failed"))
+        XCTAssertEqual(coordinator.lastErrorMessage, "登录时启动设置失败：failed")
     }
 
     @MainActor
@@ -203,5 +222,38 @@ private final class FakePermissionProvider: PermissionProviding {
 
     func requestMicrophoneAccess() async -> [PermissionSnapshot] {
         requested
+    }
+}
+
+private final class FakeLaunchAtLoginProvider: LaunchAtLoginProviding {
+    var state: LaunchAtLoginState
+    var error: Error?
+    private(set) var requests: [Bool] = []
+
+    init(initialState: LaunchAtLoginState) {
+        self.state = initialState
+    }
+
+    func currentState() -> LaunchAtLoginState {
+        state
+    }
+
+    func setEnabled(_ enabled: Bool) async throws -> LaunchAtLoginState {
+        requests.append(enabled)
+
+        if let error {
+            throw error
+        }
+
+        state = enabled ? .enabled : .disabled
+        return state
+    }
+}
+
+private enum LaunchAtLoginTestError: LocalizedError {
+    case failed
+
+    var errorDescription: String? {
+        "failed"
     }
 }
