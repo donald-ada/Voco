@@ -1,0 +1,27 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "VocoNative",
+    platforms: [.macOS(.v14)],
+    products: [
+        .library(name: "VocoAppCore", targets: ["VocoAppCore"]),
+        .executable(name: "Voco", targets: ["VocoApp"])
+    ],
+    targets: [
+        .target(
+            name: "VocoAppCore",
+            path: "Sources/VocoAppCore"
+        ),
+        .executableTarget(
+            name: "VocoApp",
+            dependencies: ["VocoAppCore"],
+            path: "Sources/VocoApp"
+        ),
+        .testTarget(
+            name: "VocoAppCoreTests",
+            dependencies: ["VocoAppCore"],
+            path: "Tests/VocoAppCoreTests"
+        )
+    ]
+)
