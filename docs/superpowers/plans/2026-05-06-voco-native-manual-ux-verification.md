@@ -301,10 +301,84 @@ git commit -m "docs(native): record native manual ux verification"
 
 ## Final Verification
 
-Status before final Task 8 recording:
+Task 8 final recording completed from `/private/tmp/voco-native-manual-ux-verification` on 2026-05-06.
 
 ```text
-PENDING: final acceptance commands not yet recorded in this plan.
-PENDING: manual clean-account UI verification not executed in this non-interactive agent run.
-PENDING: Developer ID/notarized Gatekeeper verification not executed without release credentials and notarization ticket.
+Environment:
+macOS: macOS 26.4.1, BuildVersion 25E253
+Machine: MacBookPro18,1, arm64
+Voco build hash under test: c1b018a
+App path: /private/tmp/voco-native-manual-ux-verification/dist/Voco.app
+DMG path: /private/tmp/voco-native-manual-ux-verification/dist/Voco.dmg
+Signing status: ad-hoc; Signature=adhoc; TeamIdentifier=not set; flags=0x2(adhoc)
+
+Checklist summary:
+PASS=14
+FAIL=0
+BLOCKED=20
 ```
+
+Automated acceptance gate:
+
+```text
+cd native && swift test
+PASS: XCTest reported 140 tests executed, 1 test skipped, 0 failures.
+
+packaging/tests/native_app_bundle_smoke.sh
+PASS: output included ok: verified native Voco.app bundle: target/native/Voco.app
+PASS: output ended with ok: native Voco.app bundle smoke passed
+
+packaging/tests/native_dmg_smoke.sh
+PASS: rebuilt /private/tmp/voco-native-manual-ux-verification/dist/Voco.dmg
+PASS: hdiutil verified the DMG checksum
+PASS: output ended with ok: native Voco.dmg smoke passed
+
+git diff --check
+PASS: exited 0 with no whitespace errors.
+```
+
+Local artifact checks after the DMG smoke rebuilt `dist/`:
+
+```text
+codesign --verify --deep --strict dist/Voco.app
+PASS: exited 0; recorded as dist app codesign verify: PASS.
+
+hdiutil verify dist/Voco.dmg
+PASS: reported checksum of "dist/Voco.dmg" is VALID.
+
+codesign --verify --strict dist/Voco.dmg
+PASS: exited 0; recorded as dist dmg codesign verify: PASS.
+```
+
+Developer ID and notarization prerequisites:
+
+```text
+VOCO_DEVELOPER_ID_APPLICATION=missing
+VOCO_DEVELOPER_ID_DMG=missing
+VOCO_NOTARYTOOL_PROFILE=missing
+VOCO_NOTARYTOOL_APPLE_ID=missing
+VOCO_NOTARYTOOL_TEAM_ID=missing
+VOCO_NOTARYTOOL_PASSWORD=missing
+```
+
+Release-only verification status:
+
+```text
+BLOCKED: spctl --assess --type execute --verbose=4 dist/Voco.app
+BLOCKED: xcrun stapler validate dist/Voco.dmg
+BLOCKED: spctl --assess --type open --verbose=4 dist/Voco.dmg
+```
+
+Reason: current smoke artifacts are ad-hoc signed and not notarized. Developer ID identities, notarytool credentials, and a stapled notarization ticket were unavailable in this worktree environment. These rows are tracked by `FU-RELEASE-01` in `docs/superpowers/native-manual-ux-checklist.md`.
+
+Manual UX status:
+
+```text
+BLOCKED: first launch menu bar, Dock, Settings-on-demand, and DMG run-location warning.
+BLOCKED: microphone prompt and Accessibility/Input Monitoring recovery links.
+BLOCKED: global hotkey recording, focus retention, HUD placement, and streaming partial transcript observation.
+BLOCKED: TextEdit, Safari, Notes, and terminal editor insertion matrix.
+BLOCKED: launch-at-login after logout/login and menu bar item removal on quit.
+```
+
+Reason: this was a non-interactive agent run, not a clean macOS account with UI interaction. No true manual UX PASS is claimed. Manual follow-up gates are tracked by `FU-MANUAL-01` through `FU-MANUAL-05`, `FU-TCC-01`, and `FU-ASR-01` in `docs/superpowers/native-manual-ux-checklist.md`.

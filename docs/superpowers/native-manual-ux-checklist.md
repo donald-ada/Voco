@@ -69,6 +69,15 @@ Manual UX checks in this file are not claimed as passed because this agent run d
 | stapler DMG validation | BLOCKED | Not run because current DMG is not notarized | notarytool credentials and notarization ticket are missing | FU-RELEASE-01 |
 | spctl DMG assessment | BLOCKED | Not run as release Gatekeeper evidence against non-notarized DMG | Developer ID/notarized release DMG is unavailable | FU-RELEASE-01 |
 
+## Automated Final Acceptance Gate
+
+| Check | Status | Result | Evidence | Follow-up |
+| --- | --- | --- | --- | --- |
+| `cd native && swift test` | PASS | 140 tests executed, 0 failures, 1 live Doubao opt-in test skipped | XCTest reported `Executed 140 tests, with 1 test skipped and 0 failures` | None |
+| `packaging/tests/native_app_bundle_smoke.sh` | PASS | Native app bundle smoke passed | Output ended with `ok: native Voco.app bundle smoke passed` | None |
+| `packaging/tests/native_dmg_smoke.sh` | PASS | Native DMG smoke passed | Output ended with `ok: native Voco.dmg smoke passed` | None |
+| `git diff --check` | PASS | No whitespace errors | Command exited 0 with no output | None |
+
 ## Follow-Up Gates
 
 | ID | Status | Scope | Required before release |
@@ -85,8 +94,10 @@ Manual UX checks in this file are not claimed as passed because this agent run d
 
 ## Current Summary
 
+Counts include the required checklist matrix and automated final acceptance rows. Counts exclude Follow-Up Gates and this summary table.
+
 | Status | Count |
 | --- | ---: |
-| PASS | 10 |
+| PASS | 14 |
 | FAIL | 0 |
 | BLOCKED | 20 |
