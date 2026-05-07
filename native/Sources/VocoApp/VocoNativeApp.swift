@@ -34,13 +34,13 @@ struct VocoNativeApp: App {
     }
 
     init() {
-        NSApplication.shared.setActivationPolicy(.accessory)
         SettingsWorkbenchFontRegistrar.registerBundledFonts()
         let permissionProvider = MacPermissionProvider()
         let credentialStore = MacKeychainCredentialStore()
         let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
         let voiceInputPreferences = MacVoiceInputPreferenceStore()
         let appPreferences = MacAppPreferenceStore()
+        MacDockPresentationController.apply(displayInDockEnabled: appPreferences.displayInDockEnabled)
         let audioCapture = MacAudioCaptureEngine()
         if let audioInputDevice = voiceInputPreferences.audioInputDevice {
             audioCapture.setInputDevice(audioInputDevice)

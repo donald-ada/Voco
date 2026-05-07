@@ -30,6 +30,10 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
     }
 }
 
+public enum SettingsWorkbenchActionTitle {
+    public static let checkMicrophone = "检查麦克风"
+}
+
 public enum SettingsWorkbenchSectionStatus: Equatable, Sendable {
     case ok
     case needsAttention
@@ -104,7 +108,9 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                 detail: requiredMissing.kind == .accessibility
                     ? "Voco 可以录音，但不能稳定插入当前输入框。"
                     : "\(requiredMissing.kind.title)权限缺失，语音输入链路无法完成。",
-                primaryActionTitle: requiredMissing.kind.recoveryActionTitle
+                primaryActionTitle: requiredMissing.kind == .microphone
+                    ? SettingsWorkbenchActionTitle.checkMicrophone
+                    : requiredMissing.kind.recoveryActionTitle
             )
         } else if !credentials.hasCredential || credentials.lastErrorMessage != nil {
             overview = SettingsWorkbenchOverviewSnapshot(

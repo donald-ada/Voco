@@ -655,6 +655,19 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorLoadsAndPersistsDisplayInDockPreference() {
+        let preferences = FakeAppPreferenceStore(displayInDockEnabled: true)
+        let coordinator = AppCoordinator(appPreferenceStore: preferences)
+
+        XCTAssertTrue(coordinator.displayInDockEnabled)
+
+        coordinator.setDisplayInDockEnabled(false)
+
+        XCTAssertFalse(coordinator.displayInDockEnabled)
+        XCTAssertEqual(preferences.savedDisplayInDockValues, [false])
+    }
+
+    @MainActor
     func testCoordinatorSettingsSnapshotsReflectRecentRuntimeState() async {
         let result = RecordingWorkflowResult(
             audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),
@@ -1047,15 +1060,23 @@ private final class FakeVoiceInputPreferenceStore: VoiceInputPreferenceStoring {
 @MainActor
 private final class FakeAppPreferenceStore: AppPreferenceStoring {
     private(set) var silentLaunchEnabled: Bool
+    private(set) var displayInDockEnabled: Bool
     private(set) var savedSilentLaunchValues: [Bool] = []
+    private(set) var savedDisplayInDockValues: [Bool] = []
 
-    init(silentLaunchEnabled: Bool = false) {
+    init(silentLaunchEnabled: Bool = false, displayInDockEnabled: Bool = false) {
         self.silentLaunchEnabled = silentLaunchEnabled
+        self.displayInDockEnabled = displayInDockEnabled
     }
 
     func saveSilentLaunchEnabled(_ enabled: Bool) {
         silentLaunchEnabled = enabled
         savedSilentLaunchValues.append(enabled)
+    }
+
+    func saveDisplayInDockEnabled(_ enabled: Bool) {
+        displayInDockEnabled = enabled
+        savedDisplayInDockValues.append(enabled)
     }
 }
 

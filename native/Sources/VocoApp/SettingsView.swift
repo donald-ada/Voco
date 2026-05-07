@@ -90,13 +90,7 @@ struct SettingsView: View {
                 eyebrow: "SETTINGS",
                 title: "语音输入体验",
                 detail: "配置开始录音的按键、触发方式、麦克风输入和 macOS 权限。"
-            ) {
-                Button {
-                    startTestRecordingFromSettings()
-                } label: {
-                    Label("试录 3 秒", systemImage: "waveform")
-                }
-            }
+            )
 
             workbenchPanel(
                 title: "录音控制",
@@ -486,6 +480,27 @@ struct SettingsView: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
                 }
+
+                VoiceInputSettingRow(
+                    label: "在 Dock 中显示",
+                    title: coordinator.displayInDockEnabled ? "已显示" : "已隐藏",
+                    detail: "启用后，Voco 会出现在 Dock 和应用切换器中。",
+                    systemImage: coordinator.displayInDockEnabled ? "dock.rectangle" : "dock.rectangle",
+                    color: SettingsWorkbenchVisual.neutral
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { coordinator.displayInDockEnabled },
+                            set: { enabled in
+                                coordinator.setDisplayInDockEnabled(enabled)
+                                MacDockPresentationController.apply(displayInDockEnabled: enabled)
+                            }
+                        )
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
             }
         }
     }
@@ -541,13 +556,13 @@ struct SettingsView: View {
     private var credentialFields: some View {
         switch selectedVolcengineCredentialMode {
         case .apiKey:
-            SecureField("火山引擎 API Key", text: $transcriptionAPIKey)
+            SecureField("输入火山引擎 API Key", text: $transcriptionAPIKey)
                 .workbenchCredentialField()
         case .appIDAccessToken:
-            TextField("火山引擎 App ID", text: $volcengineAppID)
+            TextField("输入火山引擎 App ID", text: $volcengineAppID)
                 .workbenchCredentialField()
 
-            SecureField("火山引擎 Access Token", text: $volcengineAccessToken)
+            SecureField("输入火山引擎 Access Token", text: $volcengineAccessToken)
                 .workbenchCredentialField()
         }
     }
@@ -640,21 +655,21 @@ struct SettingsView: View {
     private func performOverviewPrimaryAction() {
         let title = coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle
 
-        if title == PermissionKind.microphone.recoveryActionTitle {
-            openSettings(for: .microphone)
-        } else if title == PermissionKind.accessibility.recoveryActionTitle {
+        switch SettingsOverviewPrimaryActionResolver.resolve(title: title) {
+        case .requestMicrophonePermission:
+            Task {
+                await coordinator.requestMicrophonePermission()
+            }
+        case .openAccessibilitySettings:
             openSettings(for: .accessibility)
-        } else if title == "前往设置" ||
-            title.contains("输入") {
+        case .selectSettings:
             selectedSection = .settings
-        } else if title == "前往模型" ||
-            title.contains("模型") ||
-            title.contains("Keychain") {
+        case .selectModel:
             selectedSection = .model
-        } else if title == "重新检查" {
+        case .refresh:
             coordinator.prepareForSettingsPresentation()
             settingsFeedbackMessage = "已重新检查状态。"
-        } else {
+        case .startTestRecording:
             startTestRecordingFromSettings()
         }
     }
@@ -1000,9 +1015,11 @@ private struct WorkbenchMenuControlLabel: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "chevron.up.chevron.down")
-                .font(SettingsWorkbenchVisual.tinyBoldFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+            Image(systemName: "chevron.down")
+                .font(SettingsWorkbenchVisual.caption2BoldFont)
+                .foregroundStyle(Color.white)
+                .frame(width: 22, height: 22)
+                .background(SettingsWorkbenchVisual.primaryText, in: Circle())
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: 34)
@@ -1351,12 +1368,6 @@ private struct SettingsOverviewRecoveryCard: View {
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .lineLimit(2)
 
-            Text(snapshot.overview.detail)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-
             HStack(spacing: 8) {
                 Button(snapshot.overview.primaryActionTitle, action: primaryAction)
                     .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
@@ -1413,8 +1424,6 @@ private struct VoiceInputFlowPreview: View {
                 }
 
                 Spacer()
-
-                WorkbenchStatusPill("实时路径", color: SettingsWorkbenchVisual.accent)
             }
 
             VStack(spacing: 8) {

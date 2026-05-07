@@ -50,6 +50,26 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.status(for: .settings), .needsAttention)
     }
 
+    func testMicrophonePermissionProblemUsesPromptRecoveryAction() {
+        let snapshot = SettingsWorkbenchSnapshot.make(
+            statusTitle: "需要权限",
+            permissions: [
+                .microphone(.notDetermined),
+                .accessibility(.granted),
+            ],
+            hotkeyState: .permissionNeeded,
+            hotkeyBinding: .default,
+            hotkeyMode: .toggle,
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
+            injection: nil,
+            lastErrorMessage: nil
+        )
+
+        XCTAssertEqual(snapshot.overview.title, "麦克风权限缺失")
+        XCTAssertEqual(snapshot.overview.primaryActionTitle, SettingsWorkbenchActionTitle.checkMicrophone)
+    }
+
     func testMissingVolcengineCredentialBecomesOverviewBlockerWhenPermissionsAreReady() {
         let snapshot = SettingsWorkbenchSnapshot.make(
             statusTitle: "就绪",

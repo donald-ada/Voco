@@ -14,7 +14,19 @@ final class AppPreferenceModelsTests: XCTestCase {
         )
     }
 
+    func testDockPresentationPolicyHidesDockIconByDefault() {
+        XCTAssertEqual(
+            AppDockPresentationPolicy(displayInDockEnabled: false).action,
+            .hideFromDock
+        )
+        XCTAssertEqual(
+            AppDockPresentationPolicy(displayInDockEnabled: true).action,
+            .showInDock
+        )
+    }
+
     func testNoOpAppPreferenceStoreDefaultsToVisibleLaunch() {
         XCTAssertFalse(NoOpAppPreferenceStore().silentLaunchEnabled)
+        XCTAssertFalse(NoOpAppPreferenceStore().displayInDockEnabled)
     }
 }

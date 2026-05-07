@@ -61,6 +61,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var hotkeyMode: HotkeyMode
     @Published public private(set) var selectedAudioInputDevice: AudioInputDeviceSelection
     @Published public private(set) var silentLaunchEnabled: Bool
+    @Published public private(set) var displayInDockEnabled: Bool
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -125,6 +126,7 @@ public final class AppCoordinator: ObservableObject {
         self.hotkeyMode = hotkeyMode
         self.selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
         self.silentLaunchEnabled = appPreferenceStore.silentLaunchEnabled
+        self.displayInDockEnabled = appPreferenceStore.displayInDockEnabled
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -301,6 +303,11 @@ public final class AppCoordinator: ObservableObject {
     public func setSilentLaunchEnabled(_ enabled: Bool) {
         silentLaunchEnabled = enabled
         appPreferenceStore.saveSilentLaunchEnabled(enabled)
+    }
+
+    public func setDisplayInDockEnabled(_ enabled: Bool) {
+        displayInDockEnabled = enabled
+        appPreferenceStore.saveDisplayInDockEnabled(enabled)
     }
 
     public func setHotkeyPreset(_ preset: HotkeyPreset) {
