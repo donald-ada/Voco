@@ -12,13 +12,13 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
 
     func currentSnapshot() -> TranscriptionCredentialSnapshot {
         do {
-            guard let credential = try readCredential(for: .doubao) else {
-                return .missing(provider: .doubao)
+            guard let credential = try readCredential(for: .volcengine) else {
+                return .missing(provider: .volcengine)
             }
 
-            return .stored(provider: .doubao, credential: credential)
+            return .stored(provider: .volcengine, credential: credential)
         } catch {
-            return .failed(provider: .doubao, message: error.localizedDescription)
+            return .failed(provider: .volcengine, message: error.localizedDescription)
         }
     }
 
@@ -34,7 +34,7 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
             throw TranscriptionCredentialError.storeFailed(message: error.localizedDescription)
         }
         let updateStatus = SecItemUpdate(
-            baseQuery(for: provider) as CFDictionary,
+            baseQuery(account: keychainAccount(for: provider)) as CFDictionary,
             [kSecValueData as String: data] as CFDictionary
         )
 
@@ -42,7 +42,7 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
         case errSecSuccess:
             return .stored(provider: provider, credential: normalizedCredential)
         case errSecItemNotFound:
-            var addQuery = baseQuery(for: provider)
+            var addQuery = baseQuery(account: keychainAccount(for: provider))
             addQuery[kSecValueData as String] = data
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -58,9 +58,11 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
     }
 
     func deleteCredentials(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredentialSnapshot {
-        let status = SecItemDelete(baseQuery(for: provider) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw TranscriptionCredentialError.deleteFailed(message: statusMessage(status))
+        for account in keychainAccountsToRead(for: provider) {
+            let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw TranscriptionCredentialError.deleteFailed(message: statusMessage(status))
+            }
         }
 
         return .missing(provider: provider)
@@ -71,7 +73,17 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
     }
 
     private func readCredential(for provider: TranscriptionCredentialProvider) throws -> TranscriptionCredential? {
-        var query = baseQuery(for: provider)
+        for account in keychainAccountsToRead(for: provider) {
+            if let credential = try readCredential(account: account) {
+                return credential
+            }
+        }
+
+        return nil
+    }
+
+    private func readCredential(account: String) throws -> TranscriptionCredential? {
+        var query = baseQuery(account: account)
         query[kSecReturnData as String] = kCFBooleanTrue
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -96,7 +108,7 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
                 return nil
             }
 
-            return .doubaoAPIKey(trimmedLegacyAPIKey)
+            return .volcengineAPIKey(trimmedLegacyAPIKey)
         case errSecItemNotFound:
             return nil
         default:
@@ -104,11 +116,22 @@ final class MacKeychainCredentialStore: TranscriptionCredentialStoring {
         }
     }
 
-    private func baseQuery(for provider: TranscriptionCredentialProvider) -> [String: Any] {
+    private func keychainAccount(for provider: TranscriptionCredentialProvider) -> String {
+        provider.rawValue
+    }
+
+    private func keychainAccountsToRead(for provider: TranscriptionCredentialProvider) -> [String] {
+        switch provider {
+        case .volcengine:
+            ["volcengine", "doubao"]
+        }
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue
+            kSecAttrAccount as String: account
         ]
     }
 

@@ -272,7 +272,7 @@ final class RecordingWorkflowTests: XCTestCase {
             )
             XCTFail("Expected unavailable provider to throw")
         } catch {
-            XCTAssertEqual(error.localizedDescription, "转写服务未配置：请先在设置中配置 ASR provider。")
+            XCTAssertEqual(error.localizedDescription, "模型未配置：请先在设置中配置火山引擎凭证。")
         }
 
         XCTAssertEqual(provider.status, .notConfigured)

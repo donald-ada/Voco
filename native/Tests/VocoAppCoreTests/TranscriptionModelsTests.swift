@@ -7,62 +7,62 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(TranscriptionProviderStatus.notConfigured.systemImage, "exclamationmark.triangle")
         XCTAssertFalse(TranscriptionProviderStatus.notConfigured.isUsable)
 
-        XCTAssertEqual(TranscriptionProviderStatus.ready(providerName: "Doubao").title, "Doubao")
-        XCTAssertEqual(TranscriptionProviderStatus.ready(providerName: "Doubao").detail, "转写服务已配置")
-        XCTAssertTrue(TranscriptionProviderStatus.ready(providerName: "Doubao").isUsable)
+        XCTAssertEqual(TranscriptionProviderStatus.ready(providerName: "火山引擎").title, "火山引擎")
+        XCTAssertEqual(TranscriptionProviderStatus.ready(providerName: "火山引擎").detail, "模型已配置")
+        XCTAssertTrue(TranscriptionProviderStatus.ready(providerName: "火山引擎").isUsable)
 
-        XCTAssertEqual(TranscriptionProviderStatus.authenticationRequired(providerName: "Doubao").title, "Doubao 需要认证")
-        XCTAssertFalse(TranscriptionProviderStatus.authenticationRequired(providerName: "Doubao").isUsable)
+        XCTAssertEqual(TranscriptionProviderStatus.authenticationRequired(providerName: "火山引擎").title, "火山引擎需要认证")
+        XCTAssertFalse(TranscriptionProviderStatus.authenticationRequired(providerName: "火山引擎").isUsable)
     }
 
     func testProviderErrorsAreLocalizedAndClassified() {
         XCTAssertEqual(
             TranscriptionProviderError.notConfigured.localizedDescription,
-            "转写服务未配置：请先在设置中配置 ASR provider。"
+            "模型未配置：请先在设置中配置火山引擎凭证。"
         )
         XCTAssertEqual(
-            TranscriptionProviderError.authentication(providerName: "Doubao", message: "invalid token").localizedDescription,
-            "Doubao 认证失败：invalid token"
+            TranscriptionProviderError.authentication(providerName: "火山引擎", message: "invalid token").localizedDescription,
+            "火山引擎认证失败：invalid token"
         )
-        XCTAssertTrue(TranscriptionProviderError.transport(providerName: "Doubao", message: "timeout", retryable: true).isRetryable)
-        XCTAssertFalse(TranscriptionProviderError.authentication(providerName: "Doubao", message: "invalid token").isRetryable)
+        XCTAssertTrue(TranscriptionProviderError.transport(providerName: "火山引擎", message: "timeout", retryable: true).isRetryable)
+        XCTAssertFalse(TranscriptionProviderError.authentication(providerName: "火山引擎", message: "invalid token").isRetryable)
     }
 
     func testTranscriptSnapshotAppendsNonEmptyPartials() {
         let base = TranscriptSnapshot(
             finalText: "",
             partials: [],
-            providerName: "Doubao",
+            providerName: "火山引擎",
             latencyMilliseconds: nil
         )
 
         let updated = base.appendingPartial(
-            TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "Doubao")
+            TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "火山引擎")
         )
 
         XCTAssertEqual(updated.finalText, "")
         XCTAssertEqual(updated.partials, ["你好"])
-        XCTAssertEqual(updated.providerName, "Doubao")
+        XCTAssertEqual(updated.providerName, "火山引擎")
     }
 
     func testTranscriptSnapshotIgnoresBlankPartials() {
         let base = TranscriptSnapshot(
             finalText: "",
             partials: ["你好"],
-            providerName: "Doubao",
+            providerName: "火山引擎",
             latencyMilliseconds: nil
         )
 
         let updated = base.appendingPartial(
-            TranscriptPartialSnapshot(text: " \n ", stablePrefixLength: 0, providerName: "Doubao")
+            TranscriptPartialSnapshot(text: " \n ", stablePrefixLength: 0, providerName: "火山引擎")
         )
 
         XCTAssertEqual(updated.partials, ["你好"])
     }
 
-    func testDoubaoRequestBuilderRejectsSingleAPIKeyForOpenSpeechStreaming() {
+    func testVolcengineRequestBuilderRejectsSingleAPIKeyForOpenSpeechStreaming() {
         XCTAssertThrowsError(
-            try DoubaoTranscriptionRequest.make(
+            try VolcengineTranscriptionRequest.make(
                 apiKey: " sk-test-secret ",
                 audio: CapturedAudioSnapshot(
                     durationSeconds: 1,
@@ -75,15 +75,15 @@ final class TranscriptionModelsTests: XCTestCase {
             XCTAssertEqual(
                 error as? TranscriptionProviderError,
                 .authentication(
-                    providerName: "Doubao",
+                    providerName: "火山引擎",
                     message: "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
                 )
             )
         }
     }
 
-    func testDoubaoRealtimeGatewayRequestBuilderUsesBearerAuthWithoutLeakingSecret() throws {
-        let request = try DoubaoRealtimeGatewayTranscriptionRequest.make(
+    func testVolcengineRealtimeGatewayRequestBuilderUsesBearerAuthWithoutLeakingSecret() throws {
+        let request = try VolcengineRealtimeGatewayTranscriptionRequest.make(
             apiKey: " sk-gateway-secret ",
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -104,32 +104,32 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertTrue(request.safeDebugDescription.contains("Authorization"))
     }
 
-    func testDoubaoRealtimeGatewayProtocolBuildsEventsAndParsesTranscriptEvents() throws {
-        let sessionUpdate = try DoubaoRealtimeGatewayProtocol.buildSessionUpdateEvent(model: "bigmodel")
+    func testVolcengineRealtimeGatewayProtocolBuildsEventsAndParsesTranscriptEvents() throws {
+        let sessionUpdate = try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: "bigmodel")
         XCTAssertTrue(sessionUpdate.contains(#""type":"transcription_session.update""#))
         XCTAssertTrue(sessionUpdate.contains(#""input_audio_sample_rate":16000"#))
         XCTAssertTrue(sessionUpdate.contains(#""model":"bigmodel""#))
 
-        let appendEvent = try DoubaoRealtimeGatewayProtocol.buildAudioAppendEvent(pcm16Samples: [1, -2])
+        let appendEvent = try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(pcm16Samples: [1, -2])
         XCTAssertTrue(appendEvent.contains(#""type":"input_audio_buffer.append""#))
         XCTAssertTrue(appendEvent.contains(#""audio":"AQD+/w==""#))
 
         XCTAssertEqual(
-            try DoubaoRealtimeGatewayProtocol.parseServerEvent(
+            try VolcengineRealtimeGatewayProtocol.parseServerEvent(
                 #"{"type":"conversation.item.input_audio_transcription.result","transcript":"你好"}"#
             ),
-            .partial(TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "Doubao"))
+            .partial(TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "火山引擎"))
         )
         XCTAssertEqual(
-            try DoubaoRealtimeGatewayProtocol.parseServerEvent(
+            try VolcengineRealtimeGatewayProtocol.parseServerEvent(
                 #"{"type":"conversation.item.input_audio_transcription.completed","transcript":"你好世界"}"#
             ),
             .final("你好世界")
         )
     }
 
-    func testDoubaoRequestBuilderUsesAppIDAccessTokenHeadersWithoutLeakingSecret() throws {
-        let request = try DoubaoTranscriptionRequest.make(
+    func testVolcengineRequestBuilderUsesAppIDAccessTokenHeadersWithoutLeakingSecret() throws {
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: " 3145608744 ", accessToken: " old-token "),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -152,8 +152,8 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertTrue(request.safeDebugDescription.contains("wss://openspeech.bytedance.com"))
     }
 
-    func testDoubaoRequestBuilderSupportsLegacyAppIDAccessTokenCredentials() throws {
-        let request = try DoubaoTranscriptionRequest.make(
+    func testVolcengineRequestBuilderSupportsLegacyAppIDAccessTokenCredentials() throws {
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: " 3145608744 ", accessToken: " old-token "),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -170,9 +170,9 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertTrue(request.safeDebugDescription.contains("X-Api-Access-Key"))
     }
 
-    func testDoubaoRequestBuilderRejectsMissingCredentialAndAudio() {
+    func testVolcengineRequestBuilderRejectsMissingCredentialAndAudio() {
         XCTAssertThrowsError(
-            try DoubaoTranscriptionRequest.make(
+            try VolcengineTranscriptionRequest.make(
                 apiKey: " ",
                 audio: CapturedAudioSnapshot(
                     durationSeconds: 1,
@@ -184,12 +184,12 @@ final class TranscriptionModelsTests: XCTestCase {
         ) { error in
             XCTAssertEqual(
                 error as? TranscriptionProviderError,
-                .authentication(providerName: "Doubao", message: "Keychain 中没有保存 Doubao API Key。")
+                .authentication(providerName: "火山引擎", message: "Keychain 中没有保存火山引擎 API Key。")
             )
         }
 
         XCTAssertThrowsError(
-            try DoubaoTranscriptionRequest.make(
+            try VolcengineTranscriptionRequest.make(
                 auth: .appIDAccessToken(appID: "3145608744", accessToken: "old-token"),
                 audio: CapturedAudioSnapshot(
                     durationSeconds: 0,
@@ -203,26 +203,26 @@ final class TranscriptionModelsTests: XCTestCase {
         }
     }
 
-    func testDoubaoServerErrorCodesMapToProviderErrors() {
+    func testVolcengineServerErrorCodesMapToProviderErrors() {
         XCTAssertEqual(
-            DoubaoTranscriptionErrorMapper.providerError(code: 45000002, message: "empty audio"),
+            VolcengineTranscriptionErrorMapper.providerError(code: 45000002, message: "empty audio"),
             .emptyAudio
         )
         XCTAssertEqual(
-            DoubaoTranscriptionErrorMapper.providerError(code: 45000081, message: "timeout"),
-            .transport(providerName: "Doubao", message: "server timeout (45000081): timeout", retryable: true)
+            VolcengineTranscriptionErrorMapper.providerError(code: 45000081, message: "timeout"),
+            .transport(providerName: "火山引擎", message: "server timeout (45000081): timeout", retryable: true)
         )
         XCTAssertEqual(
-            DoubaoTranscriptionErrorMapper.providerError(code: 55000031, message: "busy"),
-            .transport(providerName: "Doubao", message: "server busy (55000031): busy", retryable: true)
+            VolcengineTranscriptionErrorMapper.providerError(code: 55000031, message: "busy"),
+            .transport(providerName: "火山引擎", message: "server busy (55000031): busy", retryable: true)
         )
     }
 
-    func testDoubaoBadServerResponseMapsToActionableHandshakeError() {
-        let error = DoubaoTranscriptionErrorMapper.transportError(
+    func testVolcengineBadServerResponseMapsToActionableHandshakeError() {
+        let error = VolcengineTranscriptionErrorMapper.transportError(
             URLError(.badServerResponse),
-            endpoint: URL(string: doubaoDefaultEndpoint)!,
-            resourceID: doubaoLegacyOpenSpeechResourceID
+            endpoint: URL(string: volcengineDefaultEndpoint)!,
+            resourceID: volcengineLegacyOpenSpeechResourceID
         )
 
         guard case .transport(let providerName, let message, let retryable) = error else {
@@ -230,18 +230,18 @@ final class TranscriptionModelsTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(providerName, "Doubao")
+        XCTAssertEqual(providerName, "火山引擎")
         XCTAssertTrue(message.contains("OpenSpeech WebSocket 握手被服务端拒绝"))
         XCTAssertTrue(message.contains("App ID + Access Token"))
-        XCTAssertTrue(message.contains(doubaoDefaultEndpoint))
-        XCTAssertTrue(message.contains(doubaoLegacyOpenSpeechResourceID))
+        XCTAssertTrue(message.contains(volcengineDefaultEndpoint))
+        XCTAssertTrue(message.contains(volcengineLegacyOpenSpeechResourceID))
         XCTAssertTrue(retryable)
     }
 
-    func testDoubaoRealtimeGatewayBadServerResponseMapsToAPIKeyHandshakeError() {
-        let error = DoubaoTranscriptionErrorMapper.transportError(
+    func testVolcengineRealtimeGatewayBadServerResponseMapsToAPIKeyHandshakeError() {
+        let error = VolcengineTranscriptionErrorMapper.transportError(
             URLError(.badServerResponse),
-            endpoint: URL(string: doubaoRealtimeGatewayEndpoint)!
+            endpoint: URL(string: volcengineRealtimeGatewayEndpoint)!
         )
 
         guard case .transport(let providerName, let message, let retryable) = error else {
@@ -249,25 +249,25 @@ final class TranscriptionModelsTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(providerName, "Doubao")
+        XCTAssertEqual(providerName, "火山引擎")
         XCTAssertTrue(message.contains("Realtime 网关 WebSocket 握手被服务端拒绝"))
         XCTAssertTrue(message.contains("API Key"))
-        XCTAssertTrue(message.contains(doubaoRealtimeGatewayEndpoint))
+        XCTAssertTrue(message.contains(volcengineRealtimeGatewayEndpoint))
         XCTAssertTrue(retryable)
     }
 
-    func testDoubaoResponseParserExtractsPartialAndFinalText() throws {
-        let partial = try DoubaoServerResponse.parsePartial(
+    func testVolcengineResponseParserExtractsPartialAndFinalText() throws {
+        let partial = try VolcengineServerResponse.parsePartial(
             Data(
                 #"{"result":{"utterances":[{"text":"你好","start_time":0,"end_time":500,"definite":false}]}}"#.utf8
             )
         )
         XCTAssertEqual(
             partial,
-            TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "Doubao")
+            TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "火山引擎")
         )
 
-        let final = try DoubaoServerResponse.parseFinalText(
+        let final = try VolcengineServerResponse.parseFinalText(
             Data(
                 #"{"result":{"text":"你好世界","utterances":[{"text":"你好","start_time":0,"end_time":500,"definite":true},{"text":"世界","start_time":500,"end_time":900,"definite":true}]}}"#.utf8
             )
@@ -275,59 +275,59 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(final, "你好世界")
     }
 
-    func testDoubaoResponseParserToleratesIncompleteUtteranceObjects() throws {
+    func testVolcengineResponseParserToleratesIncompleteUtteranceObjects() throws {
         let payload = Data(
             #"{"result":{"text":"你好世界","utterances":[{"start_time":0,"end_time":500,"definite":false},{}]}}"#.utf8
         )
 
-        let partial = try DoubaoServerResponse.parsePartial(payload)
-        let final = try DoubaoServerResponse.parseFinalText(payload)
+        let partial = try VolcengineServerResponse.parsePartial(payload)
+        let final = try VolcengineServerResponse.parseFinalText(payload)
 
         XCTAssertEqual(
             partial,
-            TranscriptPartialSnapshot(text: "你好世界", stablePrefixLength: 0, providerName: "Doubao")
+            TranscriptPartialSnapshot(text: "你好世界", stablePrefixLength: 0, providerName: "火山引擎")
         )
         XCTAssertEqual(final, "你好世界")
     }
 
-    func testDoubaoWireProtocolBuildsClientFramesAndParsesFinalServerFrame() throws {
-        let fullClientRequest = try DoubaoWireProtocol.buildFullClientRequestFrame()
+    func testVolcengineWireProtocolBuildsClientFramesAndParsesFinalServerFrame() throws {
+        let fullClientRequest = try VolcengineWireProtocol.buildFullClientRequestFrame()
         XCTAssertEqual(Array(fullClientRequest.prefix(4)), [0x11, 0x10, 0x11, 0x00])
 
-        let audioFrame = try DoubaoWireProtocol.buildAudioFrame(
+        let audioFrame = try VolcengineWireProtocol.buildAudioFrame(
             pcm16Samples: [1, -2],
             last: true
         )
         XCTAssertEqual(Array(audioFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
 
-        let serverFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let serverFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
             last: true
         )
 
-        let parsed = try DoubaoWireProtocol.parseServerFrame(serverFrame)
+        let parsed = try VolcengineWireProtocol.parseServerFrame(serverFrame)
         guard case .response(let flags, let payload) = parsed else {
             XCTFail("Expected response frame")
             return
         }
 
         XCTAssertTrue(flags.isLast)
-        XCTAssertEqual(try DoubaoServerResponse.parseFinalText(payload), "hello world")
+        XCTAssertEqual(try VolcengineServerResponse.parseFinalText(payload), "hello world")
     }
 
-    func testLiveDoubaoSmokeIsExplicitlyOptIn() throws {
-        guard ProcessInfo.processInfo.environment["VOCO_LIVE_DOUBAO_ASR"] == "1" else {
-            throw XCTSkip("Set VOCO_LIVE_DOUBAO_ASR=1 to run the live Doubao native smoke test.")
+    func testLiveVolcengineSmokeIsExplicitlyOptIn() throws {
+        guard ProcessInfo.processInfo.environment["VOCO_LIVE_VOLCENGINE_ASR"] == "1" else {
+            throw XCTSkip("Set VOCO_LIVE_VOLCENGINE_ASR=1 to run the live Volcengine native smoke test.")
         }
 
-        guard let appID = ProcessInfo.processInfo.environment["VOCO_DOUBAO_APP_ID"], !appID.isEmpty,
-              let accessToken = ProcessInfo.processInfo.environment["VOCO_DOUBAO_ACCESS_TOKEN"], !accessToken.isEmpty
+        guard let appID = ProcessInfo.processInfo.environment["VOCO_VOLCENGINE_APP_ID"], !appID.isEmpty,
+              let accessToken = ProcessInfo.processInfo.environment["VOCO_VOLCENGINE_ACCESS_TOKEN"], !accessToken.isEmpty
         else {
-            XCTFail("VOCO_LIVE_DOUBAO_ASR=1 requires VOCO_DOUBAO_APP_ID and VOCO_DOUBAO_ACCESS_TOKEN.")
+            XCTFail("VOCO_LIVE_VOLCENGINE_ASR=1 requires VOCO_VOLCENGINE_APP_ID and VOCO_VOLCENGINE_ACCESS_TOKEN.")
             return
         }
 
-        let request = try DoubaoTranscriptionRequest.make(
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: appID, accessToken: accessToken),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 0.1,

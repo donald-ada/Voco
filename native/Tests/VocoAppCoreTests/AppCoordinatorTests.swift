@@ -464,12 +464,12 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testCoordinatorPublishesTranscriptionProviderStatus() {
-        let recordingWorkflow = FakeRecordingWorkflow(transcriptionStatus: .authenticationRequired(providerName: "Doubao"))
+        let recordingWorkflow = FakeRecordingWorkflow(transcriptionStatus: .authenticationRequired(providerName: "火山引擎"))
         let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
 
         coordinator.finishLaunching()
 
-        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "火山引擎"))
     }
 
     @MainActor
@@ -493,23 +493,23 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.transcriptionCredentials.hasAPIKey)
         XCTAssertEqual(coordinator.transcriptionCredentials.maskedAPIKey, "sk-t...cdef")
         XCTAssertNil(coordinator.lastErrorMessage)
-        let savedAPIKey = try await credentialStore.apiKey(for: .doubao)
+        let savedAPIKey = try await credentialStore.apiKey(for: .volcengine)
         XCTAssertEqual(savedAPIKey, "sk-test-abcdef")
 
         await coordinator.clearTranscriptionCredentials()
 
         XCTAssertFalse(coordinator.transcriptionCredentials.hasAPIKey)
         XCTAssertNil(coordinator.lastErrorMessage)
-        let clearedAPIKey = try await credentialStore.apiKey(for: .doubao)
+        let clearedAPIKey = try await credentialStore.apiKey(for: .volcengine)
         XCTAssertNil(clearedAPIKey)
     }
 
     @MainActor
-    func testCoordinatorSavesLegacyDoubaoCredentialMode() async throws {
+    func testCoordinatorSavesLegacyVolcengineCredentialMode() async throws {
         let credentialStore = InMemoryTranscriptionCredentialStore()
         let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
 
-        await coordinator.saveDoubaoAppIDAccessToken(
+        await coordinator.saveVolcengineAppIDAccessToken(
             appID: "3145608744",
             accessToken: "legacy-token"
         )
@@ -517,7 +517,7 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.transcriptionCredentials.hasCredential)
         XCTAssertFalse(coordinator.transcriptionCredentials.hasAPIKey)
         XCTAssertEqual(coordinator.transcriptionCredentials.mode, .appIDAccessToken)
-        let credential = try await credentialStore.credential(for: .doubao)
+        let credential = try await credentialStore.credential(for: .volcengine)
         XCTAssertEqual(credential?.appID, "3145608744")
         XCTAssertEqual(credential?.accessToken, "legacy-token")
     }
@@ -526,38 +526,38 @@ final class AppCoordinatorTests: XCTestCase {
     func testSavingTranscriptionCredentialRefreshesProviderStatus() async {
         let credentialStore = InMemoryTranscriptionCredentialStore()
         let recordingWorkflow = FakeRecordingWorkflow(
-            transcriptionStatus: .authenticationRequired(providerName: "Doubao")
+            transcriptionStatus: .authenticationRequired(providerName: "火山引擎")
         )
         let coordinator = AppCoordinator(
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: recordingWorkflow
         )
         coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "火山引擎"))
 
-        recordingWorkflow.transcriptionStatus = .ready(providerName: "Doubao")
+        recordingWorkflow.transcriptionStatus = .ready(providerName: "火山引擎")
         await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
 
-        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "Doubao"))
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "火山引擎"))
     }
 
     @MainActor
     func testClearingTranscriptionCredentialRefreshesProviderStatus() async {
         let credentialStore = InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
         let recordingWorkflow = FakeRecordingWorkflow(
-            transcriptionStatus: .ready(providerName: "Doubao")
+            transcriptionStatus: .ready(providerName: "火山引擎")
         )
         let coordinator = AppCoordinator(
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: recordingWorkflow
         )
         coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "Doubao"))
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .ready(providerName: "火山引擎"))
 
-        recordingWorkflow.transcriptionStatus = .authenticationRequired(providerName: "Doubao")
+        recordingWorkflow.transcriptionStatus = .authenticationRequired(providerName: "火山引擎")
         await coordinator.clearTranscriptionCredentials()
 
-        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "Doubao"))
+        XCTAssertEqual(coordinator.transcriptionProviderStatus, .authenticationRequired(providerName: "火山引擎"))
     }
 
     @MainActor
@@ -569,7 +569,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
 
-        XCTAssertEqual(coordinator.transcriptionCredentials.statusTitle, "Doubao 凭证读取失败")
+        XCTAssertEqual(coordinator.transcriptionCredentials.statusTitle, "火山引擎凭证读取失败")
         XCTAssertEqual(coordinator.transcriptionCredentials.lastErrorMessage, "保存 ASR 凭证失败：Keychain denied")
         XCTAssertEqual(coordinator.lastErrorMessage, "保存 ASR 凭证失败：Keychain denied")
     }
@@ -595,7 +595,7 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
 
         XCTAssertEqual(coordinator.hudSnapshot.phase, .error)
-        XCTAssertEqual(coordinator.hudSnapshot.detail, "转写服务未配置：请先在设置中配置 ASR provider。")
+        XCTAssertEqual(coordinator.hudSnapshot.detail, "模型未配置：请先在设置中配置火山引擎凭证。")
     }
 
     @MainActor
@@ -682,15 +682,15 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
 
         XCTAssertEqual(coordinator.status, .providerOffline)
-        XCTAssertEqual(coordinator.lastErrorMessage, "转写服务未配置：请先在设置中配置 ASR provider。")
+        XCTAssertEqual(coordinator.lastErrorMessage, "模型未配置：请先在设置中配置火山引擎凭证。")
     }
 
     @MainActor
-    func testWorkbenchMarksDoubaoFailedAfterTranscriptionError() async {
+    func testWorkbenchMarksVolcengineFailedAfterTranscriptionError() async {
         let recordingWorkflow = FakeRecordingWorkflow(
-            transcriptionStatus: .ready(providerName: "Doubao"),
+            transcriptionStatus: .ready(providerName: "火山引擎"),
             stopError: TranscriptionProviderError.provider(
-                providerName: "Doubao",
+                providerName: "火山引擎",
                 message: "server response contains no final text"
             )
         )
@@ -703,22 +703,22 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
         await coordinator.toggleRecordingFromUserAction()
 
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.title, "Doubao 转写失败")
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle, "前往转写服务")
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .transcription), .needsAttention)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.title, "火山引擎转写失败")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle, "前往模型")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .model), .needsAttention)
     }
 
     @MainActor
-    func testWorkbenchKeepsDoubaoFailureWhenPartialArrivedBeforeTranscriptionError() async {
+    func testWorkbenchKeepsVolcengineFailureWhenPartialArrivedBeforeTranscriptionError() async {
         let partial = TranscriptPartialSnapshot(
             text: "partial text",
             stablePrefixLength: 0,
-            providerName: "Doubao"
+            providerName: "火山引擎"
         )
         let recordingWorkflow = FakeRecordingWorkflow(
-            transcriptionStatus: .ready(providerName: "Doubao"),
+            transcriptionStatus: .ready(providerName: "火山引擎"),
             stopError: TranscriptionProviderError.transport(
-                providerName: "Doubao",
+                providerName: "火山引擎",
                 message: "timeout",
                 retryable: true
             ),
@@ -734,8 +734,8 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
 
         XCTAssertEqual(coordinator.lastTranscript?.partials, ["partial text"])
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .transcription), .needsAttention)
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.detail, "Doubao 网络错误：timeout")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .model), .needsAttention)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.detail, "火山引擎网络错误：timeout")
     }
 
     @MainActor
@@ -1039,7 +1039,7 @@ private final class FakeTranscriptionCredentialStore: TranscriptionCredentialSto
     private var storedCredential: TranscriptionCredential?
 
     init(
-        snapshot: TranscriptionCredentialSnapshot = .missing(provider: .doubao),
+        snapshot: TranscriptionCredentialSnapshot = .missing(provider: .volcengine),
         saveError: Error? = nil,
         deleteError: Error? = nil
     ) {

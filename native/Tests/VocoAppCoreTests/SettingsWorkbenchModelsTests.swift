@@ -5,18 +5,18 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
     func testWorkbenchSectionsStayInApprovedOrder() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.rawValue),
-            ["overview", "settings", "transcription"]
+            ["overview", "settings", "model"]
         )
     }
 
     func testWorkbenchSectionsExposeUserVisibleCopy() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.title),
-            ["总览", "设置", "转写服务"]
+            ["总览", "设置", "模型"]
         )
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.summary),
-            ["当前状态", "快捷键、模式、麦克风、权限", "Doubao 和 Keychain"]
+            ["当前状态", "快捷键、模式、麦克风、权限", "火山引擎和 Keychain"]
         )
     }
 
@@ -37,8 +37,8 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .permissionNeeded,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .ready(providerName: "Doubao"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: nil,
             lastErrorMessage: nil
         )
@@ -50,7 +50,7 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.status(for: .settings), .needsAttention)
     }
 
-    func testMissingDoubaoCredentialBecomesOverviewBlockerWhenPermissionsAreReady() {
+    func testMissingVolcengineCredentialBecomesOverviewBlockerWhenPermissionsAreReady() {
         let snapshot = SettingsWorkbenchSnapshot.make(
             statusTitle: "就绪",
             permissions: [
@@ -60,15 +60,15 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .listening,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .authenticationRequired(providerName: "Doubao"),
-            credentials: .missing(provider: .doubao),
+            asrStatus: .authenticationRequired(providerName: "火山引擎"),
+            credentials: .missing(provider: .volcengine),
             injection: nil,
             lastErrorMessage: nil
         )
 
-        XCTAssertEqual(snapshot.overview.title, "Doubao 凭证未保存")
-        XCTAssertEqual(snapshot.overview.primaryActionTitle, "前往转写服务")
-        XCTAssertEqual(snapshot.status(for: .transcription), .needsAttention)
+        XCTAssertEqual(snapshot.overview.title, "火山引擎凭证未保存")
+        XCTAssertEqual(snapshot.overview.primaryActionTitle, "前往模型")
+        XCTAssertEqual(snapshot.status(for: .model), .needsAttention)
         XCTAssertEqual(snapshot.status(for: .settings), .ok)
     }
 
@@ -82,17 +82,17 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .listening,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .offline(providerName: "Doubao"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .offline(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: nil,
             lastErrorMessage: nil
         )
 
-        XCTAssertEqual(snapshot.overview.title, "Doubao 离线")
-        XCTAssertEqual(snapshot.overview.detail, "转写服务暂不可用，稍后可重试。")
-        XCTAssertEqual(snapshot.overview.primaryActionTitle, "前往转写服务")
+        XCTAssertEqual(snapshot.overview.title, "火山引擎离线")
+        XCTAssertEqual(snapshot.overview.detail, "模型暂不可用，稍后可重试。")
+        XCTAssertEqual(snapshot.overview.primaryActionTitle, "前往模型")
         XCTAssertEqual(snapshot.status(for: .overview), .needsAttention)
-        XCTAssertEqual(snapshot.status(for: .transcription), .needsAttention)
+        XCTAssertEqual(snapshot.status(for: .model), .needsAttention)
     }
 
     func testRecentRuntimeErrorKeepsRecoveryInsideSettingsWorkbench() {
@@ -105,8 +105,8 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .listening,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .ready(providerName: "Doubao"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: nil,
             lastErrorMessage: "server response contains no final text"
         )
@@ -140,8 +140,8 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .inactive,
             hotkeyBinding: .default,
             hotkeyMode: .pressAndHold,
-            asrStatus: .ready(providerName: "Doubao"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: nil,
             lastErrorMessage: nil
         )
@@ -159,15 +159,15 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .listening,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .failed(providerName: "Doubao", message: "server response contains no final text"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .failed(providerName: "火山引擎", message: "server response contains no final text"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: nil,
             lastErrorMessage: "server response contains no final text"
         )
 
-        XCTAssertEqual(snapshot.overview.title, "Doubao 转写失败")
+        XCTAssertEqual(snapshot.overview.title, "火山引擎转写失败")
         XCTAssertEqual(snapshot.status(for: .overview), .needsAttention)
-        XCTAssertEqual(snapshot.status(for: .transcription), .needsAttention)
+        XCTAssertEqual(snapshot.status(for: .model), .needsAttention)
     }
 
     func testFailedInputRoutesRecoveryToSettings() {
@@ -187,8 +187,8 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
             hotkeyState: .listening,
             hotkeyBinding: .default,
             hotkeyMode: .toggle,
-            asrStatus: .ready(providerName: "Doubao"),
-            credentials: .stored(provider: .doubao, apiKey: "sk-test-abcdef"),
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
             injection: injection,
             lastErrorMessage: injection.detail
         )

@@ -14,22 +14,22 @@ public struct TranscriptPartialSnapshot: Equatable, Sendable {
 
 public typealias TranscriptionProgressHandler = @MainActor @Sendable (TranscriptPartialSnapshot) -> Void
 
-public let doubaoTranscriptionProviderName = "Doubao"
-public let doubaoDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
-public let doubaoSeedASRResourceID = "volc.seedasr.sauc.duration"
-public let doubaoLegacyOpenSpeechResourceID = "volc.bigasr.sauc.duration"
-public let doubaoDefaultResourceID = doubaoSeedASRResourceID
-public let doubaoRealtimeGatewayModel = "bigmodel"
-public let doubaoRealtimeGatewayEndpoint = "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
-public let doubaoSingleAPIKeyUnsupportedMessage =
+public let volcengineTranscriptionProviderName = "火山引擎"
+public let volcengineDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+public let volcengineSeedASRResourceID = "volc.seedasr.sauc.duration"
+public let volcengineLegacyOpenSpeechResourceID = "volc.bigasr.sauc.duration"
+public let volcengineDefaultResourceID = volcengineSeedASRResourceID
+public let volcengineRealtimeGatewayModel = "bigmodel"
+public let volcengineRealtimeGatewayEndpoint = "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+public let volcengineSingleAPIKeyUnsupportedMessage =
     "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
 
-public enum DoubaoTranscriptionAuth: Equatable, Sendable {
+public enum VolcengineTranscriptionAuth: Equatable, Sendable {
     case apiKey(String)
     case appIDAccessToken(appID: String, accessToken: String)
 }
 
-public struct DoubaoTranscriptionRequest: Equatable, Sendable {
+public struct VolcengineTranscriptionRequest: Equatable, Sendable {
     public let endpoint: URL
     public let resourceID: String
     public let headers: [String: String]
@@ -39,14 +39,14 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
     public static func make(
         apiKey: String?,
         audio: CapturedAudioSnapshot,
-        endpoint: String = doubaoDefaultEndpoint,
-        resourceID: String = doubaoDefaultResourceID
-    ) throws -> DoubaoTranscriptionRequest {
+        endpoint: String = volcengineDefaultEndpoint,
+        resourceID: String = volcengineDefaultResourceID
+    ) throws -> VolcengineTranscriptionRequest {
         let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmedAPIKey.isEmpty else {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Keychain 中没有保存 Doubao API Key。"
+                providerName: volcengineTranscriptionProviderName,
+                message: "Keychain 中没有保存火山引擎 API Key。"
             )
         }
 
@@ -59,12 +59,12 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
     }
 
     public static func make(
-        auth: DoubaoTranscriptionAuth,
+        auth: VolcengineTranscriptionAuth,
         audio: CapturedAudioSnapshot,
-        endpoint: String = doubaoDefaultEndpoint,
-        resourceID: String = doubaoDefaultResourceID
-    ) throws -> DoubaoTranscriptionRequest {
-        let sessionRequest = try DoubaoTranscriptionSessionRequest.make(
+        endpoint: String = volcengineDefaultEndpoint,
+        resourceID: String = volcengineDefaultResourceID
+    ) throws -> VolcengineTranscriptionRequest {
+        let sessionRequest = try VolcengineTranscriptionSessionRequest.make(
             auth: auth,
             endpoint: endpoint,
             resourceID: resourceID
@@ -81,7 +81,7 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
             "samples=\(audio.pcm16Samples.count)"
         ].joined(separator: " ")
 
-        return DoubaoTranscriptionRequest(
+        return VolcengineTranscriptionRequest(
             endpoint: sessionRequest.endpoint,
             resourceID: resourceID,
             headers: sessionRequest.headers,
@@ -91,7 +91,7 @@ public struct DoubaoTranscriptionRequest: Equatable, Sendable {
     }
 }
 
-public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
+public struct VolcengineTranscriptionSessionRequest: Equatable, Sendable {
     public let endpoint: URL
     public let resourceID: String
     public let headers: [String: String]
@@ -99,14 +99,14 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
 
     public static func make(
         apiKey: String?,
-        endpoint: String = doubaoDefaultEndpoint,
-        resourceID: String = doubaoDefaultResourceID
-    ) throws -> DoubaoTranscriptionSessionRequest {
+        endpoint: String = volcengineDefaultEndpoint,
+        resourceID: String = volcengineDefaultResourceID
+    ) throws -> VolcengineTranscriptionSessionRequest {
         let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmedAPIKey.isEmpty else {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Keychain 中没有保存 Doubao API Key。"
+                providerName: volcengineTranscriptionProviderName,
+                message: "Keychain 中没有保存火山引擎 API Key。"
             )
         }
 
@@ -118,31 +118,31 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
     }
 
     public static func make(
-        auth: DoubaoTranscriptionAuth,
-        endpoint: String = doubaoDefaultEndpoint,
-        resourceID: String = doubaoDefaultResourceID
-    ) throws -> DoubaoTranscriptionSessionRequest {
+        auth: VolcengineTranscriptionAuth,
+        endpoint: String = volcengineDefaultEndpoint,
+        resourceID: String = volcengineDefaultResourceID
+    ) throws -> VolcengineTranscriptionSessionRequest {
         let headers: [String: String]
         switch auth {
         case .apiKey(let apiKey):
             let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedAPIKey.isEmpty else {
                 throw TranscriptionProviderError.authentication(
-                    providerName: doubaoTranscriptionProviderName,
-                    message: "Keychain 中没有保存 Doubao API Key。"
+                    providerName: volcengineTranscriptionProviderName,
+                    message: "Keychain 中没有保存火山引擎 API Key。"
                 )
             }
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
-                message: doubaoSingleAPIKeyUnsupportedMessage
+                providerName: volcengineTranscriptionProviderName,
+                message: volcengineSingleAPIKeyUnsupportedMessage
             )
         case .appIDAccessToken(let appID, let accessToken):
             let trimmedAppID = appID.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedAccessToken = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedAppID.isEmpty, !trimmedAccessToken.isEmpty else {
                 throw TranscriptionProviderError.authentication(
-                    providerName: doubaoTranscriptionProviderName,
-                    message: "Doubao 旧控制台凭证缺少 App ID 或 Access Token。"
+                    providerName: volcengineTranscriptionProviderName,
+                    message: "火山引擎旧控制台凭证缺少 App ID 或 Access Token。"
                 )
             }
             headers = [
@@ -156,8 +156,8 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
 
         guard let endpointURL = URL(string: endpoint), endpointURL.scheme?.hasPrefix("ws") == true else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Doubao WebSocket endpoint 无效：\(endpoint)"
+                providerName: volcengineTranscriptionProviderName,
+                message: "火山引擎 WebSocket endpoint 无效：\(endpoint)"
             )
         }
 
@@ -167,7 +167,7 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
             "headers=\(headers.keys.sorted().joined(separator: ","))"
         ].joined(separator: " ")
 
-        return DoubaoTranscriptionSessionRequest(
+        return VolcengineTranscriptionSessionRequest(
             endpoint: endpointURL,
             resourceID: resourceID,
             headers: headers,
@@ -176,7 +176,7 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
     }
 }
 
-public struct DoubaoRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
+public struct VolcengineRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
     public let endpoint: URL
     public let model: String
     public let headers: [String: String]
@@ -186,10 +186,10 @@ public struct DoubaoRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
     public static func make(
         apiKey: String?,
         audio: CapturedAudioSnapshot,
-        endpoint: String = doubaoRealtimeGatewayEndpoint,
-        model: String = doubaoRealtimeGatewayModel
-    ) throws -> DoubaoRealtimeGatewayTranscriptionRequest {
-        let sessionRequest = try DoubaoRealtimeGatewaySessionRequest.make(
+        endpoint: String = volcengineRealtimeGatewayEndpoint,
+        model: String = volcengineRealtimeGatewayModel
+    ) throws -> VolcengineRealtimeGatewayTranscriptionRequest {
+        let sessionRequest = try VolcengineRealtimeGatewaySessionRequest.make(
             apiKey: apiKey,
             endpoint: endpoint,
             model: model
@@ -204,7 +204,7 @@ public struct DoubaoRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
             "samples=\(audio.pcm16Samples.count)"
         ].joined(separator: " ")
 
-        return DoubaoRealtimeGatewayTranscriptionRequest(
+        return VolcengineRealtimeGatewayTranscriptionRequest(
             endpoint: sessionRequest.endpoint,
             model: sessionRequest.model,
             headers: sessionRequest.headers,
@@ -214,7 +214,7 @@ public struct DoubaoRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
     }
 }
 
-public struct DoubaoRealtimeGatewaySessionRequest: Equatable, Sendable {
+public struct VolcengineRealtimeGatewaySessionRequest: Equatable, Sendable {
     public let endpoint: URL
     public let model: String
     public let headers: [String: String]
@@ -222,21 +222,21 @@ public struct DoubaoRealtimeGatewaySessionRequest: Equatable, Sendable {
 
     public static func make(
         apiKey: String?,
-        endpoint: String = doubaoRealtimeGatewayEndpoint,
-        model: String = doubaoRealtimeGatewayModel
-    ) throws -> DoubaoRealtimeGatewaySessionRequest {
+        endpoint: String = volcengineRealtimeGatewayEndpoint,
+        model: String = volcengineRealtimeGatewayModel
+    ) throws -> VolcengineRealtimeGatewaySessionRequest {
         let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmedAPIKey.isEmpty else {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Keychain 中没有保存 Doubao API Key。"
+                providerName: volcengineTranscriptionProviderName,
+                message: "Keychain 中没有保存火山引擎 API Key。"
             )
         }
 
         guard let endpointURL = URL(string: endpoint), endpointURL.scheme?.hasPrefix("ws") == true else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Doubao Realtime endpoint 无效：\(endpoint)"
+                providerName: volcengineTranscriptionProviderName,
+                message: "火山引擎 Realtime endpoint 无效：\(endpoint)"
             )
         }
 
@@ -249,7 +249,7 @@ public struct DoubaoRealtimeGatewaySessionRequest: Equatable, Sendable {
             "headers=\(headers.keys.sorted().joined(separator: ","))"
         ].joined(separator: " ")
 
-        return DoubaoRealtimeGatewaySessionRequest(
+        return VolcengineRealtimeGatewaySessionRequest(
             endpoint: endpointURL,
             model: model,
             headers: headers,
@@ -258,7 +258,7 @@ public struct DoubaoRealtimeGatewaySessionRequest: Equatable, Sendable {
     }
 }
 
-public enum DoubaoRealtimeGatewayServerEvent: Equatable, Sendable {
+public enum VolcengineRealtimeGatewayServerEvent: Equatable, Sendable {
     case sessionUpdated
     case partial(TranscriptPartialSnapshot)
     case final(String)
@@ -266,10 +266,10 @@ public enum DoubaoRealtimeGatewayServerEvent: Equatable, Sendable {
     case ignored
 }
 
-public enum DoubaoRealtimeGatewayProtocol {
-    public static func buildSessionUpdateEvent(model: String = doubaoRealtimeGatewayModel) throws -> String {
+public enum VolcengineRealtimeGatewayProtocol {
+    public static func buildSessionUpdateEvent(model: String = volcengineRealtimeGatewayModel) throws -> String {
         try encodeJSONString(
-            DoubaoRealtimeGatewaySessionUpdateEvent(
+            VolcengineRealtimeGatewaySessionUpdateEvent(
                 session: .init(
                     inputAudioFormat: "pcm16",
                     inputAudioSampleRate: 16_000,
@@ -282,30 +282,30 @@ public enum DoubaoRealtimeGatewayProtocol {
 
     public static func buildAudioAppendEvent(pcm16Samples: [Int16]) throws -> String {
         try encodeJSONString(
-            DoubaoRealtimeGatewayAudioAppendEvent(
+            VolcengineRealtimeGatewayAudioAppendEvent(
                 audio: Data(pcm16LittleEndianBytes: pcm16Samples).base64EncodedString()
             )
         )
     }
 
     public static func buildAudioCommitEvent() throws -> String {
-        try encodeJSONString(DoubaoRealtimeGatewayTypedEvent(type: "input_audio_buffer.commit"))
+        try encodeJSONString(VolcengineRealtimeGatewayTypedEvent(type: "input_audio_buffer.commit"))
     }
 
-    public static func parseServerEvent(_ text: String) throws -> DoubaoRealtimeGatewayServerEvent {
+    public static func parseServerEvent(_ text: String) throws -> VolcengineRealtimeGatewayServerEvent {
         guard let data = text.data(using: .utf8) else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "Realtime event is not UTF-8 text"
             )
         }
 
-        let payload: DoubaoRealtimeGatewayServerPayload
+        let payload: VolcengineRealtimeGatewayServerPayload
         do {
-            payload = try JSONDecoder().decode(DoubaoRealtimeGatewayServerPayload.self, from: data)
+            payload = try JSONDecoder().decode(VolcengineRealtimeGatewayServerPayload.self, from: data)
         } catch {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "Realtime event json: \(error.localizedDescription)"
             )
         }
@@ -323,7 +323,7 @@ public enum DoubaoRealtimeGatewayProtocol {
                 TranscriptPartialSnapshot(
                     text: text,
                     stablePrefixLength: 0,
-                    providerName: doubaoTranscriptionProviderName
+                    providerName: volcengineTranscriptionProviderName
                 )
             )
         case "conversation.item.input_audio_transcription.completed":
@@ -341,7 +341,7 @@ public enum DoubaoRealtimeGatewayProtocol {
         let data = try encoder.encode(value)
         guard let string = String(data: data, encoding: .utf8) else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "Realtime event encode failed"
             )
         }
@@ -349,42 +349,42 @@ public enum DoubaoRealtimeGatewayProtocol {
     }
 }
 
-public enum DoubaoTranscriptionErrorMapper {
+public enum VolcengineTranscriptionErrorMapper {
     public static func providerError(code: Int, message: String) -> TranscriptionProviderError {
         switch code {
         case 45000002:
             return .emptyAudio
         case 45000081:
             return .transport(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server timeout (45000081): \(message)",
                 retryable: true
             )
         case 55000031:
             return .transport(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server busy (55000031): \(message)",
                 retryable: true
             )
         case 45000001:
             return .provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "bad request (45000001): \(message)"
             )
         case 45000151:
             return .provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "audio format error (45000151): \(message)"
             )
         case 55000000..<56000000:
             return .transport(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server internal (\(code)): \(message)",
                 retryable: true
             )
         default:
             return .provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server error (\(code)): \(message)"
             )
         }
@@ -399,7 +399,7 @@ public enum DoubaoTranscriptionErrorMapper {
         if nsError.domain == NSURLErrorDomain && nsError.code == URLError.badServerResponse.rawValue {
             if endpoint.host?.contains("ai-gateway.vei.volces.com") == true {
                 return .transport(
-                    providerName: doubaoTranscriptionProviderName,
+                    providerName: volcengineTranscriptionProviderName,
                     message: "Realtime 网关 WebSocket 握手被服务端拒绝。请检查新网关 API Key 是否有效，并确认模型访问权限已开通。endpoint=\(endpoint.absoluteString)",
                     retryable: true
                 )
@@ -407,21 +407,21 @@ public enum DoubaoTranscriptionErrorMapper {
 
             let resourceDetail = resourceID.map { " resourceID=\($0)" } ?? ""
             return .transport(
-                providerName: doubaoTranscriptionProviderName,
-                message: "OpenSpeech WebSocket 握手被服务端拒绝。请在转写服务中保存旧控制台 App ID + Access Token，并确认 Resource ID 已开通。endpoint=\(endpoint.absoluteString)\(resourceDetail)",
+                providerName: volcengineTranscriptionProviderName,
+                message: "OpenSpeech WebSocket 握手被服务端拒绝。请在模型中保存旧控制台 App ID + Access Token，并确认 Resource ID 已开通。endpoint=\(endpoint.absoluteString)\(resourceDetail)",
                 retryable: true
             )
         }
 
         return .transport(
-            providerName: doubaoTranscriptionProviderName,
+            providerName: volcengineTranscriptionProviderName,
             message: "WebSocket connect to \(endpoint.absoluteString) failed: \(error.localizedDescription)",
             retryable: true
         )
     }
 }
 
-public enum DoubaoServerResponse {
+public enum VolcengineServerResponse {
     public static func parsePartial(_ data: Data) throws -> TranscriptPartialSnapshot? {
         let response = try decode(data)
         guard let result = response.result else {
@@ -447,7 +447,7 @@ public enum DoubaoServerResponse {
         return TranscriptPartialSnapshot(
             text: trimmedText,
             stablePrefixLength: pendingText.isEmpty ? 0 : stableText.count,
-            providerName: doubaoTranscriptionProviderName
+            providerName: volcengineTranscriptionProviderName
         )
     }
 
@@ -455,7 +455,7 @@ public enum DoubaoServerResponse {
         let response = try decode(data)
         guard let result = response.result else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server response missing result"
             )
         }
@@ -473,7 +473,7 @@ public enum DoubaoServerResponse {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !stitchedText.isEmpty else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server response contains no final text"
             )
         }
@@ -481,12 +481,12 @@ public enum DoubaoServerResponse {
         return stitchedText
     }
 
-    private static func decode(_ data: Data) throws -> DoubaoServerResponsePayload {
+    private static func decode(_ data: Data) throws -> VolcengineServerResponsePayload {
         do {
-            return try JSONDecoder().decode(DoubaoServerResponsePayload.self, from: data)
+            return try JSONDecoder().decode(VolcengineServerResponsePayload.self, from: data)
         } catch {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "server json: \(error.localizedDescription)"
             )
         }
@@ -494,32 +494,32 @@ public enum DoubaoServerResponse {
 }
 
 @MainActor
-public protocol DoubaoTranscriptionTransporting {
+public protocol VolcengineTranscriptionTransporting {
     func transcribe(
-        request: DoubaoTranscriptionRequest,
+        request: VolcengineTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot
 
     func startStreaming(
-        request: DoubaoTranscriptionSessionRequest,
+        request: VolcengineTranscriptionSessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession
 }
 
 @MainActor
-public protocol DoubaoRealtimeGatewayTranscriptionTransporting {
+public protocol VolcengineRealtimeGatewayTranscriptionTransporting {
     func transcribe(
-        request: DoubaoRealtimeGatewayTranscriptionRequest,
+        request: VolcengineRealtimeGatewayTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot
 
     func startStreaming(
-        request: DoubaoRealtimeGatewaySessionRequest,
+        request: VolcengineRealtimeGatewaySessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession
 }
 
-private struct DoubaoRealtimeGatewaySessionUpdateEvent: Encodable {
+private struct VolcengineRealtimeGatewaySessionUpdateEvent: Encodable {
     let type = "transcription_session.update"
     let session: Session
 
@@ -542,29 +542,29 @@ private struct DoubaoRealtimeGatewaySessionUpdateEvent: Encodable {
     }
 }
 
-private struct DoubaoRealtimeGatewayAudioAppendEvent: Encodable {
+private struct VolcengineRealtimeGatewayAudioAppendEvent: Encodable {
     let type = "input_audio_buffer.append"
     let audio: String
 }
 
-private struct DoubaoRealtimeGatewayTypedEvent: Encodable {
+private struct VolcengineRealtimeGatewayTypedEvent: Encodable {
     let type: String
 }
 
-private struct DoubaoRealtimeGatewayServerPayload: Decodable {
+private struct VolcengineRealtimeGatewayServerPayload: Decodable {
     let type: String
     let transcript: String?
     let delta: String?
     let text: String?
     let message: String?
-    let error: DoubaoRealtimeGatewayServerError?
+    let error: VolcengineRealtimeGatewayServerError?
 
     var transcriptText: String? {
         transcript ?? delta ?? text
     }
 }
 
-private struct DoubaoRealtimeGatewayServerError: Decodable {
+private struct VolcengineRealtimeGatewayServerError: Decodable {
     let message: String?
 }
 
@@ -580,16 +580,16 @@ private extension Data {
     }
 }
 
-private struct DoubaoServerResponsePayload: Decodable {
-    let result: DoubaoServerResult?
+private struct VolcengineServerResponsePayload: Decodable {
+    let result: VolcengineServerResult?
 }
 
-private struct DoubaoServerResult: Decodable {
+private struct VolcengineServerResult: Decodable {
     let text: String?
-    let utterances: [DoubaoServerUtterance]?
+    let utterances: [VolcengineServerUtterance]?
 }
 
-private struct DoubaoServerUtterance: Decodable {
+private struct VolcengineServerUtterance: Decodable {
     let text: String
     let startTime: Int?
     let endTime: Int?
@@ -625,24 +625,24 @@ public enum TranscriptionProviderStatus: Equatable, Sendable {
         case .ready(let providerName):
             providerName
         case .authenticationRequired(let providerName):
-            "\(providerName) 需要认证"
+            "\(providerName)需要认证"
         case .offline(let providerName):
-            "\(providerName) 离线"
+            "\(providerName)离线"
         case .failed(let providerName, _):
-            "\(providerName) 错误"
+            "\(providerName)错误"
         }
     }
 
     public var detail: String {
         switch self {
         case .notConfigured:
-            "请先配置 ASR provider。"
+            "请先配置火山引擎凭证。"
         case .ready:
-            "转写服务已配置"
+            "模型已配置"
         case .authenticationRequired:
-            "请检查 provider 凭证。"
+            "请检查火山引擎凭证。"
         case .offline:
-            "转写服务暂不可用，稍后可重试。"
+            "模型暂不可用，稍后可重试。"
         case .failed(_, let message):
             message
         }
@@ -653,7 +653,7 @@ public enum TranscriptionProviderStatus: Equatable, Sendable {
         case .notConfigured, .authenticationRequired:
             "exclamationmark.triangle"
         case .ready:
-            "text.bubble"
+            "cpu"
         case .offline:
             "wifi.slash"
         case .failed:
@@ -680,15 +680,15 @@ public enum TranscriptionProviderError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
-            "转写服务未配置：请先在设置中配置 ASR provider。"
+            "模型未配置：请先在设置中配置火山引擎凭证。"
         case .emptyAudio:
             "转写失败：没有可用音频。"
         case .authentication(let providerName, let message):
-            "\(providerName) 认证失败：\(message)"
+            "\(providerName)认证失败：\(message)"
         case .transport(let providerName, let message, _):
-            "\(providerName) 网络错误：\(message)"
+            "\(providerName)网络错误：\(message)"
         case .provider(let providerName, let message):
-            "\(providerName) 转写失败：\(message)"
+            "\(providerName)转写失败：\(message)"
         case .cancelled:
             "转写已取消。"
         }

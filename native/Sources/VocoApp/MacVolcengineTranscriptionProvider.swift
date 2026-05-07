@@ -2,16 +2,16 @@ import Foundation
 import VocoAppCore
 
 @MainActor
-final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTranscriptionProviding {
+final class MacVolcengineTranscriptionProvider: TranscriptionProviding, RealtimeTranscriptionProviding {
     private let credentialStore: any TranscriptionCredentialStoring
-    private let openSpeechTransport: any DoubaoTranscriptionTransporting
-    private let realtimeGatewayTransport: any DoubaoRealtimeGatewayTranscriptionTransporting
+    private let openSpeechTransport: any VolcengineTranscriptionTransporting
+    private let realtimeGatewayTransport: any VolcengineRealtimeGatewayTranscriptionTransporting
 
     init(
         credentialStore: any TranscriptionCredentialStoring,
-        transport: any DoubaoTranscriptionTransporting = URLSessionDoubaoTranscriptionTransport(),
-        realtimeGatewayTransport: any DoubaoRealtimeGatewayTranscriptionTransporting =
-            URLSessionDoubaoRealtimeGatewayTranscriptionTransport()
+        transport: any VolcengineTranscriptionTransporting = URLSessionVolcengineTranscriptionTransport(),
+        realtimeGatewayTransport: any VolcengineRealtimeGatewayTranscriptionTransporting =
+            URLSessionVolcengineRealtimeGatewayTranscriptionTransport()
     ) {
         self.credentialStore = credentialStore
         self.openSpeechTransport = transport
@@ -21,22 +21,22 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
     var status: TranscriptionProviderStatus {
         let snapshot = credentialStore.currentSnapshot()
         if snapshot.hasCredential {
-            return .ready(providerName: doubaoTranscriptionProviderName)
+            return .ready(providerName: volcengineTranscriptionProviderName)
         }
         if let message = snapshot.lastErrorMessage {
-            return .failed(providerName: doubaoTranscriptionProviderName, message: message)
+            return .failed(providerName: volcengineTranscriptionProviderName, message: message)
         }
-        return .authenticationRequired(providerName: doubaoTranscriptionProviderName)
+        return .authenticationRequired(providerName: volcengineTranscriptionProviderName)
     }
 
     func transcribe(
         _ audio: CapturedAudioSnapshot,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
-        let credential = try await doubaoCredential()
+        let credential = try await volcengineCredential()
         switch credential.mode {
         case .apiKey:
-            let request = try DoubaoRealtimeGatewayTranscriptionRequest.make(
+            let request = try VolcengineRealtimeGatewayTranscriptionRequest.make(
                 apiKey: credential.apiKey,
                 audio: audio
             )
@@ -51,10 +51,10 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
     }
 
     func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession {
-        let credential = try await doubaoCredential()
+        let credential = try await volcengineCredential()
         switch credential.mode {
         case .apiKey:
-            let request = try DoubaoRealtimeGatewaySessionRequest.make(apiKey: credential.apiKey)
+            let request = try VolcengineRealtimeGatewaySessionRequest.make(apiKey: credential.apiKey)
             return try await realtimeGatewayTransport.startStreaming(request: request, progress: progress)
         case .appIDAccessToken:
             return try await startOpenSpeechStreaming(
@@ -70,7 +70,7 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         try await withOpenSpeechResourceFallback { resourceID in
-            let request = try DoubaoTranscriptionRequest.make(
+            let request = try VolcengineTranscriptionRequest.make(
                 auth: .appIDAccessToken(
                     appID: credential.appID ?? "",
                     accessToken: credential.accessToken ?? ""
@@ -87,7 +87,7 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession {
         try await withOpenSpeechResourceFallback { resourceID in
-            let request = try DoubaoTranscriptionSessionRequest.make(
+            let request = try VolcengineTranscriptionSessionRequest.make(
                 auth: .appIDAccessToken(
                     appID: credential.appID ?? "",
                     accessToken: credential.accessToken ?? ""
@@ -120,9 +120,9 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
     }
 
     private static var openSpeechResourceIDs: [String] {
-        var resourceIDs = [doubaoDefaultResourceID]
-        if !resourceIDs.contains(doubaoLegacyOpenSpeechResourceID) {
-            resourceIDs.append(doubaoLegacyOpenSpeechResourceID)
+        var resourceIDs = [volcengineDefaultResourceID]
+        if !resourceIDs.contains(volcengineLegacyOpenSpeechResourceID) {
+            resourceIDs.append(volcengineLegacyOpenSpeechResourceID)
         }
         return resourceIDs
     }
@@ -132,26 +132,26 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
             return false
         }
 
-        return providerName == doubaoTranscriptionProviderName
+        return providerName == volcengineTranscriptionProviderName
             && retryable
             && message.contains("OpenSpeech WebSocket 握手被服务端拒绝")
     }
 
-    private func doubaoCredential() async throws -> TranscriptionCredential {
+    private func volcengineCredential() async throws -> TranscriptionCredential {
         let credential: TranscriptionCredential?
         do {
-            credential = try await credentialStore.credential(for: .doubao)
+            credential = try await credentialStore.credential(for: .volcengine)
         } catch {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: error.localizedDescription
             )
         }
 
         guard let credential else {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
-                message: "Keychain 中没有保存 Doubao 凭证。"
+                providerName: volcengineTranscriptionProviderName,
+                message: "Keychain 中没有保存火山引擎凭证。"
             )
         }
 
@@ -160,7 +160,7 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
             normalizedCredential = try credential.normalized()
         } catch {
             throw TranscriptionProviderError.authentication(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: error.localizedDescription
             )
         }
@@ -170,15 +170,15 @@ final class MacDoubaoTranscriptionProvider: TranscriptionProviding, RealtimeTran
 }
 
 @MainActor
-final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtimeGatewayTranscriptionTransporting {
-    private let session: any DoubaoWebSocketSessioning
+final class URLSessionVolcengineRealtimeGatewayTranscriptionTransport: VolcengineRealtimeGatewayTranscriptionTransporting {
+    private let session: any VolcengineWebSocketSessioning
 
-    init(session: any DoubaoWebSocketSessioning = URLSession.shared) {
+    init(session: any VolcengineWebSocketSessioning = URLSession.shared) {
         self.session = session
     }
 
     func transcribe(
-        request: DoubaoRealtimeGatewayTranscriptionRequest,
+        request: VolcengineRealtimeGatewayTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
@@ -187,9 +187,9 @@ final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtim
 
         do {
             try await task.send(
-                .string(try DoubaoRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
+                .string(try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
             )
-            let streamingSession = URLSessionDoubaoRealtimeGatewayStreamingSession(
+            let streamingSession = URLSessionVolcengineRealtimeGatewayStreamingSession(
                 task: task,
                 endpoint: request.endpoint,
                 model: request.model,
@@ -203,12 +203,12 @@ final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtim
             throw providerError
         } catch {
             task.cancel(with: .goingAway, reason: nil)
-            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
+            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
         }
     }
 
     func startStreaming(
-        request: DoubaoRealtimeGatewaySessionRequest,
+        request: VolcengineRealtimeGatewaySessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession {
         let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
@@ -217,9 +217,9 @@ final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtim
 
         do {
             try await task.send(
-                .string(try DoubaoRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
+                .string(try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
             )
-            return URLSessionDoubaoRealtimeGatewayStreamingSession(
+            return URLSessionVolcengineRealtimeGatewayStreamingSession(
                 task: task,
                 endpoint: request.endpoint,
                 model: request.model,
@@ -228,7 +228,7 @@ final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtim
             )
         } catch {
             task.cancel(with: .goingAway, reason: nil)
-            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
+            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
         }
     }
 
@@ -241,8 +241,8 @@ final class URLSessionDoubaoRealtimeGatewayTranscriptionTransport: DoubaoRealtim
     }
 }
 
-private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscriptionSession {
-    private let task: any DoubaoWebSocketTasking
+private actor URLSessionVolcengineRealtimeGatewayStreamingSession: RealtimeTranscriptionSession {
+    private let task: any VolcengineWebSocketTasking
     private let endpoint: URL
     private let model: String
     private let receiveTask: Task<TranscriptSnapshot, Error>
@@ -251,7 +251,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
     private var sentAudioSampleCount = 0
 
     init(
-        task: any DoubaoWebSocketTasking,
+        task: any VolcengineWebSocketTasking,
         endpoint: URL,
         model: String,
         progress: TranscriptionProgressHandler?,
@@ -277,7 +277,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
         do {
             try await task.send(
                 .string(
-                    try DoubaoRealtimeGatewayProtocol.buildAudioAppendEvent(
+                    try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(
                         pcm16Samples: pcm16Samples
                     )
                 )
@@ -288,7 +288,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
             receiveTask.cancel()
             await cancelTask()
         } catch {
-            pendingError = DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+            pendingError = VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
             receiveTask.cancel()
             await cancelTask()
         }
@@ -307,7 +307,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
                 if !remainder.isEmpty {
                     try await task.send(
                         .string(
-                            try DoubaoRealtimeGatewayProtocol.buildAudioAppendEvent(
+                            try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(
                                 pcm16Samples: remainder
                             )
                         )
@@ -316,7 +316,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
                 }
             }
 
-            try await task.send(.string(try DoubaoRealtimeGatewayProtocol.buildAudioCommitEvent()))
+            try await task.send(.string(try VolcengineRealtimeGatewayProtocol.buildAudioCommitEvent()))
             let transcript = try await receiveTask.value
             await cancelTask()
             return transcript
@@ -325,7 +325,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
             throw providerError
         } catch {
             await cancelTask()
-            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
         }
     }
 
@@ -342,7 +342,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
     }
 
     private static func receiveTranscript(
-        from task: any DoubaoWebSocketTasking,
+        from task: any VolcengineWebSocketTasking,
         progress: TranscriptionProgressHandler?,
         startedAt: Date
     ) async throws -> TranscriptSnapshot {
@@ -363,7 +363,7 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
                 continue
             }
 
-            switch try DoubaoRealtimeGatewayProtocol.parseServerEvent(text) {
+            switch try VolcengineRealtimeGatewayProtocol.parseServerEvent(text) {
             case .sessionUpdated, .ignored:
                 continue
             case .partial(let partial):
@@ -374,12 +374,12 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
                 return TranscriptSnapshot(
                     finalText: finalText,
                     partials: partials,
-                    providerName: doubaoTranscriptionProviderName,
+                    providerName: volcengineTranscriptionProviderName,
                     latencyMilliseconds: latency
                 )
             case .error(let message):
                 throw TranscriptionProviderError.provider(
-                    providerName: doubaoTranscriptionProviderName,
+                    providerName: volcengineTranscriptionProviderName,
                     message: message
                 )
             }
@@ -388,16 +388,16 @@ private actor URLSessionDoubaoRealtimeGatewayStreamingSession: RealtimeTranscrip
 }
 
 @MainActor
-final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransporting {
+final class URLSessionVolcengineTranscriptionTransport: VolcengineTranscriptionTransporting {
     private let frameSamples = 3_200
-    private let session: any DoubaoWebSocketSessioning
+    private let session: any VolcengineWebSocketSessioning
 
-    init(session: any DoubaoWebSocketSessioning = URLSession.shared) {
+    init(session: any VolcengineWebSocketSessioning = URLSession.shared) {
         self.session = session
     }
 
     func transcribe(
-        request: DoubaoTranscriptionRequest,
+        request: VolcengineTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
@@ -406,7 +406,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
 
         do {
             let start = Date()
-            try await task.send(.data(try DoubaoWireProtocol.buildFullClientRequestFrame()))
+            try await task.send(.data(try VolcengineWireProtocol.buildFullClientRequestFrame()))
 
             let samples = request.audio.pcm16Samples
             var cursor = 0
@@ -415,7 +415,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
                 let isLast = end == samples.count
                 try await task.send(
                     .data(
-                        try DoubaoWireProtocol.buildAudioFrame(
+                        try VolcengineWireProtocol.buildAudioFrame(
                             pcm16Samples: Array(samples[cursor..<end]),
                             last: isLast
                         )
@@ -436,7 +436,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
             throw providerError
         } catch {
             task.cancel(with: .goingAway, reason: nil)
-            throw DoubaoTranscriptionErrorMapper.transportError(
+            throw VolcengineTranscriptionErrorMapper.transportError(
                 error,
                 endpoint: request.endpoint,
                 resourceID: request.resourceID
@@ -445,7 +445,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
     }
 
     func startStreaming(
-        request: DoubaoTranscriptionSessionRequest,
+        request: VolcengineTranscriptionSessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession {
         let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
@@ -453,8 +453,8 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
         task.resume()
 
         do {
-            try await task.send(.data(try DoubaoWireProtocol.buildFullClientRequestFrame()))
-            return URLSessionDoubaoStreamingTranscriptionSession(
+            try await task.send(.data(try VolcengineWireProtocol.buildFullClientRequestFrame()))
+            return URLSessionVolcengineStreamingTranscriptionSession(
                 task: task,
                 endpoint: request.endpoint,
                 progress: progress,
@@ -462,7 +462,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
             )
         } catch {
             task.cancel(with: .goingAway, reason: nil)
-            throw DoubaoTranscriptionErrorMapper.transportError(
+            throw VolcengineTranscriptionErrorMapper.transportError(
                 error,
                 endpoint: request.endpoint,
                 resourceID: request.resourceID
@@ -479,7 +479,7 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
     }
 
     private func receiveTranscript(
-        from task: any DoubaoWebSocketTasking,
+        from task: any VolcengineWebSocketTasking,
         progress: TranscriptionProgressHandler?,
         startedAt: Date
     ) async throws -> TranscriptSnapshot {
@@ -498,22 +498,22 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
                 continue
             }
 
-            switch try DoubaoWireProtocol.parseServerFrame(data) {
+            switch try VolcengineWireProtocol.parseServerFrame(data) {
             case .error(let code, let message):
-                throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
+                throw VolcengineTranscriptionErrorMapper.providerError(code: code, message: message)
             case .response(let flags, let payload):
                 if flags.isLast {
-                    finalText = try DoubaoFinalTextResolver.resolve(payload: payload, partials: partials)
+                    finalText = try VolcengineFinalTextResolver.resolve(payload: payload, partials: partials)
                     let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
                     return TranscriptSnapshot(
                         finalText: finalText ?? "",
                         partials: partials,
-                        providerName: doubaoTranscriptionProviderName,
+                        providerName: volcengineTranscriptionProviderName,
                         latencyMilliseconds: latency
                     )
                 }
 
-                if let partial = try DoubaoServerResponse.parsePartial(payload) {
+                if let partial = try VolcengineServerResponse.parsePartial(payload) {
                     partials.append(partial.text)
                     progress?(partial)
                 }
@@ -522,10 +522,10 @@ final class URLSessionDoubaoTranscriptionTransport: DoubaoTranscriptionTransport
     }
 }
 
-private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscriptionSession {
+private actor URLSessionVolcengineStreamingTranscriptionSession: RealtimeTranscriptionSession {
     private static let frameSampleCount = 3_200
 
-    private let task: any DoubaoWebSocketTasking
+    private let task: any VolcengineWebSocketTasking
     private let endpoint: URL
     private let receiveTask: Task<TranscriptSnapshot, Error>
     private var pendingError: TranscriptionProviderError?
@@ -535,7 +535,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
     private var pendingAudioSamples: [Int16] = []
 
     init(
-        task: any DoubaoWebSocketTasking,
+        task: any VolcengineWebSocketTasking,
         endpoint: URL,
         progress: TranscriptionProgressHandler?,
         startedAt: Date
@@ -564,7 +564,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
                 pendingAudioSamples.removeFirst(Self.frameSampleCount)
                 try await task.send(
                     .data(
-                        try DoubaoWireProtocol.buildAudioFrame(
+                        try VolcengineWireProtocol.buildAudioFrame(
                             pcm16Samples: frameSamples,
                             last: false
                         )
@@ -578,7 +578,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
             receiveTask.cancel()
             await cancelTask()
         } catch {
-            pendingError = DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+            pendingError = VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
             receiveTask.cancel()
             await cancelTask()
         }
@@ -605,7 +605,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
             } else {
                 try await task.send(
                     .data(
-                        try DoubaoWireProtocol.buildAudioFrame(
+                        try VolcengineWireProtocol.buildAudioFrame(
                             pcm16Samples: [],
                             last: true
                         )
@@ -621,7 +621,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
             throw providerError
         } catch {
             await cancelTask()
-            throw DoubaoTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
+            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
         }
     }
 
@@ -632,7 +632,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
             let isLast = end == samples.count
             try await task.send(
                 .data(
-                    try DoubaoWireProtocol.buildAudioFrame(
+                    try VolcengineWireProtocol.buildAudioFrame(
                         pcm16Samples: Array(samples[cursor..<end]),
                         last: isLast
                     )
@@ -657,7 +657,7 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
     }
 
     private static func receiveTranscript(
-        from task: any DoubaoWebSocketTasking,
+        from task: any VolcengineWebSocketTasking,
         progress: TranscriptionProgressHandler?,
         startedAt: Date
     ) async throws -> TranscriptSnapshot {
@@ -675,22 +675,22 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
                 continue
             }
 
-            switch try DoubaoWireProtocol.parseServerFrame(data) {
+            switch try VolcengineWireProtocol.parseServerFrame(data) {
             case .error(let code, let message):
-                throw DoubaoTranscriptionErrorMapper.providerError(code: code, message: message)
+                throw VolcengineTranscriptionErrorMapper.providerError(code: code, message: message)
             case .response(let flags, let payload):
                 if flags.isLast {
-                    let finalText = try DoubaoFinalTextResolver.resolve(payload: payload, partials: partials)
+                    let finalText = try VolcengineFinalTextResolver.resolve(payload: payload, partials: partials)
                     let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
                     return TranscriptSnapshot(
                         finalText: finalText,
                         partials: partials,
-                        providerName: doubaoTranscriptionProviderName,
+                        providerName: volcengineTranscriptionProviderName,
                         latencyMilliseconds: latency
                     )
                 }
 
-                if let partial = try DoubaoServerResponse.parsePartial(payload) {
+                if let partial = try VolcengineServerResponse.parsePartial(payload) {
                     partials.append(partial.text)
                     await progress?(partial)
                 }
@@ -699,12 +699,12 @@ private actor URLSessionDoubaoStreamingTranscriptionSession: RealtimeTranscripti
     }
 }
 
-private enum DoubaoFinalTextResolver {
+private enum VolcengineFinalTextResolver {
     static func resolve(payload: Data, partials: [String]) throws -> String {
         do {
-            return try DoubaoServerResponse.parseFinalText(payload)
+            return try VolcengineServerResponse.parseFinalText(payload)
         } catch let error as TranscriptionProviderError where canRecoverFromEmptyFinal(error) {
-            if let finalFramePartial = try DoubaoServerResponse.parsePartial(payload)?.text,
+            if let finalFramePartial = try VolcengineServerResponse.parsePartial(payload)?.text,
                !finalFramePartial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return finalFramePartial
             }
@@ -723,33 +723,33 @@ private enum DoubaoFinalTextResolver {
             return false
         }
 
-        return providerName == doubaoTranscriptionProviderName
+        return providerName == volcengineTranscriptionProviderName
             && (message == "server response missing result" || message == "server response contains no final text")
     }
 }
 
 @MainActor
-protocol DoubaoWebSocketSessioning {
-    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking
+protocol VolcengineWebSocketSessioning {
+    func webSocketTask(with request: URLRequest) -> any VolcengineWebSocketTasking
 }
 
 @MainActor
-protocol DoubaoWebSocketTasking: AnyObject, Sendable {
+protocol VolcengineWebSocketTasking: AnyObject, Sendable {
     func resume()
     func send(_ message: URLSessionWebSocketTask.Message) async throws
     func receive() async throws -> URLSessionWebSocketTask.Message
     func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
 }
 
-extension URLSession: DoubaoWebSocketSessioning {
-    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking {
+extension URLSession: VolcengineWebSocketSessioning {
+    func webSocketTask(with request: URLRequest) -> any VolcengineWebSocketTasking {
         webSocketTask(with: request) as URLSessionWebSocketTask
     }
 }
 
 extension URLSessionWebSocketTask: @unchecked Sendable {}
 
-extension URLSessionWebSocketTask: DoubaoWebSocketTasking {
+extension URLSessionWebSocketTask: VolcengineWebSocketTasking {
     func send(_ message: URLSessionWebSocketTask.Message) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             send(message) { error in

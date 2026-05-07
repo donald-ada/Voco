@@ -5,10 +5,10 @@ import VocoAppCore
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
     @State private var selectedSection: SettingsWorkbenchSection = .overview
-    @State private var selectedDoubaoCredentialMode: DoubaoCredentialMode = .apiKey
+    @State private var selectedVolcengineCredentialMode: VolcengineCredentialMode = .apiKey
     @State private var transcriptionAPIKey = ""
-    @State private var doubaoAppID = ""
-    @State private var doubaoAccessToken = ""
+    @State private var volcengineAppID = ""
+    @State private var volcengineAccessToken = ""
     @State private var settingsFeedbackMessage: String?
 
     var body: some View {
@@ -36,13 +36,13 @@ struct SettingsView: View {
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             coordinator.prepareForSettingsPresentation()
-            syncSelectedDoubaoCredentialMode()
+            syncSelectedVolcengineCredentialMode()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             coordinator.refreshLegacyInstall()
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
-            syncSelectedDoubaoCredentialMode()
+            syncSelectedVolcengineCredentialMode()
         }
     }
 
@@ -53,8 +53,8 @@ struct SettingsView: View {
             overviewSection
         case .settings:
             settingsSection
-        case .transcription:
-            transcriptionWorkbenchSection
+        case .model:
+            modelWorkbenchSection
         }
     }
 
@@ -119,12 +119,12 @@ struct SettingsView: View {
         }
     }
 
-    private var transcriptionWorkbenchSection: some View {
+    private var modelWorkbenchSection: some View {
         return VStack(alignment: .leading, spacing: 16) {
             settingsPageHeader(
-                eyebrow: "TRANSCRIPTION",
-                title: "Doubao 转写服务",
-                detail: "选择凭证模式，并将 Doubao 凭证保存到 macOS Keychain。"
+                eyebrow: "MODEL",
+                title: "火山引擎模型",
+                detail: "选择凭证模式，并将火山引擎凭证保存到 macOS Keychain。"
             )
 
             credentialPanel
@@ -328,7 +328,7 @@ struct SettingsView: View {
 
     private var credentialPanel: some View {
         workbenchPanel(
-            title: "Doubao 凭证",
+            title: "火山引擎凭证",
             detail: "凭证会保存到 macOS Keychain，不会在界面中显示完整密钥。"
         ) {
             WorkbenchStatusPill(
@@ -339,42 +339,42 @@ struct SettingsView: View {
         } content: {
             VStack(alignment: .leading, spacing: 12) {
                 WorkbenchSegmentedControl(
-                    options: DoubaoCredentialMode.allCases,
-                    selected: selectedDoubaoCredentialMode,
+                    options: VolcengineCredentialMode.allCases,
+                    selected: selectedVolcengineCredentialMode,
                     width: 360,
                     title: \.title
                 ) { mode in
-                    selectedDoubaoCredentialMode = mode
+                    selectedVolcengineCredentialMode = mode
                 }
 
-                WorkbenchFieldBlock(label: selectedDoubaoCredentialMode.fieldLabel) {
+                WorkbenchFieldBlock(label: selectedVolcengineCredentialMode.fieldLabel) {
                     credentialFields
                 }
 
-                Text(selectedDoubaoCredentialMode.detail)
+                Text(selectedVolcengineCredentialMode.detail)
                     .font(SettingsWorkbenchVisual.captionFont)
                     .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
                     Button {
-                        let mode = selectedDoubaoCredentialMode
+                        let mode = selectedVolcengineCredentialMode
                         let apiKey = transcriptionAPIKey
-                        let appID = doubaoAppID
-                        let accessToken = doubaoAccessToken
+                        let appID = volcengineAppID
+                        let accessToken = volcengineAccessToken
                         clearTranscriptionInputFields()
                         Task {
                             switch mode {
                             case .apiKey:
                                 await coordinator.saveTranscriptionAPIKey(apiKey)
                             case .appIDAccessToken:
-                                await coordinator.saveDoubaoAppIDAccessToken(
+                                await coordinator.saveVolcengineAppIDAccessToken(
                                     appID: appID,
                                     accessToken: accessToken
                                 )
                             }
                             if coordinator.lastErrorMessage == nil {
-                                settingsFeedbackMessage = "已保存 Doubao 凭证。"
+                                settingsFeedbackMessage = "已保存火山引擎凭证。"
                             }
                         }
                     } label: {
@@ -385,7 +385,7 @@ struct SettingsView: View {
 
                     Button("刷新状态") {
                         coordinator.prepareForSettingsPresentation()
-                        settingsFeedbackMessage = "已刷新 Doubao 状态。"
+                        settingsFeedbackMessage = "已刷新火山引擎状态。"
                     }
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
 
@@ -393,7 +393,7 @@ struct SettingsView: View {
                         Task {
                             await coordinator.clearTranscriptionCredentials()
                             if coordinator.lastErrorMessage == nil {
-                                settingsFeedbackMessage = "已清除 Doubao 凭证。"
+                                settingsFeedbackMessage = "已清除火山引擎凭证。"
                             }
                         }
                     } label: {
@@ -551,29 +551,29 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var credentialFields: some View {
-        switch selectedDoubaoCredentialMode {
+        switch selectedVolcengineCredentialMode {
         case .apiKey:
-            SecureField("Doubao API Key", text: $transcriptionAPIKey)
+            SecureField("火山引擎 API Key", text: $transcriptionAPIKey)
                 .font(SettingsWorkbenchVisual.bodyFont)
                 .textFieldStyle(.roundedBorder)
         case .appIDAccessToken:
-            TextField("Doubao App ID", text: $doubaoAppID)
+            TextField("火山引擎 App ID", text: $volcengineAppID)
                 .font(SettingsWorkbenchVisual.bodyFont)
                 .textFieldStyle(.roundedBorder)
 
-            SecureField("Doubao Access Token", text: $doubaoAccessToken)
+            SecureField("火山引擎 Access Token", text: $volcengineAccessToken)
                 .font(SettingsWorkbenchVisual.bodyFont)
                 .textFieldStyle(.roundedBorder)
         }
     }
 
     private var canSaveSelectedCredential: Bool {
-        switch selectedDoubaoCredentialMode {
+        switch selectedVolcengineCredentialMode {
         case .apiKey:
             !transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .appIDAccessToken:
-            !doubaoAppID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !doubaoAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !volcengineAppID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !volcengineAccessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
@@ -627,18 +627,18 @@ struct SettingsView: View {
         return snapshot.hasCredential ? SettingsWorkbenchVisual.success : SettingsWorkbenchVisual.neutral
     }
 
-    private func syncSelectedDoubaoCredentialMode() {
+    private func syncSelectedVolcengineCredentialMode() {
         guard let mode = coordinator.transcriptionCredentials.mode else {
             return
         }
 
-        selectedDoubaoCredentialMode = mode
+        selectedVolcengineCredentialMode = mode
     }
 
     private func clearTranscriptionInputFields() {
         transcriptionAPIKey = ""
-        doubaoAppID = ""
-        doubaoAccessToken = ""
+        volcengineAppID = ""
+        volcengineAccessToken = ""
     }
 
     private func legacyInstallTint(_ status: LegacyInstallStatus) -> Color {
@@ -662,10 +662,10 @@ struct SettingsView: View {
         } else if title == "前往设置" ||
             title.contains("输入") {
             selectedSection = .settings
-        } else if title == "前往转写服务" ||
-            title.contains("转写") ||
+        } else if title == "前往模型" ||
+            title.contains("模型") ||
             title.contains("Keychain") {
-            selectedSection = .transcription
+            selectedSection = .model
         } else if title == "重新检查" {
             coordinator.prepareForSettingsPresentation()
             settingsFeedbackMessage = "已重新检查状态。"
@@ -854,22 +854,22 @@ private extension SettingsWorkbenchSectionStatus {
     }
 }
 
-private extension DoubaoCredentialMode {
+private extension VolcengineCredentialMode {
     var fieldLabel: String {
         switch self {
         case .apiKey:
             "新网关 API Key"
         case .appIDAccessToken:
-            "Doubao App ID + Access Token"
+            "火山引擎 App ID + Access Token"
         }
     }
 
     var endpointDetail: String {
         switch self {
         case .apiKey:
-            doubaoRealtimeGatewayEndpoint
+            volcengineRealtimeGatewayEndpoint
         case .appIDAccessToken:
-            doubaoDefaultEndpoint
+            volcengineDefaultEndpoint
         }
     }
 
@@ -885,9 +885,9 @@ private extension DoubaoCredentialMode {
     var routingParameterDetail: String {
         switch self {
         case .apiKey:
-            doubaoRealtimeGatewayModel
+            volcengineRealtimeGatewayModel
         case .appIDAccessToken:
-            "\(doubaoDefaultResourceID) / \(doubaoLegacyOpenSpeechResourceID)"
+            "\(volcengineDefaultResourceID) / \(volcengineLegacyOpenSpeechResourceID)"
         }
     }
 
@@ -1595,8 +1595,8 @@ private extension SettingsWorkbenchSection {
             "house"
         case .settings:
             "gearshape"
-        case .transcription:
-            "text.bubble"
+        case .model:
+            "cpu"
         }
     }
 }

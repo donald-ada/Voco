@@ -4,24 +4,24 @@ import XCTest
 final class TranscriptionCredentialModelsTests: XCTestCase {
     func testStoredSnapshotMasksAPIKey() {
         let snapshot = TranscriptionCredentialSnapshot.stored(
-            provider: .doubao,
+            provider: .volcengine,
             apiKey: "sk-test-1234567890"
         )
 
-        XCTAssertEqual(snapshot.provider.title, "Doubao")
+        XCTAssertEqual(snapshot.provider.title, "火山引擎")
         XCTAssertTrue(snapshot.hasCredential)
         XCTAssertTrue(snapshot.hasAPIKey)
         XCTAssertEqual(snapshot.mode, .apiKey)
         XCTAssertEqual(snapshot.maskedCredential, "sk-t...7890")
         XCTAssertEqual(snapshot.maskedAPIKey, "sk-t...7890")
-        XCTAssertEqual(snapshot.statusTitle, "Doubao 凭证已保存")
+        XCTAssertEqual(snapshot.statusTitle, "火山引擎凭证已保存")
         XCTAssertNil(snapshot.lastErrorMessage)
     }
 
-    func testStoredSnapshotDescribesLegacyDoubaoCredentialMode() {
+    func testStoredSnapshotDescribesLegacyVolcengineCredentialMode() {
         let snapshot = TranscriptionCredentialSnapshot.stored(
-            provider: .doubao,
-            credential: .doubaoAppIDAccessToken(
+            provider: .volcengine,
+            credential: .volcengineAppIDAccessToken(
                 appID: "3145608744",
                 accessToken: "legacy-token"
             )
@@ -32,21 +32,21 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.mode, .appIDAccessToken)
         XCTAssertEqual(snapshot.maskedCredential, "App ID 3145...8744 · Token lega...oken")
         XCTAssertNil(snapshot.maskedAPIKey)
-        XCTAssertEqual(snapshot.statusTitle, "Doubao 凭证已保存")
+        XCTAssertEqual(snapshot.statusTitle, "火山引擎凭证已保存")
         XCTAssertEqual(snapshot.storageDetail, "旧控制台 App ID + Token 已安全保存在 Keychain。")
     }
 
     func testMissingAndFailedSnapshotsAreUserVisible() {
-        let missing = TranscriptionCredentialSnapshot.missing(provider: .doubao)
+        let missing = TranscriptionCredentialSnapshot.missing(provider: .volcengine)
         XCTAssertFalse(missing.hasCredential)
         XCTAssertFalse(missing.hasAPIKey)
-        XCTAssertEqual(missing.statusTitle, "Doubao 凭证未保存")
-        XCTAssertEqual(missing.storageDetail, "Keychain 中没有保存 Doubao 凭证。")
+        XCTAssertEqual(missing.statusTitle, "火山引擎凭证未保存")
+        XCTAssertEqual(missing.storageDetail, "Keychain 中没有保存火山引擎凭证。")
 
-        let failed = TranscriptionCredentialSnapshot.failed(provider: .doubao, message: "read failed")
+        let failed = TranscriptionCredentialSnapshot.failed(provider: .volcengine, message: "read failed")
         XCTAssertFalse(failed.hasCredential)
         XCTAssertFalse(failed.hasAPIKey)
-        XCTAssertEqual(failed.statusTitle, "Doubao 凭证读取失败")
+        XCTAssertEqual(failed.statusTitle, "火山引擎凭证读取失败")
         XCTAssertEqual(failed.lastErrorMessage, "read failed")
     }
 
@@ -57,7 +57,7 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
         )
         XCTAssertEqual(
             TranscriptionCredentialError.emptyAppIDAccessToken.localizedDescription,
-            "Doubao App ID 和 Access Token 不能为空。"
+            "火山引擎 App ID 和 Access Token 不能为空。"
         )
         XCTAssertEqual(
             TranscriptionCredentialError.storeFailed(message: "OSStatus -50").localizedDescription,
@@ -69,39 +69,39 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
     func testInMemoryCredentialStoreSavesAndDeletesKey() async throws {
         let store = InMemoryTranscriptionCredentialStore()
 
-        XCTAssertEqual(store.currentSnapshot(), .missing(provider: .doubao))
+        XCTAssertEqual(store.currentSnapshot(), .missing(provider: .volcengine))
 
-        let stored = try await store.saveAPIKey("  sk-test-abcdef  ", for: .doubao)
+        let stored = try await store.saveAPIKey("  sk-test-abcdef  ", for: .volcengine)
         XCTAssertTrue(stored.hasCredential)
         XCTAssertTrue(stored.hasAPIKey)
-        let savedAPIKey = try await store.apiKey(for: .doubao)
+        let savedAPIKey = try await store.apiKey(for: .volcengine)
         XCTAssertEqual(savedAPIKey, "sk-test-abcdef")
 
-        let missing = try await store.deleteCredentials(for: .doubao)
-        XCTAssertEqual(missing, .missing(provider: .doubao))
-        let deletedAPIKey = try await store.apiKey(for: .doubao)
+        let missing = try await store.deleteCredentials(for: .volcengine)
+        XCTAssertEqual(missing, .missing(provider: .volcengine))
+        let deletedAPIKey = try await store.apiKey(for: .volcengine)
         XCTAssertNil(deletedAPIKey)
     }
 
     @MainActor
-    func testInMemoryCredentialStoreSavesLegacyDoubaoCredential() async throws {
+    func testInMemoryCredentialStoreSavesLegacyVolcengineCredential() async throws {
         let store = InMemoryTranscriptionCredentialStore()
 
         let stored = try await store.saveCredential(
-            .doubaoAppIDAccessToken(
+            .volcengineAppIDAccessToken(
                 appID: "  3145608744  ",
                 accessToken: "  legacy-token  "
             ),
-            for: .doubao
+            for: .volcengine
         )
 
         XCTAssertTrue(stored.hasCredential)
         XCTAssertFalse(stored.hasAPIKey)
         XCTAssertEqual(stored.mode, .appIDAccessToken)
-        let credential = try await store.credential(for: .doubao)
+        let credential = try await store.credential(for: .volcengine)
         XCTAssertEqual(credential?.appID, "3145608744")
         XCTAssertEqual(credential?.accessToken, "legacy-token")
-        let apiKey = try await store.apiKey(for: .doubao)
+        let apiKey = try await store.apiKey(for: .volcengine)
         XCTAssertNil(apiKey)
     }
 }

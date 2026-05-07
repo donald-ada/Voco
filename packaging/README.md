@@ -150,7 +150,7 @@ verification pass:
 ```text
 native microphone capture
 native hotkey recording workflow
-native Doubao transcription
+native Volcengine model
 native text injection
 native HUD overlay
 native Keychain credentials

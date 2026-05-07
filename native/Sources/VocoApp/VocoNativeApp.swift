@@ -35,7 +35,7 @@ struct VocoNativeApp: App {
         SettingsWorkbenchFontRegistrar.registerBundledFonts()
         let permissionProvider = MacPermissionProvider()
         let credentialStore = MacKeychainCredentialStore()
-        let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
+        let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
         let voiceInputPreferences = MacVoiceInputPreferenceStore()
         let audioCapture = MacAudioCaptureEngine()
         if let audioInputDevice = voiceInputPreferences.audioInputDevice {

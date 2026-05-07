@@ -8,9 +8,9 @@ See `docs/superpowers/specs/2026-05-01-voco-design.md` for the full design.
 
 Native rewrite development: Voco now has a native macOS menu bar app with
 onboarding, Settings, Diagnostics, Keychain-backed credentials, audio capture,
-hotkey recording, Doubao transcription, text injection, HUD overlay, launch at
-login, and native release packaging. The user-facing install path is the native
-`Voco.app` distributed through `dist/Voco.dmg`.
+hotkey recording, Volcengine model transcription, text injection, HUD overlay,
+launch at login, and native release packaging. The user-facing install path is
+the native `Voco.app` distributed through `dist/Voco.dmg`.
 
 The older Rust CLI/daemon, user LaunchAgent template, and Swift HUD helper
 packaging remain in the repository for development reference until the final

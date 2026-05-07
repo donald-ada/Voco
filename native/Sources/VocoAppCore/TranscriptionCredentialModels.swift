@@ -1,19 +1,19 @@
 import Foundation
 
 public enum TranscriptionCredentialProvider: String, CaseIterable, Identifiable, Sendable {
-    case doubao
+    case volcengine
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
-        case .doubao:
-            "Doubao"
+        case .volcengine:
+            "火山引擎"
         }
     }
 }
 
-public enum DoubaoCredentialMode: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum VolcengineCredentialMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case apiKey
     case appIDAccessToken
 
@@ -39,13 +39,13 @@ public enum DoubaoCredentialMode: String, CaseIterable, Identifiable, Codable, S
 }
 
 public struct TranscriptionCredential: Codable, Equatable, Sendable {
-    public let mode: DoubaoCredentialMode
+    public let mode: VolcengineCredentialMode
     public let apiKey: String?
     public let appID: String?
     public let accessToken: String?
 
     public init(
-        mode: DoubaoCredentialMode,
+        mode: VolcengineCredentialMode,
         apiKey: String? = nil,
         appID: String? = nil,
         accessToken: String? = nil
@@ -56,11 +56,11 @@ public struct TranscriptionCredential: Codable, Equatable, Sendable {
         self.accessToken = accessToken
     }
 
-    public static func doubaoAPIKey(_ apiKey: String) -> TranscriptionCredential {
+    public static func volcengineAPIKey(_ apiKey: String) -> TranscriptionCredential {
         TranscriptionCredential(mode: .apiKey, apiKey: apiKey)
     }
 
-    public static func doubaoAppIDAccessToken(
+    public static func volcengineAppIDAccessToken(
         appID: String,
         accessToken: String
     ) -> TranscriptionCredential {
@@ -79,7 +79,7 @@ public struct TranscriptionCredential: Codable, Equatable, Sendable {
                 throw TranscriptionCredentialError.emptyAPIKey
             }
 
-            return .doubaoAPIKey(trimmedAPIKey)
+            return .volcengineAPIKey(trimmedAPIKey)
         case .appIDAccessToken:
             let trimmedAppID = appID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let trimmedAccessToken = accessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -87,7 +87,7 @@ public struct TranscriptionCredential: Codable, Equatable, Sendable {
                 throw TranscriptionCredentialError.emptyAppIDAccessToken
             }
 
-            return .doubaoAppIDAccessToken(
+            return .volcengineAppIDAccessToken(
                 appID: trimmedAppID,
                 accessToken: trimmedAccessToken
             )
@@ -98,7 +98,7 @@ public struct TranscriptionCredential: Codable, Equatable, Sendable {
 public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
     public let provider: TranscriptionCredentialProvider
     public let hasCredential: Bool
-    public let mode: DoubaoCredentialMode?
+    public let mode: VolcengineCredentialMode?
     public let maskedCredential: String?
     public let hasAPIKey: Bool
     public let maskedAPIKey: String?
@@ -107,11 +107,11 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
 
     public var statusTitle: String {
         if let lastErrorMessage, !lastErrorMessage.isEmpty {
-            "\(provider.title) 凭证读取失败"
+            "\(provider.title)凭证读取失败"
         } else if hasCredential {
-            "\(provider.title) 凭证已保存"
+            "\(provider.title)凭证已保存"
         } else {
-            "\(provider.title) 凭证未保存"
+            "\(provider.title)凭证未保存"
         }
     }
 
@@ -123,7 +123,7 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
             maskedCredential: nil,
             hasAPIKey: false,
             maskedAPIKey: nil,
-            storageDetail: "Keychain 中没有保存 Doubao 凭证。",
+            storageDetail: "Keychain 中没有保存火山引擎凭证。",
             lastErrorMessage: nil
         )
     }
@@ -132,7 +132,7 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
         provider: TranscriptionCredentialProvider,
         apiKey: String
     ) -> TranscriptionCredentialSnapshot {
-        stored(provider: provider, credential: .doubaoAPIKey(apiKey))
+        stored(provider: provider, credential: .volcengineAPIKey(apiKey))
     }
 
     public static func stored(
@@ -184,7 +184,7 @@ public enum TranscriptionCredentialError: LocalizedError, Equatable, Sendable {
         case .emptyAPIKey:
             "ASR API Key 不能为空。"
         case .emptyAppIDAccessToken:
-            "Doubao App ID 和 Access Token 不能为空。"
+            "火山引擎 App ID 和 Access Token 不能为空。"
         case .readFailed(let message):
             "读取 ASR 凭证失败：\(message)"
         case .storeFailed(let message):
@@ -211,7 +211,7 @@ public extension TranscriptionCredentialStoring {
         _ apiKey: String,
         for provider: TranscriptionCredentialProvider
     ) async throws -> TranscriptionCredentialSnapshot {
-        try await saveCredential(.doubaoAPIKey(apiKey), for: provider)
+        try await saveCredential(.volcengineAPIKey(apiKey), for: provider)
     }
 
     func apiKey(for provider: TranscriptionCredentialProvider) async throws -> String? {
@@ -229,12 +229,12 @@ public final class InMemoryTranscriptionCredentialStore: TranscriptionCredential
     private var storedCredential: TranscriptionCredential?
 
     public init(
-        provider: TranscriptionCredentialProvider = .doubao,
+        provider: TranscriptionCredentialProvider = .volcengine,
         apiKey: String? = nil,
         credential: TranscriptionCredential? = nil
     ) {
         self.provider = provider
-        self.storedCredential = credential ?? apiKey.map(TranscriptionCredential.doubaoAPIKey)
+        self.storedCredential = credential ?? apiKey.map(TranscriptionCredential.volcengineAPIKey)
     }
 
     public func currentSnapshot() -> TranscriptionCredentialSnapshot {

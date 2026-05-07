@@ -3,7 +3,7 @@ import Foundation
 public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendable {
     case overview
     case settings
-    case transcription
+    case model
 
     public var id: String { rawValue }
 
@@ -13,8 +13,8 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
             "总览"
         case .settings:
             "设置"
-        case .transcription:
-            "转写服务"
+        case .model:
+            "模型"
         }
     }
 
@@ -24,8 +24,8 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
             "当前状态"
         case .settings:
             "快捷键、模式、麦克风、权限"
-        case .transcription:
-            "Doubao 和 Keychain"
+        case .model:
+            "火山引擎和 Keychain"
         }
     }
 }
@@ -108,21 +108,21 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             )
         } else if !credentials.hasCredential || credentials.lastErrorMessage != nil {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: credentials.lastErrorMessage == nil ? "Doubao 凭证未保存" : "Doubao 凭证读取失败",
+                title: credentials.lastErrorMessage == nil ? "火山引擎凭证未保存" : "火山引擎凭证读取失败",
                 detail: credentials.storageDetail,
-                primaryActionTitle: "前往转写服务"
+                primaryActionTitle: "前往模型"
             )
         } else if let transcriptionErrorMessage {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "Doubao 转写失败",
+                title: "火山引擎转写失败",
                 detail: transcriptionErrorMessage,
-                primaryActionTitle: "前往转写服务"
+                primaryActionTitle: "前往模型"
             )
         } else if asrStatus.isWorkbenchAttention {
             overview = SettingsWorkbenchOverviewSnapshot(
                 title: asrStatus.workbenchIssueTitle,
                 detail: asrStatus.detail,
-                primaryActionTitle: "前往转写服务"
+                primaryActionTitle: "前往模型"
             )
         } else if let injection, !injection.succeeded {
             overview = SettingsWorkbenchOverviewSnapshot(
@@ -167,7 +167,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                     ? .needsAttention
                     : .ok,
                 .settings: settingsStatus,
-                .transcription: transcriptionNeedsAttention ? .needsAttention : .ok
+                .model: transcriptionNeedsAttention ? .needsAttention : .ok
             ]
         )
     }
@@ -192,15 +192,15 @@ private extension TranscriptionProviderStatus {
     var workbenchIssueTitle: String {
         switch self {
         case .notConfigured:
-            "转写服务未配置"
+            "模型未配置"
         case .ready(let providerName):
-            "\(providerName) 已就绪"
+            "\(providerName)已就绪"
         case .authenticationRequired(let providerName):
-            "\(providerName) 需要认证"
+            "\(providerName)需要认证"
         case .offline(let providerName):
-            "\(providerName) 离线"
+            "\(providerName)离线"
         case .failed(let providerName, _):
-            "\(providerName) 转写失败"
+            "\(providerName)转写失败"
         }
     }
 }

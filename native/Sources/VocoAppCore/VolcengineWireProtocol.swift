@@ -1,7 +1,7 @@
 import Foundation
 import zlib
 
-public enum DoubaoMessageFlags: UInt8, Sendable {
+public enum VolcengineMessageFlags: UInt8, Sendable {
     case noSequence = 0b0000
     case positiveSequence = 0b0001
     case lastNoSequence = 0b0010
@@ -21,17 +21,17 @@ public enum DoubaoMessageFlags: UInt8, Sendable {
     }
 }
 
-public enum DoubaoServerFrame: Sendable {
-    case response(flags: DoubaoMessageFlags, payload: Data)
+public enum VolcengineServerFrame: Sendable {
+    case response(flags: VolcengineMessageFlags, payload: Data)
     case error(code: Int, message: String)
 }
 
-public enum DoubaoWireProtocol {
+public enum VolcengineWireProtocol {
     private static let protocolVersion: UInt8 = 1
     private static let headerSizeWords: UInt8 = 1
 
     public static func buildFullClientRequestFrame() throws -> Data {
-        let payload = DoubaoFullClientRequestPayload.vocoDefaults()
+        let payload = VolcengineFullClientRequestPayload.vocoDefaults()
         let json = try JSONEncoder().encode(payload)
         return try sizePrefixedFrame(
             messageType: .fullClientRequest,
@@ -61,7 +61,7 @@ public enum DoubaoWireProtocol {
         )
     }
 
-    public static func parseServerFrame(_ data: Data) throws -> DoubaoServerFrame {
+    public static func parseServerFrame(_ data: Data) throws -> VolcengineServerFrame {
         var cursor = DataCursor(data)
         let headerBytes = try cursor.readBytes(count: 4)
         let header = try Header.decode(headerBytes)
@@ -136,9 +136,9 @@ public enum DoubaoWireProtocol {
 
     private static func sizePrefixedFrame(
         messageType: MessageType,
-        flags: DoubaoMessageFlags,
+        flags: VolcengineMessageFlags,
         serialization: Serialization,
-        compression: DoubaoCompression,
+        compression: VolcengineCompression,
         payload: Data
     ) throws -> Data {
         var frame = header(
@@ -154,9 +154,9 @@ public enum DoubaoWireProtocol {
 
     private static func header(
         messageType: MessageType,
-        flags: DoubaoMessageFlags,
+        flags: VolcengineMessageFlags,
         serialization: Serialization,
-        compression: DoubaoCompression
+        compression: VolcengineCompression
     ) -> Data {
         Data([
             (protocolVersion << 4) | headerSizeWords,
@@ -275,7 +275,7 @@ public enum DoubaoWireProtocol {
     }
 
     private static func wireError(_ message: String) -> TranscriptionProviderError {
-        .provider(providerName: doubaoTranscriptionProviderName, message: "wire protocol: \(message)")
+        .provider(providerName: volcengineTranscriptionProviderName, message: "wire protocol: \(message)")
     }
 }
 
@@ -305,26 +305,26 @@ private enum Serialization: UInt8 {
     case json = 0b0001
 }
 
-private enum DoubaoCompression: UInt8 {
+private enum VolcengineCompression: UInt8 {
     case none = 0b0000
     case gzip = 0b0001
 }
 
 private struct Header {
     let messageType: MessageType
-    let flags: DoubaoMessageFlags
-    let compression: DoubaoCompression
+    let flags: VolcengineMessageFlags
+    let compression: VolcengineCompression
 
     static func decode(_ bytes: Data) throws -> Header {
         guard bytes.count == 4 else {
-            throw DoubaoWireProtocol.providerWireErrorForHeader("header needs 4 bytes")
+            throw VolcengineWireProtocol.providerWireErrorForHeader("header needs 4 bytes")
         }
 
         let first = bytes[bytes.startIndex]
         let protocolVersion = first >> 4
         let headerSize = first & 0x0F
         guard protocolVersion == 1, headerSize == 1 else {
-            throw DoubaoWireProtocol.providerWireErrorForHeader(
+            throw VolcengineWireProtocol.providerWireErrorForHeader(
                 "unsupported header version=\(protocolVersion) size=\(headerSize)"
             )
         }
@@ -332,22 +332,22 @@ private struct Header {
         let second = bytes[bytes.index(bytes.startIndex, offsetBy: 1)]
         let third = bytes[bytes.index(bytes.startIndex, offsetBy: 2)]
         guard let messageType = MessageType(rawValue: second >> 4) else {
-            throw DoubaoWireProtocol.providerWireErrorForHeader("unknown message type \(second >> 4)")
+            throw VolcengineWireProtocol.providerWireErrorForHeader("unknown message type \(second >> 4)")
         }
-        guard let flags = DoubaoMessageFlags(rawValue: second & 0x0F) else {
-            throw DoubaoWireProtocol.providerWireErrorForHeader("unknown flags \(second & 0x0F)")
+        guard let flags = VolcengineMessageFlags(rawValue: second & 0x0F) else {
+            throw VolcengineWireProtocol.providerWireErrorForHeader("unknown flags \(second & 0x0F)")
         }
-        guard let compression = DoubaoCompression(rawValue: third & 0x0F) else {
-            throw DoubaoWireProtocol.providerWireErrorForHeader("unknown compression \(third & 0x0F)")
+        guard let compression = VolcengineCompression(rawValue: third & 0x0F) else {
+            throw VolcengineWireProtocol.providerWireErrorForHeader("unknown compression \(third & 0x0F)")
         }
 
         return Header(messageType: messageType, flags: flags, compression: compression)
     }
 }
 
-private extension DoubaoWireProtocol {
+private extension VolcengineWireProtocol {
     static func providerWireErrorForHeader(_ message: String) -> TranscriptionProviderError {
-        .provider(providerName: doubaoTranscriptionProviderName, message: "wire protocol: \(message)")
+        .provider(providerName: volcengineTranscriptionProviderName, message: "wire protocol: \(message)")
     }
 }
 
@@ -362,7 +362,7 @@ private struct DataCursor {
     mutating func readBytes(count: Int) throws -> Data {
         guard count >= 0, offset + count <= data.count else {
             throw TranscriptionProviderError.provider(
-                providerName: doubaoTranscriptionProviderName,
+                providerName: volcengineTranscriptionProviderName,
                 message: "wire protocol: truncated frame"
             )
         }
@@ -388,13 +388,13 @@ private struct DataCursor {
     }
 }
 
-private struct DoubaoFullClientRequestPayload: Encodable {
+private struct VolcengineFullClientRequestPayload: Encodable {
     let user: UserPayload
     let audio: AudioPayload
     let request: RequestPayload
 
-    static func vocoDefaults() -> DoubaoFullClientRequestPayload {
-        DoubaoFullClientRequestPayload(
+    static func vocoDefaults() -> VolcengineFullClientRequestPayload {
+        VolcengineFullClientRequestPayload(
             user: UserPayload(uid: "voco", platform: "macOS"),
             audio: AudioPayload(format: "pcm", codec: "raw", rate: 16_000, bits: 16, channel: 1),
             request: RequestPayload(

@@ -85,11 +85,11 @@ final class HUDModelsTests: XCTestCase {
             status: .providerOffline,
             lastTranscript: nil,
             lastInjection: nil,
-            lastErrorMessage: "转写服务未配置"
+            lastErrorMessage: "模型未配置"
         )
         XCTAssertEqual(explicitError.phase, .error)
         XCTAssertEqual(explicitError.title, "需要处理")
-        XCTAssertEqual(explicitError.detail, "转写服务未配置")
+        XCTAssertEqual(explicitError.detail, "模型未配置")
         XCTAssertNil(explicitError.autoHideAfterSeconds)
     }
 }

@@ -343,35 +343,35 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
-        await saveTranscriptionCredential(.doubaoAPIKey(apiKey))
+        await saveTranscriptionCredential(.volcengineAPIKey(apiKey))
     }
 
-    public func saveDoubaoAppIDAccessToken(appID: String, accessToken: String) async {
+    public func saveVolcengineAppIDAccessToken(appID: String, accessToken: String) async {
         await saveTranscriptionCredential(
-            .doubaoAppIDAccessToken(appID: appID, accessToken: accessToken)
+            .volcengineAppIDAccessToken(appID: appID, accessToken: accessToken)
         )
     }
 
     public func saveTranscriptionCredential(_ credential: TranscriptionCredential) async {
         do {
-            transcriptionCredentials = try await transcriptionCredentialStore.saveCredential(credential, for: .doubao)
+            transcriptionCredentials = try await transcriptionCredentialStore.saveCredential(credential, for: .volcengine)
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
             let message = error.localizedDescription
-            transcriptionCredentials = .failed(provider: .doubao, message: message)
+            transcriptionCredentials = .failed(provider: .volcengine, message: message)
             lastErrorMessage = message
         }
     }
 
     public func clearTranscriptionCredentials() async {
         do {
-            transcriptionCredentials = try await transcriptionCredentialStore.deleteCredentials(for: .doubao)
+            transcriptionCredentials = try await transcriptionCredentialStore.deleteCredentials(for: .volcengine)
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
             let message = error.localizedDescription
-            transcriptionCredentials = .failed(provider: .doubao, message: message)
+            transcriptionCredentials = .failed(provider: .volcengine, message: message)
             lastErrorMessage = message
         }
     }

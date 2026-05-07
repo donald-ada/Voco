@@ -3,19 +3,19 @@ import XCTest
 @testable import VocoAppCore
 
 @MainActor
-final class MacDoubaoTranscriptionProviderTests: XCTestCase {
+final class MacVolcengineTranscriptionProviderTests: XCTestCase {
     func testProviderReportsAuthenticationRequiredWithoutStoredAPIKey() {
-        let provider = MacDoubaoTranscriptionProvider(
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
-            transport: FakeDoubaoTransport()
+            transport: FakeVolcengineTransport()
         )
 
-        XCTAssertEqual(provider.status, .authenticationRequired(providerName: "Doubao"))
+        XCTAssertEqual(provider.status, .authenticationRequired(providerName: "火山引擎"))
     }
 
     func testProviderFailsBeforeTransportWhenCredentialIsMissing() async {
-        let transport = FakeDoubaoTransport()
-        let provider = MacDoubaoTranscriptionProvider(
+        let transport = FakeVolcengineTransport()
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(),
             transport: transport
         )
@@ -33,7 +33,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         } catch {
             XCTAssertEqual(
                 error.localizedDescription,
-                "Doubao 认证失败：Keychain 中没有保存 Doubao 凭证。"
+                "火山引擎认证失败：Keychain 中没有保存火山引擎凭证。"
             )
         }
 
@@ -41,16 +41,16 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testProviderBuildsRealtimeGatewayRequestFromStoredAPIKey() async throws {
-        let openSpeechTransport = FakeDoubaoTransport()
-        let gatewayTransport = FakeDoubaoRealtimeGatewayTransport(
+        let openSpeechTransport = FakeVolcengineTransport()
+        let gatewayTransport = FakeVolcengineRealtimeGatewayTransport(
             transcript: TranscriptSnapshot(
                 finalText: "hello gateway",
                 partials: [],
-                providerName: "Doubao",
+                providerName: "火山引擎",
                 latencyMilliseconds: 12
             )
         )
-        let provider = MacDoubaoTranscriptionProvider(
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
             transport: openSpeechTransport,
             realtimeGatewayTransport: gatewayTransport
@@ -65,7 +65,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(provider.status, .ready(providerName: "Doubao"))
+        XCTAssertEqual(provider.status, .ready(providerName: "火山引擎"))
         XCTAssertEqual(transcript.finalText, "hello gateway")
         XCTAssertTrue(openSpeechTransport.requests.isEmpty)
         XCTAssertEqual(gatewayTransport.requests.count, 1)
@@ -77,10 +77,10 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testProviderBuildsRequestFromStoredAppIDAccessTokenCredential() async throws {
-        let transport = FakeDoubaoTransport()
-        let provider = MacDoubaoTranscriptionProvider(
+        let transport = FakeVolcengineTransport()
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(
-                credential: .doubaoAppIDAccessToken(
+                credential: .volcengineAppIDAccessToken(
                     appID: "3145608744",
                     accessToken: "legacy-token"
                 )
@@ -108,10 +108,10 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testProviderStartsStreamingFromStoredAppIDAccessTokenCredential() async throws {
-        let transport = FakeDoubaoTransport()
-        let provider = MacDoubaoTranscriptionProvider(
+        let transport = FakeVolcengineTransport()
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(
-                credential: .doubaoAppIDAccessToken(
+                credential: .volcengineAppIDAccessToken(
                     appID: "3145608744",
                     accessToken: "legacy-token"
                 )
@@ -132,16 +132,16 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testProviderRetriesLegacyStreamingWithBigASRResourceIDAfterHandshakeRejection() async throws {
-        let transport = FakeDoubaoTransport()
+        let transport = FakeVolcengineTransport()
         let legacyHourlyResourceID = "volc.bigasr.sauc.duration"
-        transport.streamingErrorsByResourceID[doubaoDefaultResourceID] = TranscriptionProviderError.transport(
-            providerName: "Doubao",
-            message: "OpenSpeech WebSocket 握手被服务端拒绝。endpoint=\(doubaoDefaultEndpoint)",
+        transport.streamingErrorsByResourceID[volcengineDefaultResourceID] = TranscriptionProviderError.transport(
+            providerName: "火山引擎",
+            message: "OpenSpeech WebSocket 握手被服务端拒绝。endpoint=\(volcengineDefaultEndpoint)",
             retryable: true
         )
-        let provider = MacDoubaoTranscriptionProvider(
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(
-                credential: .doubaoAppIDAccessToken(
+                credential: .volcengineAppIDAccessToken(
                     appID: "3145608744",
                     accessToken: "legacy-token"
                 )
@@ -151,14 +151,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
 
         _ = try await provider.startStreaming(progress: nil)
 
-        XCTAssertEqual(transport.streamingRequests.map(\.resourceID), [doubaoDefaultResourceID, legacyHourlyResourceID])
+        XCTAssertEqual(transport.streamingRequests.map(\.resourceID), [volcengineDefaultResourceID, legacyHourlyResourceID])
         XCTAssertEqual(transport.streamingRequests.last?.headers["X-Api-Resource-Id"], legacyHourlyResourceID)
     }
 
     func testProviderStartsRealtimeGatewayStreamingFromStoredAPIKey() async throws {
-        let openSpeechTransport = FakeDoubaoTransport()
-        let gatewayTransport = FakeDoubaoRealtimeGatewayTransport()
-        let provider = MacDoubaoTranscriptionProvider(
+        let openSpeechTransport = FakeVolcengineTransport()
+        let gatewayTransport = FakeVolcengineRealtimeGatewayTransport()
+        let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
             transport: openSpeechTransport,
             realtimeGatewayTransport: gatewayTransport
@@ -176,14 +176,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamsBinaryFramesAndReturnsFinalTranscript() async throws {
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionRequest.make(
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -206,18 +206,18 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamingSendsAudioChunksAndReturnsFinalTranscript() async throws {
-        let partialFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let partialFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello","utterances":[{"text":"hello","start_time":0,"end_time":400,"definite":false}]}}"#,
             last: false
         )
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionSessionRequest.make(
             auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token")
         )
         var received: [TranscriptPartialSnapshot] = []
@@ -253,16 +253,16 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionRealtimeGatewayTransportStreamsJSONEventsAndReturnsFinalTranscript() async throws {
-        let task = FakeDoubaoWebSocketTask(
+        let task = FakeVolcengineWebSocketTask(
             receiveMessages: [
                 .string(#"{"type":"transcription_session.updated"}"#),
                 .string(#"{"type":"conversation.item.input_audio_transcription.result","transcript":"hello"}"#),
                 .string(#"{"type":"conversation.item.input_audio_transcription.completed","transcript":"hello world"}"#)
             ]
         )
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoRealtimeGatewayTranscriptionTransport(session: session)
-        let request = try DoubaoRealtimeGatewaySessionRequest.make(apiKey: "sk-gateway-secret")
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineRealtimeGatewayTranscriptionTransport(session: session)
+        let request = try VolcengineRealtimeGatewaySessionRequest.make(apiKey: "sk-gateway-secret")
         var received: [TranscriptPartialSnapshot] = []
 
         let streamingSession = try await transport.startStreaming(request: request) { partial in
@@ -291,18 +291,18 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamingUsesLatestPartialWhenFinalFrameHasNoText() async throws {
-        let partialFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let partialFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":false}]}}"#,
             last: false
         )
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"","utterances":[]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
         await streamingSession.acceptAudioChunk([1, 2, 3])
@@ -321,14 +321,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamingReturnsEmptyTranscriptWhenFinalFrameHasNoTextOrPartials() async throws {
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"","utterances":[]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
         let transcript = try await streamingSession.finish(
@@ -346,14 +346,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamingFlushesFullAudioFramesBeforeFinish() async throws {
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
         let frameSamples = Array(repeating: Int16(1), count: 3_200)
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
@@ -386,14 +386,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportStreamingChunksSnapshotAudioWhenNoRealtimeChunksWereSent() async throws {
-        let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
+        let finalFrame = try VolcengineWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
             last: true
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(finalFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
         let samples = Array(repeating: Int16(1), count: 6_401)
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
@@ -425,14 +425,14 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportPreservesServerErrorClassification() async throws {
-        let errorFrame = DoubaoWireProtocol.buildTestServerErrorFrame(
+        let errorFrame = VolcengineWireProtocol.buildTestServerErrorFrame(
             code: 45000002,
             message: "empty audio"
         )
-        let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(errorFrame)])
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionRequest.make(
+        let task = FakeVolcengineWebSocketTask(receiveMessages: [.data(errorFrame)])
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -453,10 +453,10 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
     }
 
     func testURLSessionTransportMapsPingFailureAndCancels() async throws {
-        let task = FakeDoubaoWebSocketTask(sendError: URLError(.timedOut))
-        let session = FakeDoubaoWebSocketSession(task: task)
-        let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionRequest.make(
+        let task = FakeVolcengineWebSocketTask(sendError: URLError(.timedOut))
+        let session = FakeVolcengineWebSocketSession(task: task)
+        let transport = URLSessionVolcengineTranscriptionTransport(session: session)
+        let request = try VolcengineTranscriptionRequest.make(
             auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
@@ -474,7 +474,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
                 XCTFail("Expected transport error, got \(providerError)")
                 return
             }
-            XCTAssertEqual(providerName, "Doubao")
+            XCTAssertEqual(providerName, "火山引擎")
             XCTAssertTrue(message.contains("WebSocket connect to \(request.endpoint.absoluteString) failed"))
             XCTAssertTrue(retryable)
         } catch {
@@ -488,9 +488,9 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
 }
 
 @MainActor
-private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
-    private(set) var requests: [DoubaoTranscriptionRequest] = []
-    private(set) var streamingRequests: [DoubaoTranscriptionSessionRequest] = []
+private final class FakeVolcengineTransport: VolcengineTranscriptionTransporting {
+    private(set) var requests: [VolcengineTranscriptionRequest] = []
+    private(set) var streamingRequests: [VolcengineTranscriptionSessionRequest] = []
     let transcript: TranscriptSnapshot
     let partialsToEmit: [TranscriptPartialSnapshot]
     var error: Error?
@@ -500,7 +500,7 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
         transcript: TranscriptSnapshot = TranscriptSnapshot(
             finalText: "",
             partials: [],
-            providerName: "Doubao",
+            providerName: "火山引擎",
             latencyMilliseconds: nil
         ),
         partialsToEmit: [TranscriptPartialSnapshot] = []
@@ -510,7 +510,7 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
     }
 
     func transcribe(
-        request: DoubaoTranscriptionRequest,
+        request: VolcengineTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         requests.append(request)
@@ -527,7 +527,7 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
     }
 
     func startStreaming(
-        request: DoubaoTranscriptionSessionRequest,
+        request: VolcengineTranscriptionSessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession {
         streamingRequests.append(request)
@@ -540,14 +540,14 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
             throw error
         }
 
-        return FakeDoubaoStreamingSession(transcript: transcript, partialsToEmit: partialsToEmit, progress: progress)
+        return FakeVolcengineStreamingSession(transcript: transcript, partialsToEmit: partialsToEmit, progress: progress)
     }
 }
 
 @MainActor
-private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTranscriptionTransporting {
-    private(set) var requests: [DoubaoRealtimeGatewayTranscriptionRequest] = []
-    private(set) var streamingRequests: [DoubaoRealtimeGatewaySessionRequest] = []
+private final class FakeVolcengineRealtimeGatewayTransport: VolcengineRealtimeGatewayTranscriptionTransporting {
+    private(set) var requests: [VolcengineRealtimeGatewayTranscriptionRequest] = []
+    private(set) var streamingRequests: [VolcengineRealtimeGatewaySessionRequest] = []
     let transcript: TranscriptSnapshot
     var error: Error?
 
@@ -555,7 +555,7 @@ private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTra
         transcript: TranscriptSnapshot = TranscriptSnapshot(
             finalText: "",
             partials: [],
-            providerName: "Doubao",
+            providerName: "火山引擎",
             latencyMilliseconds: nil
         )
     ) {
@@ -563,7 +563,7 @@ private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTra
     }
 
     func transcribe(
-        request: DoubaoRealtimeGatewayTranscriptionRequest,
+        request: VolcengineRealtimeGatewayTranscriptionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         requests.append(request)
@@ -576,7 +576,7 @@ private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTra
     }
 
     func startStreaming(
-        request: DoubaoRealtimeGatewaySessionRequest,
+        request: VolcengineRealtimeGatewaySessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession {
         streamingRequests.append(request)
@@ -585,11 +585,11 @@ private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTra
             throw error
         }
 
-        return FakeDoubaoStreamingSession(transcript: transcript, partialsToEmit: [], progress: progress)
+        return FakeVolcengineStreamingSession(transcript: transcript, partialsToEmit: [], progress: progress)
     }
 }
 
-private actor FakeDoubaoStreamingSession: RealtimeTranscriptionSession {
+private actor FakeVolcengineStreamingSession: RealtimeTranscriptionSession {
     let transcript: TranscriptSnapshot
     let partialsToEmit: [TranscriptPartialSnapshot]
     let progress: TranscriptionProgressHandler?
@@ -618,22 +618,22 @@ private actor FakeDoubaoStreamingSession: RealtimeTranscriptionSession {
 }
 
 @MainActor
-private final class FakeDoubaoWebSocketSession: DoubaoWebSocketSessioning {
-    private let task: FakeDoubaoWebSocketTask
+private final class FakeVolcengineWebSocketSession: VolcengineWebSocketSessioning {
+    private let task: FakeVolcengineWebSocketTask
     private(set) var requests: [URLRequest] = []
 
-    init(task: FakeDoubaoWebSocketTask) {
+    init(task: FakeVolcengineWebSocketTask) {
         self.task = task
     }
 
-    func webSocketTask(with request: URLRequest) -> any DoubaoWebSocketTasking {
+    func webSocketTask(with request: URLRequest) -> any VolcengineWebSocketTasking {
         requests.append(request)
         return task
     }
 }
 
 @MainActor
-private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking, @unchecked Sendable {
+private final class FakeVolcengineWebSocketTask: VolcengineWebSocketTasking, @unchecked Sendable {
     private let sendError: Error?
     private var receiveMessages: [URLSessionWebSocketTask.Message]
     private(set) var resumeCount = 0
