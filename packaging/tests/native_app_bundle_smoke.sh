@@ -23,6 +23,21 @@ if [[ ! -s "${RESOURCES_DIR}/VocoMenuBarIconTemplate.svg" ]]; then
   exit 1
 fi
 
+for font_file in \
+  IBMPlexSans-Regular.ttf \
+  IBMPlexSans-Medium.ttf \
+  IBMPlexSans-SemiBold.ttf \
+  IBMPlexSans-Bold.ttf \
+  IBMPlexMono-Regular.ttf \
+  IBMPlexMono-Medium.ttf \
+  IBMPlexMono-SemiBold.ttf
+do
+  if [[ ! -s "${RESOURCES_DIR}/Fonts/${font_file}" ]]; then
+    echo "missing settings font: ${RESOURCES_DIR}/Fonts/${font_file}" >&2
+    exit 1
+  fi
+done
+
 for entry in "${MACOS_DIR}"/*; do
   name="$(basename "${entry}")"
   case "${name}" in

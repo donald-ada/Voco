@@ -6,11 +6,22 @@ final class AudioSettingsModelsTests: XCTestCase {
         let snapshot = AudioSettingsSnapshot(lastAudio: nil)
 
         XCTAssertEqual(snapshot.inputDevice.title, "系统默认输入")
-        XCTAssertEqual(snapshot.inputDevice.detail, "使用 macOS 当前默认麦克风；真实设备选择将在后续偏好设置中接入。")
+        XCTAssertEqual(snapshot.inputDevice.detail, "跟随 macOS 当前默认麦克风。")
         XCTAssertEqual(snapshot.levelMeter.title, "无近期采样")
         XCTAssertEqual(snapshot.levelMeter.detail, "开始一次录音后会显示最近峰值电平。")
         XCTAssertEqual(snapshot.sampleRate.title, "等待采样率")
         XCTAssertEqual(snapshot.sampleRate.detail, "暂无最近录音；目标转写采样率为 16,000 Hz。")
+    }
+
+    func testAudioSettingsReflectSelectedInputDevice() {
+        let snapshot = AudioSettingsSnapshot(
+            lastAudio: nil,
+            inputDevice: .device(id: "studio-mic", title: "Studio Mic")
+        )
+
+        XCTAssertEqual(snapshot.inputDevice.title, "Studio Mic")
+        XCTAssertEqual(snapshot.inputDevice.detail, "已选择此麦克风用于录音。")
+        XCTAssertEqual(snapshot.inputDevice.systemImage, "mic.fill")
     }
 
     func testRecentAudioShowsLevelAndMatchedSampleRate() {

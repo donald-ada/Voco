@@ -7,14 +7,40 @@ public struct AudioSettingsSnapshot: Equatable, Sendable {
 
     public init(
         lastAudio: CapturedAudioSnapshot?,
-        inputDeviceName: String = "系统默认输入",
+        inputDevice: AudioInputDeviceSelection = .systemDefault,
         expectedSampleRate: Double = 16_000
     ) {
-        self.inputDevice = AudioInputDeviceSnapshot(displayName: inputDeviceName)
+        self.inputDevice = AudioInputDeviceSnapshot(selection: inputDevice)
         self.levelMeter = AudioLevelMeterSnapshot(lastAudio: lastAudio)
         self.sampleRate = AudioSampleRateSnapshot(
             lastAudio: lastAudio,
             expectedSampleRate: expectedSampleRate
+        )
+    }
+}
+
+public struct AudioInputDeviceSelection: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let systemImage: String
+    public let isSystemDefault: Bool
+
+    public static let systemDefault = AudioInputDeviceSelection(
+        id: "system-default",
+        title: "系统默认输入",
+        detail: "跟随 macOS 当前默认麦克风。",
+        systemImage: "mic",
+        isSystemDefault: true
+    )
+
+    public static func device(id: String, title: String) -> AudioInputDeviceSelection {
+        AudioInputDeviceSelection(
+            id: id,
+            title: title,
+            detail: "已选择此麦克风用于录音。",
+            systemImage: "mic.fill",
+            isSystemDefault: false
         )
     }
 }
@@ -24,10 +50,10 @@ public struct AudioInputDeviceSnapshot: Equatable, Sendable {
     public let detail: String
     public let systemImage: String
 
-    public init(displayName: String) {
-        self.title = displayName
-        self.detail = "使用 macOS 当前默认麦克风；真实设备选择将在后续偏好设置中接入。"
-        self.systemImage = "mic"
+    public init(selection: AudioInputDeviceSelection) {
+        self.title = selection.title
+        self.detail = selection.detail
+        self.systemImage = selection.systemImage
     }
 }
 

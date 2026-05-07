@@ -9,7 +9,7 @@ struct VocoNativeApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            Button("设置...") {
+            Button("显示 Voco") {
                 coordinator.prepareForSettingsPresentation()
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
@@ -32,21 +32,31 @@ struct VocoNativeApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
+        SettingsWorkbenchFontRegistrar.registerBundledFonts()
         let permissionProvider = MacPermissionProvider()
         let credentialStore = MacKeychainCredentialStore()
         let transcriptionProvider = MacDoubaoTranscriptionProvider(credentialStore: credentialStore)
+        let voiceInputPreferences = MacVoiceInputPreferenceStore()
+        let audioCapture = MacAudioCaptureEngine()
+        if let audioInputDevice = voiceInputPreferences.audioInputDevice {
+            audioCapture.setInputDevice(audioInputDevice)
+        }
+
         let appCoordinator = AppCoordinator(
             permissionProvider: permissionProvider,
             launchAtLoginProvider: MacLaunchAtLoginProvider(),
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: NativeRecordingWorkflow(
-                audioCapture: MacAudioCaptureEngine(),
+                audioCapture: audioCapture,
                 transcription: transcriptionProvider,
                 textInjection: MacTextInjectionProvider()
             ),
             hotkeyProvider: MacHotkeyProvider(),
             installLocationProvider: MacInstallLocationProvider(),
-            legacyInstallProvider: MacLegacyInstallProvider()
+            legacyInstallProvider: MacLegacyInstallProvider(),
+            voiceInputPreferenceStore: voiceInputPreferences,
+            hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
+            hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
         )
         appCoordinator.finishLaunching()
         HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)

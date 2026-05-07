@@ -72,12 +72,25 @@ public struct RecordingWorkflowError: LocalizedError, Equatable, Sendable {
 
 @MainActor
 public protocol AudioCaptureProviding {
+    var availableInputDevices: [AudioInputDeviceSelection] { get }
+    var selectedInputDevice: AudioInputDeviceSelection { get }
+    func setInputDevice(_ device: AudioInputDeviceSelection)
     func startCapture() async throws
     func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws
     func stopCapture() async throws -> CapturedAudioSnapshot
 }
 
 public extension AudioCaptureProviding {
+    var availableInputDevices: [AudioInputDeviceSelection] {
+        [.systemDefault]
+    }
+
+    var selectedInputDevice: AudioInputDeviceSelection {
+        .systemDefault
+    }
+
+    func setInputDevice(_ device: AudioInputDeviceSelection) {}
+
     func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws {
         try await startCapture()
     }
@@ -117,12 +130,25 @@ public protocol TextInjectionProviding {
 @MainActor
 public protocol RecordingWorkflowing: AnyObject {
     var transcriptionStatus: TranscriptionProviderStatus { get }
+    var availableAudioInputDevices: [AudioInputDeviceSelection] { get }
+    var selectedAudioInputDevice: AudioInputDeviceSelection { get }
+    func setAudioInputDevice(_ device: AudioInputDeviceSelection)
     func startRecording() async throws
     func startRecording(progress: TranscriptionProgressHandler?) async throws
     func stopRecording(progress: TranscriptionProgressHandler?) async throws -> RecordingWorkflowResult
 }
 
 public extension RecordingWorkflowing {
+    var availableAudioInputDevices: [AudioInputDeviceSelection] {
+        [.systemDefault]
+    }
+
+    var selectedAudioInputDevice: AudioInputDeviceSelection {
+        .systemDefault
+    }
+
+    func setAudioInputDevice(_ device: AudioInputDeviceSelection) {}
+
     func startRecording(progress: TranscriptionProgressHandler?) async throws {
         try await startRecording()
     }
@@ -153,6 +179,18 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
 
     public var transcriptionStatus: TranscriptionProviderStatus {
         transcription.status
+    }
+
+    public var availableAudioInputDevices: [AudioInputDeviceSelection] {
+        audioCapture.availableInputDevices
+    }
+
+    public var selectedAudioInputDevice: AudioInputDeviceSelection {
+        audioCapture.selectedInputDevice
+    }
+
+    public func setAudioInputDevice(_ device: AudioInputDeviceSelection) {
+        audioCapture.setInputDevice(device)
     }
 
     public func startRecording() async throws {

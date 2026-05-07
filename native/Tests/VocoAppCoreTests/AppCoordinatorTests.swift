@@ -459,8 +459,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.status, .error)
         XCTAssertEqual(coordinator.lastErrorMessage, "provider offline")
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.recentChain[2].detail, "尚无近期转写")
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.recentChain[2].status, .neutral)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .overview), .needsAttention)
     }
 
     @MainActor
@@ -606,7 +605,40 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "系统默认输入")
         XCTAssertEqual(coordinator.injectionSettingsSnapshot.strategy.title, "等待插入")
         XCTAssertEqual(coordinator.hudSettingsSnapshot.position.title, "顶部居中")
-        XCTAssertEqual(coordinator.privacySettingsSnapshot.transcriptRetention.title, "不保留转写文本")
+    }
+
+    @MainActor
+    func testUpdatingVoiceInputSettingsRestartsHotkeyMonitorAndUpdatesAudioSelection() {
+        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
+        let recordingWorkflow = FakeRecordingWorkflow()
+        let preferences = FakeVoiceInputPreferenceStore()
+        let coordinator = AppCoordinator(
+            recordingWorkflow: recordingWorkflow,
+            hotkeyProvider: hotkeyProvider,
+            voiceInputPreferenceStore: preferences
+        )
+        coordinator.finishLaunching()
+
+        coordinator.setHotkeyPreset(.f19)
+        coordinator.setHotkeyMode(.pressAndHold)
+        coordinator.setAudioInputDevice(.device(id: "studio-mic", title: "Studio Mic"))
+
+        XCTAssertEqual(coordinator.hotkeyBinding, HotkeyPreset.f19.binding)
+        XCTAssertEqual(coordinator.hotkeyMode, .pressAndHold)
+        XCTAssertEqual(hotkeyProvider.stopCount, 2)
+        XCTAssertEqual(
+            hotkeyProvider.startRequests.map(\.binding),
+            [.default, HotkeyPreset.f19.binding, HotkeyPreset.f19.binding]
+        )
+        XCTAssertEqual(
+            hotkeyProvider.startRequests.map(\.mode),
+            [.toggle, .toggle, .pressAndHold]
+        )
+        XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "Studio Mic")
+        XCTAssertEqual(recordingWorkflow.selectedAudioInputDevice, .device(id: "studio-mic", title: "Studio Mic"))
+        XCTAssertEqual(preferences.hotkeyPreset, .f19)
+        XCTAssertEqual(preferences.hotkeyMode, .pressAndHold)
+        XCTAssertEqual(preferences.audioInputDevice, .device(id: "studio-mic", title: "Studio Mic"))
     }
 
     @MainActor
@@ -638,7 +670,6 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.audioSettingsSnapshot.levelMeter.title, "电平正常")
         XCTAssertEqual(coordinator.audioSettingsSnapshot.sampleRate.title, "16,000 Hz")
         XCTAssertEqual(coordinator.injectionSettingsSnapshot.focusedApp.title, "TextEdit")
-        XCTAssertEqual(coordinator.privacySettingsSnapshot.keychain.detail, "sk-t...cdef")
     }
 
     @MainActor
@@ -655,7 +686,7 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testWorkbenchMarksRecentDoubaoStepFailedAfterTranscriptionError() async {
+    func testWorkbenchMarksDoubaoFailedAfterTranscriptionError() async {
         let recordingWorkflow = FakeRecordingWorkflow(
             transcriptionStatus: .ready(providerName: "Doubao"),
             stopError: TranscriptionProviderError.provider(
@@ -672,12 +703,9 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
         await coordinator.toggleRecordingFromUserAction()
 
-        let doubaoStep = coordinator.settingsWorkbenchSnapshot.recentChain[2]
         XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.title, "Doubao 转写失败")
         XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle, "前往转写服务")
-        XCTAssertEqual(doubaoStep.detail, "Doubao 转写失败：server response contains no final text")
-        XCTAssertEqual(doubaoStep.status, .needsAttention)
-        XCTAssertEqual(doubaoStep.action, .openTranscription)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .transcription), .needsAttention)
     }
 
     @MainActor
@@ -705,12 +733,9 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
         await coordinator.toggleRecordingFromUserAction()
 
-        let doubaoStep = coordinator.settingsWorkbenchSnapshot.recentChain[2]
         XCTAssertEqual(coordinator.lastTranscript?.partials, ["partial text"])
         XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .transcription), .needsAttention)
-        XCTAssertEqual(doubaoStep.detail, "Doubao 网络错误：timeout")
-        XCTAssertEqual(doubaoStep.status, .needsAttention)
-        XCTAssertEqual(doubaoStep.action, .openTranscription)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.detail, "Doubao 网络错误：timeout")
     }
 
     @MainActor
@@ -854,6 +879,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     let partialsToEmitBeforeStopError: [TranscriptPartialSnapshot]
     let pauseAfterStart: Bool
     let pauseAfterPartials: Bool
+    private(set) var selectedAudioInputDevice: AudioInputDeviceSelection
     private var storedProgress: TranscriptionProgressHandler?
     private var didEmitPartials = false
     private var didPauseStart = false
@@ -875,7 +901,8 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         partialsToEmit: [TranscriptPartialSnapshot] = [],
         partialsToEmitBeforeStopError: [TranscriptPartialSnapshot] = [],
         pauseAfterStart: Bool = false,
-        pauseAfterPartials: Bool = false
+        pauseAfterPartials: Bool = false,
+        selectedAudioInputDevice: AudioInputDeviceSelection = .systemDefault
     ) {
         self.result = result
         self.transcriptionStatus = transcriptionStatus
@@ -886,6 +913,15 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         self.partialsToEmitBeforeStopError = partialsToEmitBeforeStopError
         self.pauseAfterStart = pauseAfterStart
         self.pauseAfterPartials = pauseAfterPartials
+        self.selectedAudioInputDevice = selectedAudioInputDevice
+    }
+
+    var availableAudioInputDevices: [AudioInputDeviceSelection] {
+        [.systemDefault, .device(id: "studio-mic", title: "Studio Mic")]
+    }
+
+    func setAudioInputDevice(_ device: AudioInputDeviceSelection) {
+        selectedAudioInputDevice = device
     }
 
     func startRecording() async throws {
@@ -973,6 +1009,25 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
 
     func emitStoredPartial(_ partial: TranscriptPartialSnapshot) {
         storedProgress?(partial)
+    }
+}
+
+@MainActor
+private final class FakeVoiceInputPreferenceStore: VoiceInputPreferenceStoring {
+    private(set) var hotkeyPreset: HotkeyPreset?
+    private(set) var hotkeyMode: HotkeyMode?
+    private(set) var audioInputDevice: AudioInputDeviceSelection?
+
+    func saveHotkeyPreset(_ preset: HotkeyPreset) {
+        hotkeyPreset = preset
+    }
+
+    func saveHotkeyMode(_ mode: HotkeyMode) {
+        hotkeyMode = mode
+    }
+
+    func saveAudioInputDevice(_ device: AudioInputDeviceSelection) {
+        audioInputDevice = device
     }
 }
 

@@ -119,31 +119,6 @@ final class LegacyInstallModelsTests: XCTestCase {
         XCTAssertTrue(coordinator.lastErrorMessage?.contains("Permission denied") == true)
     }
 
-    func testDiagnosticFactoryReportsLegacyInstallWarning() {
-        let launchAgent = URL(fileURLWithPath: "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist")
-
-        let snapshot = DiagnosticsSnapshot(
-            appStatusTitle: "就绪",
-            permissions: [],
-            audio: nil,
-            hotkeyState: .inactive,
-            hotkeyBinding: .default,
-            hotkeyMode: .toggle,
-            asrStatus: .notConfigured,
-            credentials: .missing(provider: .doubao),
-            installLocation: nil,
-            legacyInstall: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice")),
-            transcript: nil,
-            injection: nil,
-            lastErrorMessage: nil
-        )
-
-        let event = snapshot.events.first { $0.category == .legacyInstall }
-
-        XCTAssertEqual(event?.severity, .warning)
-        XCTAssertEqual(event?.title, "检测到旧版后台启动项")
-        XCTAssertTrue(event?.detail.contains(launchAgent.path) == true)
-    }
 }
 
 @MainActor

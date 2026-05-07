@@ -2,10 +2,8 @@ import Foundation
 
 public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendable {
     case overview
-    case voiceInput
+    case settings
     case transcription
-    case permissionsAndInput
-    case diagnosticsAndPrivacy
 
     public var id: String { rawValue }
 
@@ -13,14 +11,10 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
         switch self {
         case .overview:
             "总览"
-        case .voiceInput:
-            "语音输入"
+        case .settings:
+            "设置"
         case .transcription:
             "转写服务"
-        case .permissionsAndInput:
-            "权限与输入"
-        case .diagnosticsAndPrivacy:
-            "诊断与隐私"
         }
     }
 
@@ -28,14 +22,10 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
         switch self {
         case .overview:
             "当前状态"
-        case .voiceInput:
-            "快捷键、音频、HUD"
+        case .settings:
+            "快捷键、模式、麦克风、权限"
         case .transcription:
             "Doubao 和 Keychain"
-        case .permissionsAndInput:
-            "macOS 权限、插入策略"
-        case .diagnosticsAndPrivacy:
-            "记录、导出、脱敏"
         }
     }
 }
@@ -70,74 +60,19 @@ public struct SettingsWorkbenchOverviewSnapshot: Equatable, Sendable {
     }
 }
 
-public enum VoiceInputChainStepAction: Equatable, Sendable {
-    case viewDetails
-    case checkHotkey
-    case startTestRecording
-    case testTranscription
-    case openTranscription
-    case openPermissionsAndInput
-
-    public var title: String {
-        switch self {
-        case .viewDetails:
-            "查看详情"
-        case .checkHotkey:
-            "检查快捷键"
-        case .startTestRecording:
-            "开始测试录音"
-        case .testTranscription:
-            "测试连接"
-        case .openTranscription:
-            "前往转写服务"
-        case .openPermissionsAndInput:
-            "修复输入权限"
-        }
-    }
-}
-
-public struct VoiceInputChainStepSnapshot: Equatable, Identifiable, Sendable {
-    public let id: String
-    public let title: String
-    public let detail: String
-    public let status: SettingsWorkbenchSectionStatus
-    public let action: VoiceInputChainStepAction
-
-    public var actionTitle: String {
-        action.title
-    }
-
-    public init(
-        id: String,
-        title: String,
-        detail: String,
-        status: SettingsWorkbenchSectionStatus,
-        action: VoiceInputChainStepAction
-    ) {
-        self.id = id
-        self.title = title
-        self.detail = detail
-        self.status = status
-        self.action = action
-    }
-}
-
 public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
     public let statusTitle: String
     public let overview: SettingsWorkbenchOverviewSnapshot
     public let sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus]
-    public let recentChain: [VoiceInputChainStepSnapshot]
 
     public init(
         statusTitle: String,
         overview: SettingsWorkbenchOverviewSnapshot,
-        sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus],
-        recentChain: [VoiceInputChainStepSnapshot]
+        sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus]
     ) {
         self.statusTitle = statusTitle
         self.overview = overview
         self.sectionStatuses = sectionStatuses
-        self.recentChain = recentChain
     }
 
     public func status(for section: SettingsWorkbenchSection) -> SettingsWorkbenchSectionStatus {
@@ -152,8 +87,6 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         hotkeyMode: HotkeyMode,
         asrStatus: TranscriptionProviderStatus,
         credentials: TranscriptionCredentialSnapshot,
-        audio: CapturedAudioSnapshot?,
-        transcript: TranscriptSnapshot?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?,
         transcriptionErrorMessage: String? = nil
@@ -195,13 +128,13 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             overview = SettingsWorkbenchOverviewSnapshot(
                 title: "文本输入失败",
                 detail: injection.detail,
-                primaryActionTitle: "前往权限与输入"
+                primaryActionTitle: "前往设置"
             )
         } else if let lastErrorMessage, !lastErrorMessage.isEmpty {
             overview = SettingsWorkbenchOverviewSnapshot(
                 title: "最近一次操作失败",
                 detail: lastErrorMessage,
-                primaryActionTitle: "查看诊断与隐私"
+                primaryActionTitle: "重新检查"
             )
         } else {
             overview = SettingsWorkbenchOverviewSnapshot(
@@ -216,146 +149,27 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             credentials.lastErrorMessage != nil ||
             transcriptionErrorMessage != nil ||
             asrStatus.isWorkbenchAttention
-        let recentChain = makeRecentChain(
-            hotkeyState: hotkeyState,
-            hotkeyBinding: hotkeyBinding,
-            hotkeyMode: hotkeyMode,
-            asrStatus: asrStatus,
-            audio: audio,
-            transcript: transcript,
-            injection: injection,
-            transcriptionErrorMessage: transcriptionErrorMessage
-        )
+        let hasRuntimeError = lastErrorMessage?.nonEmpty != nil
+        let settingsStatus: SettingsWorkbenchSectionStatus
+        if hasRequiredPermissionProblem || inputNeedsAttention {
+            settingsStatus = .needsAttention
+        } else if hotkeyState != .listening {
+            settingsStatus = .warning
+        } else {
+            settingsStatus = .ok
+        }
 
         return SettingsWorkbenchSnapshot(
             statusTitle: statusTitle,
             overview: overview,
             sectionStatuses: [
-                .overview: hasRequiredPermissionProblem || transcriptionNeedsAttention || inputNeedsAttention
+                .overview: hasRequiredPermissionProblem || transcriptionNeedsAttention || inputNeedsAttention || hasRuntimeError
                     ? .needsAttention
                     : .ok,
-                .voiceInput: hasRequiredPermissionProblem || hotkeyState != .listening ? .warning : .ok,
-                .transcription: transcriptionNeedsAttention ? .needsAttention : .ok,
-                .permissionsAndInput: hasRequiredPermissionProblem || inputNeedsAttention ? .needsAttention : .ok,
-                .diagnosticsAndPrivacy: lastErrorMessage == nil ? .neutral : .needsAttention
-            ],
-            recentChain: recentChain
+                .settings: settingsStatus,
+                .transcription: transcriptionNeedsAttention ? .needsAttention : .ok
+            ]
         )
-    }
-
-    private static func makeRecentChain(
-        hotkeyState: HotkeyRuntimeState,
-        hotkeyBinding: HotkeyBinding,
-        hotkeyMode: HotkeyMode,
-        asrStatus: TranscriptionProviderStatus,
-        audio: CapturedAudioSnapshot?,
-        transcript: TranscriptSnapshot?,
-        injection: TextInjectionSnapshot?,
-        transcriptionErrorMessage: String?
-    ) -> [VoiceInputChainStepSnapshot] {
-        [
-            VoiceInputChainStepSnapshot(
-                id: "command",
-                title: "Command",
-                detail: "\(hotkeyBinding.displayName) · \(hotkeyMode.title)",
-                status: hotkeyState == .listening ? .ok : .warning,
-                action: hotkeyState == .listening ? .viewDetails : .checkHotkey
-            ),
-            VoiceInputChainStepSnapshot(
-                id: "audio",
-                title: "录音",
-                detail: audio.map(audioDetail) ?? "尚无近期录音",
-                status: audio == nil ? .neutral : .ok,
-                action: audio == nil ? .startTestRecording : .viewDetails
-            ),
-            VoiceInputChainStepSnapshot(
-                id: "doubao",
-                title: "Doubao",
-                detail: doubaoDetail(
-                    transcript: transcript,
-                    asrStatus: asrStatus,
-                    transcriptionErrorMessage: transcriptionErrorMessage
-                ),
-                status: doubaoStatus(
-                    transcript: transcript,
-                    asrStatus: asrStatus,
-                    transcriptionErrorMessage: transcriptionErrorMessage
-                ),
-                action: doubaoAction(
-                    transcript: transcript,
-                    asrStatus: asrStatus,
-                    transcriptionErrorMessage: transcriptionErrorMessage
-                )
-            ),
-            VoiceInputChainStepSnapshot(
-                id: "input",
-                title: "输入",
-                detail: injection.map(inputDetail) ?? "尚无近期输入",
-                status: injection.map { $0.succeeded ? .ok : .needsAttention } ?? .neutral,
-                action: injection.map { $0.succeeded ? .viewDetails : .openPermissionsAndInput } ?? .viewDetails
-            )
-        ]
-    }
-
-    private static func audioDetail(_ audio: CapturedAudioSnapshot) -> String {
-        String(format: "%.2fs · %.0f Hz · peak %.2f", audio.durationSeconds, audio.sampleRate, audio.peakAmplitude)
-    }
-
-    private static func transcriptDetail(_ transcript: TranscriptSnapshot) -> String {
-        let latency = transcript.latencyMilliseconds.map { " · \($0) ms" } ?? ""
-        return "\(transcript.finalText.count) 字符 · \(transcript.partials.count) 个 partial\(latency)"
-    }
-
-    private static func inputDetail(_ injection: TextInjectionSnapshot) -> String {
-        "\(injection.targetAppName ?? "当前 App") · \(injection.strategy.title)"
-    }
-
-    private static func doubaoDetail(
-        transcript: TranscriptSnapshot?,
-        asrStatus: TranscriptionProviderStatus,
-        transcriptionErrorMessage: String?
-    ) -> String {
-        if asrStatus.isWorkbenchAttention {
-            return asrStatus.detail
-        }
-
-        if let transcriptionErrorMessage {
-            return transcriptionErrorMessage
-        }
-
-        if let transcript {
-            return transcriptDetail(transcript)
-        }
-
-        return "尚无近期转写"
-    }
-
-    private static func doubaoStatus(
-        transcript: TranscriptSnapshot?,
-        asrStatus: TranscriptionProviderStatus,
-        transcriptionErrorMessage: String?
-    ) -> SettingsWorkbenchSectionStatus {
-        if asrStatus.isWorkbenchAttention {
-            return .needsAttention
-        }
-
-        if transcriptionErrorMessage != nil {
-            return .needsAttention
-        }
-
-        return transcript == nil ? .neutral : .ok
-    }
-
-    private static func doubaoAction(
-        transcript: TranscriptSnapshot?,
-        asrStatus: TranscriptionProviderStatus,
-        transcriptionErrorMessage: String?
-    ) -> VoiceInputChainStepAction {
-        if asrStatus.isWorkbenchAttention || transcriptionErrorMessage != nil {
-            return .openTranscription
-        }
-
-        return transcript == nil ? .testTranscription : .viewDetails
     }
 }
 

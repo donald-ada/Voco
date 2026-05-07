@@ -1,8 +1,10 @@
 import Foundation
 
-public enum HotkeyMode: String, Equatable, Sendable {
+public enum HotkeyMode: String, CaseIterable, Identifiable, Equatable, Sendable {
     case toggle
     case pressAndHold
+
+    public var id: String { rawValue }
 
     public var title: String {
         switch self {
@@ -11,6 +13,45 @@ public enum HotkeyMode: String, Equatable, Sendable {
         case .pressAndHold:
             "按住录音"
         }
+    }
+}
+
+public enum HotkeyPreset: String, CaseIterable, Identifiable, Equatable, Sendable {
+    case rightCommand
+    case fn
+    case f19
+    case capsLock
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .rightCommand:
+            "Right Command"
+        case .fn:
+            "Fn"
+        case .f19:
+            "F19"
+        case .capsLock:
+            "Caps Lock"
+        }
+    }
+
+    public var binding: HotkeyBinding {
+        switch self {
+        case .rightCommand:
+            .default
+        case .fn:
+            HotkeyBinding(keyCode: 63, modifierFlags: HotkeyMatcher.fnFlag, displayName: title)
+        case .f19:
+            HotkeyBinding(keyCode: 80, modifierFlags: 0, displayName: title)
+        case .capsLock:
+            HotkeyBinding(keyCode: 57, modifierFlags: 0, displayName: title)
+        }
+    }
+
+    public static func matching(_ binding: HotkeyBinding) -> HotkeyPreset? {
+        allCases.first { $0.binding == binding }
     }
 }
 
@@ -114,7 +155,7 @@ public struct HotkeyMatcher: Sendable {
     private static let shiftFlag: UInt64 = 0x0002_0000
     private static let controlFlag: UInt64 = 0x0004_0000
     private static let optionFlag: UInt64 = 0x0008_0000
-    private static let fnFlag: UInt64 = 0x0080_0000
+    public static let fnFlag: UInt64 = 0x0080_0000
     private static let matchedModifierMask: UInt64 =
         shiftFlag | controlFlag | optionFlag | HotkeyBinding.commandFlag | fnFlag
     private static let activeModifierMask: UInt64 = matchedModifierMask | alphaShiftFlag

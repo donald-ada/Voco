@@ -17,7 +17,8 @@ let package = Package(
         .executableTarget(
             name: "VocoApp",
             dependencies: ["VocoAppCore"],
-            path: "Sources/VocoApp"
+            path: "Sources/VocoApp",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "VocoAppCoreTests",

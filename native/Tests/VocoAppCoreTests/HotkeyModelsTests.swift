@@ -10,6 +10,14 @@ final class HotkeyModelsTests: XCTestCase {
         XCTAssertEqual(binding.displayName, "Right Command")
     }
 
+    func testHotkeyPresetsExposeSelectableBindings() {
+        XCTAssertEqual(HotkeyPreset.allCases.map(\.title), ["Right Command", "Fn", "F19", "Caps Lock"])
+        XCTAssertEqual(HotkeyPreset.fn.binding.keyCode, 63)
+        XCTAssertEqual(HotkeyPreset.f19.binding.displayName, "F19")
+        XCTAssertEqual(HotkeyPreset.capsLock.binding.keyCode, 57)
+        XCTAssertEqual(HotkeyPreset.matching(.default), .rightCommand)
+    }
+
     func testToggleMatcherEmitsToggleForModifierOnlyHotkey() {
         var matcher = HotkeyMatcher(binding: .default, mode: .toggle)
 

@@ -57,6 +57,9 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
+    @Published public private(set) var hotkeyBinding: HotkeyBinding
+    @Published public private(set) var hotkeyMode: HotkeyMode
+    @Published public private(set) var selectedAudioInputDevice: AudioInputDeviceSelection
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -65,8 +68,7 @@ public final class AppCoordinator: ObservableObject {
     private let transcriptionCredentialStore: any TranscriptionCredentialStoring
     private let installLocationProvider: any InstallLocationProviding
     private let legacyInstallProvider: any LegacyInstallProviding
-    public let hotkeyBinding: HotkeyBinding
-    public let hotkeyMode: HotkeyMode
+    private let voiceInputPreferenceStore: any VoiceInputPreferenceStoring
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
@@ -80,6 +82,7 @@ public final class AppCoordinator: ObservableObject {
         hotkeyProvider: any HotkeyProviding = StaticHotkeyProvider(),
         installLocationProvider: any InstallLocationProviding = StaticInstallLocationProvider(),
         legacyInstallProvider: any LegacyInstallProviding = StaticLegacyInstallProvider(),
+        voiceInputPreferenceStore: any VoiceInputPreferenceStoring = NoOpVoiceInputPreferenceStore(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -102,8 +105,7 @@ public final class AppCoordinator: ObservableObject {
         self.transcriptionCredentialStore = transcriptionCredentialStore
         self.installLocationProvider = installLocationProvider
         self.legacyInstallProvider = legacyInstallProvider
-        self.hotkeyBinding = hotkeyBinding
-        self.hotkeyMode = hotkeyMode
+        self.voiceInputPreferenceStore = voiceInputPreferenceStore
         self.permissions = initialPermissions
         self.launchAtLoginState = initialLaunchAtLoginState
         self.hotkeyRuntimeState = .inactive
@@ -115,6 +117,9 @@ public final class AppCoordinator: ObservableObject {
         self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
+        self.hotkeyBinding = hotkeyBinding
+        self.hotkeyMode = hotkeyMode
+        self.selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -140,24 +145,6 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
-    public var diagnosticsSnapshot: DiagnosticsSnapshot {
-        DiagnosticsSnapshot(
-            appStatusTitle: snapshot.title,
-            permissions: permissions,
-            audio: lastAudio,
-            hotkeyState: hotkeyRuntimeState,
-            hotkeyBinding: hotkeyBinding,
-            hotkeyMode: hotkeyMode,
-            asrStatus: transcriptionProviderStatus,
-            credentials: transcriptionCredentials,
-            installLocation: installLocation,
-            legacyInstall: legacyInstall,
-            transcript: lastTranscript,
-            injection: lastInjection,
-            lastErrorMessage: lastErrorMessage
-        )
-    }
-
     public var settingsWorkbenchSnapshot: SettingsWorkbenchSnapshot {
         SettingsWorkbenchSnapshot.make(
             statusTitle: snapshot.title,
@@ -167,71 +154,22 @@ public final class AppCoordinator: ObservableObject {
             hotkeyMode: hotkeyMode,
             asrStatus: transcriptionProviderStatus,
             credentials: transcriptionCredentials,
-            audio: lastAudio,
-            transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage,
             transcriptionErrorMessage: status == .providerOffline ? lastErrorMessage : nil
         )
     }
 
-    public func diagnosticBundle(generatedAt: Date = Date()) -> DiagnosticBundle {
-        let menuSnapshot = snapshot
-        let diagnosticsSnapshot = DiagnosticsSnapshot(
-            appStatusTitle: menuSnapshot.title,
-            permissions: permissions,
-            audio: lastAudio,
-            hotkeyState: hotkeyRuntimeState,
-            hotkeyBinding: hotkeyBinding,
-            hotkeyMode: hotkeyMode,
-            asrStatus: transcriptionProviderStatus,
-            credentials: transcriptionCredentials,
-            installLocation: installLocation,
-            legacyInstall: legacyInstall,
-            transcript: lastTranscript,
-            injection: lastInjection,
-            lastErrorMessage: lastErrorMessage,
-            generatedAt: generatedAt
-        )
-
-        return DiagnosticBundle(
-            snapshot: diagnosticsSnapshot,
-            redaction: DiagnosticRedactionContext(
-                secrets: diagnosticSecrets,
-                transcriptBodies: diagnosticTranscriptBodies
-            )
-        )
-    }
-
-    @discardableResult
-    public func exportDiagnosticBundle(to url: URL) throws -> URL {
-        try DiagnosticBundleExporter.write(bundle: diagnosticBundle(), to: url)
-    }
-
-    @discardableResult
-    public func exportDiagnosticBundleToTemporaryDirectory(
-        generatedAt: Date = Date(),
-        id: UUID = UUID(),
-        fileManager: FileManager = .default
-    ) throws -> URL {
-        let exportURL = fileManager.temporaryDirectory
-            .appendingPathComponent("voco-diagnostics-\(Int(generatedAt.timeIntervalSince1970))-\(id.uuidString).json")
-
-        do {
-            let writtenURL = try DiagnosticBundleExporter.write(
-                bundle: diagnosticBundle(generatedAt: generatedAt),
-                to: exportURL
-            )
-            lastErrorMessage = nil
-            return writtenURL
-        } catch {
-            fail(error.localizedDescription)
-            throw error
-        }
-    }
-
     public var audioSettingsSnapshot: AudioSettingsSnapshot {
-        AudioSettingsSnapshot(lastAudio: lastAudio)
+        AudioSettingsSnapshot(
+            lastAudio: lastAudio,
+            inputDevice: selectedAudioInputDevice
+        )
+    }
+
+    public var availableAudioInputDevices: [AudioInputDeviceSelection] {
+        let devices = recordingWorkflow.availableAudioInputDevices
+        return devices.isEmpty ? [.systemDefault] : devices
     }
 
     public var injectionSettingsSnapshot: InjectionSettingsSnapshot {
@@ -240,10 +178,6 @@ public final class AppCoordinator: ObservableObject {
 
     public var hudSettingsSnapshot: HUDSettingsSnapshot {
         HUDSettingsSnapshot()
-    }
-
-    public var privacySettingsSnapshot: PrivacySettingsSnapshot {
-        PrivacySettingsSnapshot(transcriptionCredentials: transcriptionCredentials)
     }
 
     public var isRecording: Bool {
@@ -256,18 +190,6 @@ public final class AppCoordinator: ObservableObject {
 
     public var launchAtLoginEnabled: Bool {
         launchAtLoginState.isEnabled
-    }
-
-    private var diagnosticSecrets: [String] {
-        [transcriptionCredentials.maskedCredential].compactMap { $0 }
-    }
-
-    private var diagnosticTranscriptBodies: [String] {
-        guard let lastTranscript else {
-            return []
-        }
-
-        return [lastTranscript.finalText] + lastTranscript.partials
     }
 
     public func finishLaunching() {
@@ -371,6 +293,55 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
+    public func setHotkeyPreset(_ preset: HotkeyPreset) {
+        guard hotkeyBinding != preset.binding else {
+            voiceInputPreferenceStore.saveHotkeyPreset(preset)
+            return
+        }
+
+        hotkeyBinding = preset.binding
+        voiceInputPreferenceStore.saveHotkeyPreset(preset)
+        restartHotkeyRuntime()
+    }
+
+    public func setHotkeyBinding(_ binding: HotkeyBinding) {
+        guard hotkeyBinding != binding else {
+            if let preset = HotkeyPreset.matching(binding) {
+                voiceInputPreferenceStore.saveHotkeyPreset(preset)
+            }
+            return
+        }
+
+        hotkeyBinding = binding
+        if let preset = HotkeyPreset.matching(binding) {
+            voiceInputPreferenceStore.saveHotkeyPreset(preset)
+        }
+        restartHotkeyRuntime()
+    }
+
+    public func setHotkeyMode(_ mode: HotkeyMode) {
+        guard hotkeyMode != mode else {
+            voiceInputPreferenceStore.saveHotkeyMode(mode)
+            return
+        }
+
+        hotkeyMode = mode
+        voiceInputPreferenceStore.saveHotkeyMode(mode)
+        restartHotkeyRuntime()
+    }
+
+    public func setAudioInputDevice(_ device: AudioInputDeviceSelection) {
+        guard selectedAudioInputDevice != device else {
+            voiceInputPreferenceStore.saveAudioInputDevice(device)
+            return
+        }
+
+        recordingWorkflow.setAudioInputDevice(device)
+        selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
+        voiceInputPreferenceStore.saveAudioInputDevice(selectedAudioInputDevice)
+        lastErrorMessage = nil
+    }
+
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
         await saveTranscriptionCredential(.doubaoAPIKey(apiKey))
     }
@@ -461,6 +432,12 @@ public final class AppCoordinator: ObservableObject {
         if case .failed(let message) = hotkeyRuntimeState {
             lastErrorMessage = message
         }
+    }
+
+    private func restartHotkeyRuntime() {
+        hotkeyProvider.stop()
+        hotkeyRuntimeState = .inactive
+        refreshHotkeyRuntime()
     }
 
     private var hotkeyPermissionsGranted: Bool {
