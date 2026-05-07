@@ -52,12 +52,6 @@ fn collect_checks() -> Vec<Check> {
         "Accessibility",
         permissions::accessibility(),
     );
-    push(
-        &mut out,
-        "Permissions",
-        "Input Monitoring",
-        permissions::input_monitoring(),
-    );
 
     push(&mut out, "Config", "File present", config::file_present());
     push(&mut out, "Config", "Schema valid", config::schema_valid());

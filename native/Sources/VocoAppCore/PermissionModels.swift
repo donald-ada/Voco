@@ -3,7 +3,6 @@ import Foundation
 public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
     case microphone
     case accessibility
-    case inputMonitoring
 
     public var id: String {
         rawValue
@@ -15,8 +14,6 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             "麦克风"
         case .accessibility:
             "辅助功能"
-        case .inputMonitoring:
-            "输入监控"
         }
     }
 
@@ -26,8 +23,6 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             "用于录制语音并生成转写文本。"
         case .accessibility:
             "用于把转写文本插入当前正在输入的 App。"
-        case .inputMonitoring:
-            "仅用于诊断低层键盘监听能力；默认快捷键不需要。"
         }
     }
 
@@ -37,8 +32,6 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             "mic"
         case .accessibility:
             "accessibility"
-        case .inputMonitoring:
-            "keyboard"
         }
     }
 
@@ -48,8 +41,6 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             "打开麦克风设置"
         case .accessibility:
             "打开辅助功能设置"
-        case .inputMonitoring:
-            "打开输入监控设置"
         }
     }
 
@@ -59,8 +50,6 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
         case .accessibility:
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        case .inputMonitoring:
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         }
     }
 }
@@ -128,10 +117,6 @@ public struct PermissionSnapshot: Equatable, Sendable, Identifiable {
 
     public static func accessibility(_ state: PermissionGrantState, isRequired: Bool = true) -> PermissionSnapshot {
         PermissionSnapshot(kind: .accessibility, state: state, isRequired: isRequired)
-    }
-
-    public static func inputMonitoring(_ state: PermissionGrantState, isRequired: Bool = false) -> PermissionSnapshot {
-        PermissionSnapshot(kind: .inputMonitoring, state: state, isRequired: isRequired)
     }
 }
 

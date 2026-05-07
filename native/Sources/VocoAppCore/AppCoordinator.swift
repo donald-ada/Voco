@@ -3,7 +3,6 @@ import Foundation
 
 public enum AppRuntimeStatus: Equatable, Sendable {
     case launching
-    case needsOnboarding
     case ready
     case recording
     case transcribing
@@ -52,7 +51,6 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var hotkeyRuntimeState: HotkeyRuntimeState
     @Published public private(set) var transcriptionProviderStatus: TranscriptionProviderStatus
     @Published public private(set) var transcriptionCredentials: TranscriptionCredentialSnapshot
-    @Published public private(set) var onboarding: OnboardingSnapshot
     @Published public private(set) var installLocation: InstallLocationSnapshot
     @Published public private(set) var legacyInstall: LegacyInstallSnapshot
     @Published public private(set) var isRemovingLegacyLaunchAgent: Bool
@@ -60,8 +58,6 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
 
-    private var hasCompletedOnboarding: Bool
-    private let setHasCompletedOnboarding: @MainActor @Sendable (Bool) -> Void
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
     private let recordingWorkflow: any RecordingWorkflowing
@@ -71,15 +67,11 @@ public final class AppCoordinator: ObservableObject {
     private let legacyInstallProvider: any LegacyInstallProviding
     public let hotkeyBinding: HotkeyBinding
     public let hotkeyMode: HotkeyMode
-    private var hasSkippedLaunchAtLoginForOnboarding: Bool
-    private var hasVerifiedHotkeyForOnboarding: Bool
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
 
     public init(
-        hasCompletedOnboarding: Bool = false,
-        setHasCompletedOnboarding: @escaping @MainActor @Sendable (Bool) -> Void = { _ in },
         launchAtLoginEnabled: Bool = false,
         permissionProvider: any PermissionProviding = StaticPermissionProvider.allGranted,
         launchAtLoginProvider: any LaunchAtLoginProviding = StaticLaunchAtLoginProvider(),
@@ -103,8 +95,6 @@ public final class AppCoordinator: ObservableObject {
 
         self.status = .launching
         self.lastErrorMessage = nil
-        self.hasCompletedOnboarding = hasCompletedOnboarding
-        self.setHasCompletedOnboarding = setHasCompletedOnboarding
         self.permissionProvider = permissionProvider
         self.launchAtLoginProvider = launchAtLoginProvider
         self.recordingWorkflow = recordingWorkflow
@@ -122,21 +112,9 @@ public final class AppCoordinator: ObservableObject {
         self.installLocation = initialInstallLocation
         self.legacyInstall = initialLegacyInstall
         self.isRemovingLegacyLaunchAgent = false
-        self.onboarding = OnboardingSnapshot.make(
-            permissions: initialPermissions,
-            transcriptionCredentials: initialTranscriptionCredentials,
-            launchAtLoginState: initialLaunchAtLoginState,
-            hasSkippedLaunchAtLogin: false,
-            hotkeyRuntimeState: .inactive,
-            hotkeyBinding: hotkeyBinding,
-            hotkeyMode: hotkeyMode,
-            hasVerifiedHotkey: false
-        )
         self.lastAudio = nil
         self.lastTranscript = nil
         self.lastInjection = nil
-        self.hasSkippedLaunchAtLoginForOnboarding = false
-        self.hasVerifiedHotkeyForOnboarding = false
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -177,6 +155,23 @@ public final class AppCoordinator: ObservableObject {
             transcript: lastTranscript,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage
+        )
+    }
+
+    public var settingsWorkbenchSnapshot: SettingsWorkbenchSnapshot {
+        SettingsWorkbenchSnapshot.make(
+            statusTitle: snapshot.title,
+            permissions: permissions,
+            hotkeyState: hotkeyRuntimeState,
+            hotkeyBinding: hotkeyBinding,
+            hotkeyMode: hotkeyMode,
+            asrStatus: transcriptionProviderStatus,
+            credentials: transcriptionCredentials,
+            audio: lastAudio,
+            transcript: lastTranscript,
+            injection: lastInjection,
+            lastErrorMessage: lastErrorMessage,
+            transcriptionErrorMessage: status == .providerOffline ? lastErrorMessage : nil
         )
     }
 
@@ -283,16 +278,14 @@ public final class AppCoordinator: ObservableObject {
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshTranscriptionCredentials()
-        status = launchStatusAfterSetupCheck()
+        status = runtimeStatusAfterPermissionCheck()
         refreshHotkeyRuntime()
-        refreshOnboardingState()
     }
 
     public func refreshPermissions() {
         let shouldUpdateRuntimeStatus =
             status == .ready ||
-            status == .permissionNeeded ||
-            (status == .needsOnboarding && hasCompletedOnboarding)
+            status == .permissionNeeded
         permissions = permissionProvider.currentSnapshots()
 
         if shouldUpdateRuntimeStatus {
@@ -300,7 +293,6 @@ public final class AppCoordinator: ObservableObject {
         }
 
         refreshHotkeyRuntime()
-        refreshOnboardingState()
     }
 
     public func prepareForSettingsPresentation() {
@@ -319,7 +311,6 @@ public final class AppCoordinator: ObservableObject {
         if let message = transcriptionCredentials.lastErrorMessage {
             lastErrorMessage = message
         }
-        refreshOnboardingState()
     }
 
     public func requestMicrophonePermission() async {
@@ -329,10 +320,9 @@ public final class AppCoordinator: ObservableObject {
         if shouldUpdateRuntimeStatus {
             status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
         } else {
-            status = launchStatusAfterSetupCheck()
+            status = runtimeStatusAfterPermissionCheck()
         }
         refreshHotkeyRuntime()
-        refreshOnboardingState()
     }
 
     public func toggleRecordingFromMenu() {
@@ -368,7 +358,6 @@ public final class AppCoordinator: ObservableObject {
             let message = installLocation.warningDetail ?? "当前运行位置不支持登录时启动。"
             launchAtLoginState = .unavailable
             lastErrorMessage = message
-            refreshOnboardingState()
             return
         }
 
@@ -380,7 +369,6 @@ public final class AppCoordinator: ObservableObject {
             launchAtLoginState = .failed(message)
             lastErrorMessage = "登录时启动设置失败：\(message)"
         }
-        refreshOnboardingState()
     }
 
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
@@ -403,7 +391,6 @@ public final class AppCoordinator: ObservableObject {
             transcriptionCredentials = .failed(provider: .doubao, message: message)
             lastErrorMessage = message
         }
-        refreshOnboardingState()
     }
 
     public func clearTranscriptionCredentials() async {
@@ -416,7 +403,6 @@ public final class AppCoordinator: ObservableObject {
             transcriptionCredentials = .failed(provider: .doubao, message: message)
             lastErrorMessage = message
         }
-        refreshOnboardingState()
     }
 
     public func removeLegacyLaunchAgentFromUserAction() async {
@@ -439,61 +425,12 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    public func refreshOnboardingState() {
-        onboarding = OnboardingSnapshot.make(
-            permissions: permissions,
-            transcriptionCredentials: transcriptionCredentials,
-            launchAtLoginState: launchAtLoginState,
-            hasSkippedLaunchAtLogin: hasSkippedLaunchAtLoginForOnboarding,
-            hotkeyRuntimeState: hotkeyRuntimeState,
-            hotkeyBinding: hotkeyBinding,
-            hotkeyMode: hotkeyMode,
-            hasVerifiedHotkey: hasVerifiedHotkeyForOnboarding
-        )
-    }
-
-    public func markLaunchAtLoginSkippedForOnboarding() {
-        hasSkippedLaunchAtLoginForOnboarding = true
-        refreshOnboardingState()
-    }
-
-    public func markHotkeyVerifiedForOnboarding() {
-        guard hotkeyRuntimeState == .listening else {
-            refreshOnboardingState()
-            return
-        }
-
-        hasVerifiedHotkeyForOnboarding = true
-        refreshOnboardingState()
-    }
-
-    @discardableResult
-    public func completeOnboardingIfReady() -> Bool {
-        refreshOnboardingState()
-        guard onboarding.isComplete else {
-            lastErrorMessage = "首次设置尚未完成。"
-            return false
-        }
-
-        hasCompletedOnboarding = true
-        setHasCompletedOnboarding(true)
-        lastErrorMessage = nil
-        status = permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
-        refreshHotkeyRuntime()
-        refreshOnboardingState()
-        return true
-    }
-
     public func fail(_ message: String) {
         lastErrorMessage = message
         status = .error
     }
 
-    private func launchStatusAfterSetupCheck() -> AppRuntimeStatus {
-        guard hasCompletedOnboarding else {
-            return .needsOnboarding
-        }
-
+    private func runtimeStatusAfterPermissionCheck() -> AppRuntimeStatus {
         return permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
     }
 
@@ -504,7 +441,7 @@ public final class AppCoordinator: ObservableObject {
             return
         }
 
-        guard status == .ready || status == .needsOnboarding || status == .recording || status == .transcribing else {
+        guard status == .ready || status == .recording || status == .transcribing else {
             hotkeyProvider.stop()
             hotkeyRuntimeState = .inactive
             return
@@ -655,8 +592,6 @@ private extension AppRuntimeStatus {
         switch self {
         case .launching:
             "启动中"
-        case .needsOnboarding:
-            "需要设置"
         case .ready:
             "就绪"
         case .recording:
@@ -678,8 +613,6 @@ private extension AppRuntimeStatus {
         switch self {
         case .launching:
             "hourglass"
-        case .needsOnboarding:
-            "exclamationmark.triangle"
         case .ready:
             "waveform"
         case .recording:

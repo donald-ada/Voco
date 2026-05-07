@@ -41,14 +41,14 @@ pub fn hotkey_installed() -> CheckResult {
             } else {
                 CheckResult::Fail {
                     headline: "event tap not active".into(),
-                    fix: "restart voco doctor after granting Accessibility/Input Monitoring".into(),
+                    fix: "restart voco doctor after granting Accessibility".into(),
                 }
             }
         }
         Err(err) => CheckResult::Fail {
             headline: "event tap install failed".into(),
             fix: format!(
-                "{err}; System Settings → Privacy & Security → Accessibility/Input Monitoring → enable the responsible terminal/app"
+                "{err}; System Settings → Privacy & Security → Accessibility → enable the responsible terminal/app"
             ),
         },
     }

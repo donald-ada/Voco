@@ -36,7 +36,8 @@ fn doctor_skips_tcc_on_ci() -> anyhow::Result<()> {
     voco(&tmp)
         .arg("doctor")
         .assert()
-        .stdout(predicate::str::contains("Accessibility (CI=true)"));
+        .stdout(predicate::str::contains("Accessibility (CI=true)"))
+        .stdout(predicate::str::contains("Input Monitoring").not());
     Ok(())
 }
 

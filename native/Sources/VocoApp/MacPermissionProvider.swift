@@ -1,6 +1,5 @@
 import ApplicationServices
 import AVFoundation
-import CoreGraphics
 import Foundation
 import VocoAppCore
 
@@ -8,8 +7,7 @@ struct MacPermissionProvider: PermissionProviding {
     func currentSnapshots() -> [PermissionSnapshot] {
         [
             .microphone(microphoneState()),
-            .accessibility(accessibilityState()),
-            .inputMonitoring(inputMonitoringState(), isRequired: false)
+            .accessibility(accessibilityState())
         ]
     }
 
@@ -39,9 +37,5 @@ struct MacPermissionProvider: PermissionProviding {
 
     private func accessibilityState() -> PermissionGrantState {
         AXIsProcessTrusted() ? .granted : .denied
-    }
-
-    private func inputMonitoringState() -> PermissionGrantState {
-        CGPreflightListenEventAccess() ? .granted : .denied
     }
 }

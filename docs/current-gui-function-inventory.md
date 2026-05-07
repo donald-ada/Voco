@@ -90,7 +90,7 @@ Voco <当前状态标题>
 
 ### 4.3 当前实际显示的首次设置步骤
 
-`OnboardingStepID` 里定义了 `inputMonitoring`，但当前 `OnboardingStepID.ordered` 没有包含它；所以首次设置窗口实际只显示下面 5 个步骤。输入监控权限只会在设置窗口的权限列表里出现，且是可选诊断权限。
+首次设置窗口已移除，当前通过设置窗口完成权限、凭证和录音链路检查。
 
 | 步骤 | 必需 | 当前控件 | 完成条件 |
 | --- | --- | --- | --- |
@@ -106,8 +106,8 @@ Voco <当前状态标题>
 
 | 模式 | UI 文案 | 输入项 | 保存后的请求头 |
 | --- | --- | --- | --- |
-| 新控制台 API Key | `新控制台 API Key` | `Doubao API Key` SecureField | `X-Api-Key` |
-| 旧控制台 App ID + Token | `旧控制台 App ID + Token` | `Doubao App ID` TextField、`Doubao Access Token` SecureField | `X-Api-App-Key`、`X-Api-Access-Key` |
+| 新网关 API Key | `新网关 API Key` | `Doubao API Key` SecureField | `Authorization: Bearer`，连接 `wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel` |
+| 旧控制台 App ID + Token | `旧控制台 App ID + Token` | `Doubao App ID` TextField、`Doubao Access Token` SecureField | `X-Api-App-Key`、`X-Api-Access-Key`，连接 OpenSpeech 时先使用 `volc.seedasr.sauc.duration`，握手拒绝后自动回退 `volc.bigasr.sauc.duration` |
 
 保存按钮只在对应模式的必填字段非空时启用。保存位置是 Keychain。当前 native provider 不再从旧配置文件读取 TOKEN。
 
@@ -209,10 +209,11 @@ Voco <当前状态标题>
 | --- | --- |
 | provider 状态 | 显示 `ready`、`notConfigured`、`authenticationRequired`、`offline`、`failed` 的标题和详情 |
 | 凭证状态 | 显示是否保存 Doubao 凭证，以及脱敏后的凭证摘要 |
-| Doubao 凭证模式 Picker | 在“新控制台 API Key”和“旧控制台 App ID + Token”之间切换 |
+| Doubao 凭证模式 Picker | 在“新网关 API Key”和“旧控制台 App ID + Token”之间切换 |
 | 凭证输入框 | 根据模式显示 API Key，或 App ID + Access Token |
 | `保存到 Keychain` | 保存当前模式的凭证 |
 | `清除凭证` | 删除 Keychain 中的 Doubao 凭证 |
+| 服务状态参数 | 随凭证模式显示 Realtime 网关 Model，或 OpenSpeech Resource ID 自动重试队列 |
 
 当前没有 provider 选择列表，只有 Doubao。也没有“测试连接”按钮；用户只能通过一次真实录音确认 ASR 是否可用。
 
@@ -276,7 +277,6 @@ Voco <当前状态标题>
 | --- | --- | --- | --- |
 | 麦克风 | 是 | 用于录制语音并生成转写文本 | `请求麦克风权限`、`打开麦克风设置` |
 | 辅助功能 | 是 | 用于把转写文本插入当前正在输入的 App，也用于全局快捷键监听 | `打开辅助功能设置` |
-| 输入监控 | 否 | 仅用于诊断低层键盘监听能力；默认快捷键不需要 | `打开输入监控设置` |
 
 权限区顶部有 `重新检查` 按钮。权限状态包括 `未决定`、`已允许`、`已拒绝`、`受限制`、`未知`。
 
@@ -304,7 +304,7 @@ Voco <当前状态标题>
 
 | 分类 | 图标 | 当前事件来源 |
 | --- | --- | --- |
-| 权限 | `lock.shield` | 麦克风、辅助功能、输入监控的状态 |
+| 权限 | `lock.shield` | 麦克风、辅助功能的状态 |
 | 安装位置 | `externaldrive` | 仅从磁盘映像运行时显示警告 |
 | 旧版迁移 | `arrow.triangle.2.circlepath` | 检测到旧版 LaunchAgent 或移除失败时显示 |
 | 音频 | `waveform` | 最近音频指标，或无近期采样 |
@@ -384,7 +384,6 @@ HUD 是一个独立 overlay panel，贴近屏幕顶部中央和刘海区域。
 | 音频设置只有诊断，没有输入设备选择 | 看起来像半成品设置页 |
 | 快捷键不能编辑，也不能切换按住/切换模式 | 与用户对语音输入工具的预期不一致 |
 | 诊断混在设置里又有独立诊断窗口 | 信息架构重复 |
-| 输入监控是可选诊断权限，但容易被误解为必需 | 需要更清楚地表达“默认不需要” |
 | 首次设置和设置窗口重复凭证表单 | 维护和体验都重复 |
 | 错误恢复路径不集中 | 用户遇到 ASR、权限、输入失败时要自己找对应位置 |
 | HUD visual 没有使用 snapshot title/detail | 录音、转写、插入阶段的状态语义没有完整呈现 |
@@ -399,13 +398,13 @@ HUD 是一个独立 overlay panel，贴近屏幕顶部中央和刘海区域。
 | --- | --- |
 | 菜单栏菜单 | 当前状态、开始/停止录音、设置、诊断、登录项、退出 |
 | 设置总览 | 当前可用性、最近错误、下一步建议、一次测试录音入口 |
-| 权限页 | 麦克风、辅助功能、输入监控的状态、解释和修复动作 |
+| 权限页 | 麦克风、辅助功能的状态、解释和修复动作 |
 | 转写页 | Doubao 新旧凭证模式、Keychain 状态、测试连接、清除凭证 |
 | 快捷键与输入页 | Right Command、切换/按住模式、输入策略、最近目标 App |
 | 音频页 | 默认麦克风、采样率、峰值、电平反馈、未来设备选择位置 |
 | HUD 页 | 顶部刘海胶囊预览、转写预览开关、位置/动画/尺寸调节位 |
 | 诊断页 | 最近一轮录音全链路、错误解释、导出诊断包 |
-| 首次设置流程 | 只保留必须步骤，明确“可选”的登录项和输入监控 |
+| 首次设置流程 | 已删除；首次启动直接进入设置控制台 |
 
 ### 10.2 建议的信息架构
 
@@ -423,8 +422,8 @@ HUD 是一个独立 overlay panel，贴近屏幕顶部中央和刘海区域。
 | --- | --- |
 | macOS 原生感 | 应该像生产力工具设置页，不做 landing page |
 | 操作优先 | 每个错误状态都要有明确下一步按钮 |
-| 权限解释要轻 | 尤其说明输入监控不是默认必需 |
-| 凭证模式要明确 | 用户必须主动选择“新控制台 API Key”或“旧控制台 App ID + Token” |
+| 权限解释要轻 | 只解释麦克风和辅助功能两个实际需要的权限 |
+| 凭证模式要明确 | 新网关 API Key 走 Realtime 网关；旧控制台 App ID + Token 走 OpenSpeech，并在旧资源握手被拒时自动重试兼容资源 |
 | HUD 要可预览 | 设置页里要能看到当前顶部刘海胶囊效果 |
 | 诊断要围绕一次录音链路 | Command -> 录音 -> 识别 -> 展示 -> 插入输入框 |
 | 不读配置文件 TOKEN | 凭证来源只通过设置界面进入 Keychain |

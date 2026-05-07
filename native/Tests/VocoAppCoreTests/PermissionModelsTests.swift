@@ -2,6 +2,10 @@ import XCTest
 @testable import VocoAppCore
 
 final class PermissionModelsTests: XCTestCase {
+    func testPermissionKindsOnlyIncludeRequiredVoiceInputPermissions() {
+        XCTAssertEqual(PermissionKind.allCases, [.microphone, .accessibility])
+    }
+
     func testPermissionKindsExposeUserVisibleMetadata() {
         XCTAssertEqual(PermissionKind.microphone.title, "麦克风")
         XCTAssertEqual(PermissionKind.microphone.systemImage, "mic")
@@ -16,13 +20,6 @@ final class PermissionModelsTests: XCTestCase {
         XCTAssertEqual(
             PermissionKind.accessibility.settingsURLString,
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        )
-
-        XCTAssertEqual(PermissionKind.inputMonitoring.title, "输入监控")
-        XCTAssertEqual(PermissionKind.inputMonitoring.systemImage, "keyboard")
-        XCTAssertEqual(
-            PermissionKind.inputMonitoring.settingsURLString,
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         )
     }
 
@@ -44,8 +41,7 @@ final class PermissionModelsTests: XCTestCase {
         let summary = PermissionSummary(
             snapshots: [
                 .microphone(.granted),
-                .accessibility(.denied),
-                .inputMonitoring(.granted)
+                .accessibility(.denied)
             ]
         )
 
@@ -53,12 +49,11 @@ final class PermissionModelsTests: XCTestCase {
         XCTAssertEqual(summary.missingRequiredPermissions, [.accessibility])
     }
 
-    func testPermissionSummaryIgnoresOptionalDeniedPermissions() {
+    func testPermissionSummaryPassesWhenVoiceInputPermissionsAreGranted() {
         let summary = PermissionSummary(
             snapshots: [
                 .microphone(.granted),
-                .accessibility(.granted),
-                .inputMonitoring(.denied, isRequired: false)
+                .accessibility(.granted)
             ]
         )
 

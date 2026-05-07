@@ -77,7 +77,7 @@ public struct HUDSnapshot: Equatable, Sendable {
             } else {
                 self = .hidden
             }
-        case .launching, .needsOnboarding, .permissionNeeded:
+        case .launching, .permissionNeeded:
             self = .hidden
         }
     }

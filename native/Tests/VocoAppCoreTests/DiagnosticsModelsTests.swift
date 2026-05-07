@@ -126,7 +126,6 @@ final class DiagnosticsModelsTests: XCTestCase {
             )
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-live-abcdef123456"),
             recordingWorkflow: StaticRecordingWorkflow(result: result, transcriptionStatus: .ready(providerName: "Fake ASR"))
         )
@@ -161,7 +160,6 @@ final class DiagnosticsModelsTests: XCTestCase {
             )
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             recordingWorkflow: StaticRecordingWorkflow(
                 result: result,
                 transcriptionStatus: .failed(providerName: "Doubao", message: "provider status leaked \(rawAPIKey)")
@@ -180,7 +178,7 @@ final class DiagnosticsModelsTests: XCTestCase {
 
     @MainActor
     func testCoordinatorExportsDiagnosticBundleToStableTemporaryURL() throws {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
         let generatedAt = Date(timeIntervalSince1970: 42)
         let id = UUID(uuidString: "00000000-0000-0000-0000-000000000042")!
@@ -201,7 +199,7 @@ final class DiagnosticsModelsTests: XCTestCase {
 
     @MainActor
     func testCoordinatorTemporaryExportSurfacesExistingFileFailure() throws {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
         let generatedAt = Date(timeIntervalSince1970: 43)
         let id = UUID(uuidString: "00000000-0000-0000-0000-000000000043")!
@@ -237,7 +235,6 @@ final class DiagnosticsModelsTests: XCTestCase {
             )
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-live-abcdef123456"),
             recordingWorkflow: StaticRecordingWorkflow(result: result, transcriptionStatus: .ready(providerName: "Fake ASR")),
             hotkeyProvider: StaticHotkeyProvider(state: .listening)
@@ -259,7 +256,7 @@ final class DiagnosticsModelsTests: XCTestCase {
 
     @MainActor
     func testCoordinatorDiagnosticsSnapshotCapturesRecentFailure() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
 
         coordinator.fail("provider offline")
@@ -272,7 +269,6 @@ final class DiagnosticsModelsTests: XCTestCase {
     @MainActor
     func testCoordinatorDiagnosticsSnapshotIncludesMountedImageInstallLocationWarning() {
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             installLocationProvider: StaticInstallLocationProvider(
                 snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Volumes/Voco/Voco.app")
             )

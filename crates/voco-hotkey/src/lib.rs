@@ -272,7 +272,7 @@ mod platform {
         );
         if tap.is_null() {
             let _ = ready_tx.send(Err(HotkeyError::EventTap(
-                "CGEventTapCreate returned null; grant Accessibility/Input Monitoring".into(),
+                "CGEventTapCreate returned null; grant Accessibility".into(),
             )));
             return;
         }

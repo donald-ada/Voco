@@ -192,7 +192,6 @@ from service objects. It should not contain platform API details directly.
 
 - microphone authorization through native media capture APIs;
 - accessibility trust checks for text insertion and event posting;
-- optional input monitoring diagnostics for legacy event-tap paths;
 - System Settings deep links where macOS requires manual action.
 
 Permission failures are first-class app states, not log-only warnings.

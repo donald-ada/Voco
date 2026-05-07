@@ -56,7 +56,7 @@ public struct DiagnosticLogsPolicySnapshot: Equatable, Sendable {
     public static var redacted: DiagnosticLogsPolicySnapshot {
         DiagnosticLogsPolicySnapshot(
             title: "日志默认脱敏",
-            detail: "诊断信息不记录完整 API Key 或完整转写正文。",
+            detail: "诊断信息不记录完整 Doubao 凭证或完整转写正文。",
             systemImage: "doc.text.magnifyingglass"
         )
     }

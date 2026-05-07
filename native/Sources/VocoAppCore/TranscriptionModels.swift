@@ -16,7 +16,13 @@ public typealias TranscriptionProgressHandler = @MainActor @Sendable (Transcript
 
 public let doubaoTranscriptionProviderName = "Doubao"
 public let doubaoDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
-public let doubaoDefaultResourceID = "volc.seedasr.sauc.duration"
+public let doubaoSeedASRResourceID = "volc.seedasr.sauc.duration"
+public let doubaoLegacyOpenSpeechResourceID = "volc.bigasr.sauc.duration"
+public let doubaoDefaultResourceID = doubaoSeedASRResourceID
+public let doubaoRealtimeGatewayModel = "bigmodel"
+public let doubaoRealtimeGatewayEndpoint = "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+public let doubaoSingleAPIKeyUnsupportedMessage =
+    "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
 
 public enum DoubaoTranscriptionAuth: Equatable, Sendable {
     case apiKey(String)
@@ -126,12 +132,10 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
                     message: "Keychain 中没有保存 Doubao API Key。"
                 )
             }
-            headers = [
-                "X-Api-Key": trimmedAPIKey,
-                "X-Api-Resource-Id": resourceID,
-                "X-Api-Request-Id": UUID().uuidString,
-                "X-Api-Connect-Id": UUID().uuidString
-            ]
+            throw TranscriptionProviderError.authentication(
+                providerName: doubaoTranscriptionProviderName,
+                message: doubaoSingleAPIKeyUnsupportedMessage
+            )
         case .appIDAccessToken(let appID, let accessToken):
             let trimmedAppID = appID.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedAccessToken = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,6 +173,179 @@ public struct DoubaoTranscriptionSessionRequest: Equatable, Sendable {
             headers: headers,
             safeDebugDescription: safeDebugDescription
         )
+    }
+}
+
+public struct DoubaoRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
+    public let endpoint: URL
+    public let model: String
+    public let headers: [String: String]
+    public let audio: CapturedAudioSnapshot
+    public let safeDebugDescription: String
+
+    public static func make(
+        apiKey: String?,
+        audio: CapturedAudioSnapshot,
+        endpoint: String = doubaoRealtimeGatewayEndpoint,
+        model: String = doubaoRealtimeGatewayModel
+    ) throws -> DoubaoRealtimeGatewayTranscriptionRequest {
+        let sessionRequest = try DoubaoRealtimeGatewaySessionRequest.make(
+            apiKey: apiKey,
+            endpoint: endpoint,
+            model: model
+        )
+
+        guard !audio.pcm16Samples.isEmpty else {
+            throw TranscriptionProviderError.emptyAudio
+        }
+
+        let safeDebugDescription = [
+            sessionRequest.safeDebugDescription,
+            "samples=\(audio.pcm16Samples.count)"
+        ].joined(separator: " ")
+
+        return DoubaoRealtimeGatewayTranscriptionRequest(
+            endpoint: sessionRequest.endpoint,
+            model: sessionRequest.model,
+            headers: sessionRequest.headers,
+            audio: audio,
+            safeDebugDescription: safeDebugDescription
+        )
+    }
+}
+
+public struct DoubaoRealtimeGatewaySessionRequest: Equatable, Sendable {
+    public let endpoint: URL
+    public let model: String
+    public let headers: [String: String]
+    public let safeDebugDescription: String
+
+    public static func make(
+        apiKey: String?,
+        endpoint: String = doubaoRealtimeGatewayEndpoint,
+        model: String = doubaoRealtimeGatewayModel
+    ) throws -> DoubaoRealtimeGatewaySessionRequest {
+        let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedAPIKey.isEmpty else {
+            throw TranscriptionProviderError.authentication(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Keychain 中没有保存 Doubao API Key。"
+            )
+        }
+
+        guard let endpointURL = URL(string: endpoint), endpointURL.scheme?.hasPrefix("ws") == true else {
+            throw TranscriptionProviderError.provider(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Doubao Realtime endpoint 无效：\(endpoint)"
+            )
+        }
+
+        let headers = [
+            "Authorization": "Bearer \(trimmedAPIKey)"
+        ]
+        let safeDebugDescription = [
+            "endpoint=\(endpointURL.absoluteString)",
+            "model=\(model)",
+            "headers=\(headers.keys.sorted().joined(separator: ","))"
+        ].joined(separator: " ")
+
+        return DoubaoRealtimeGatewaySessionRequest(
+            endpoint: endpointURL,
+            model: model,
+            headers: headers,
+            safeDebugDescription: safeDebugDescription
+        )
+    }
+}
+
+public enum DoubaoRealtimeGatewayServerEvent: Equatable, Sendable {
+    case sessionUpdated
+    case partial(TranscriptPartialSnapshot)
+    case final(String)
+    case error(String)
+    case ignored
+}
+
+public enum DoubaoRealtimeGatewayProtocol {
+    public static func buildSessionUpdateEvent(model: String = doubaoRealtimeGatewayModel) throws -> String {
+        try encodeJSONString(
+            DoubaoRealtimeGatewaySessionUpdateEvent(
+                session: .init(
+                    inputAudioFormat: "pcm16",
+                    inputAudioSampleRate: 16_000,
+                    inputAudioChannels: 1,
+                    inputAudioTranscription: .init(model: model)
+                )
+            )
+        )
+    }
+
+    public static func buildAudioAppendEvent(pcm16Samples: [Int16]) throws -> String {
+        try encodeJSONString(
+            DoubaoRealtimeGatewayAudioAppendEvent(
+                audio: Data(pcm16LittleEndianBytes: pcm16Samples).base64EncodedString()
+            )
+        )
+    }
+
+    public static func buildAudioCommitEvent() throws -> String {
+        try encodeJSONString(DoubaoRealtimeGatewayTypedEvent(type: "input_audio_buffer.commit"))
+    }
+
+    public static func parseServerEvent(_ text: String) throws -> DoubaoRealtimeGatewayServerEvent {
+        guard let data = text.data(using: .utf8) else {
+            throw TranscriptionProviderError.provider(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Realtime event is not UTF-8 text"
+            )
+        }
+
+        let payload: DoubaoRealtimeGatewayServerPayload
+        do {
+            payload = try JSONDecoder().decode(DoubaoRealtimeGatewayServerPayload.self, from: data)
+        } catch {
+            throw TranscriptionProviderError.provider(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Realtime event json: \(error.localizedDescription)"
+            )
+        }
+
+        switch payload.type {
+        case "transcription_session.updated", "session.updated":
+            return .sessionUpdated
+        case "conversation.item.input_audio_transcription.result",
+             "conversation.item.input_audio_transcription.delta":
+            guard let text = payload.transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else {
+                return .ignored
+            }
+            return .partial(
+                TranscriptPartialSnapshot(
+                    text: text,
+                    stablePrefixLength: 0,
+                    providerName: doubaoTranscriptionProviderName
+                )
+            )
+        case "conversation.item.input_audio_transcription.completed":
+            return .final(payload.transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        case "error":
+            return .error(payload.error?.message ?? payload.message ?? "Realtime gateway error")
+        default:
+            return .ignored
+        }
+    }
+
+    private static func encodeJSONString<T: Encodable>(_ value: T) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(value)
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw TranscriptionProviderError.provider(
+                providerName: doubaoTranscriptionProviderName,
+                message: "Realtime event encode failed"
+            )
+        }
+        return string
     }
 }
 
@@ -213,8 +390,30 @@ public enum DoubaoTranscriptionErrorMapper {
         }
     }
 
-    public static func transportError(_ error: Error, endpoint: URL) -> TranscriptionProviderError {
-        .transport(
+    public static func transportError(
+        _ error: Error,
+        endpoint: URL,
+        resourceID: String? = nil
+    ) -> TranscriptionProviderError {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == URLError.badServerResponse.rawValue {
+            if endpoint.host?.contains("ai-gateway.vei.volces.com") == true {
+                return .transport(
+                    providerName: doubaoTranscriptionProviderName,
+                    message: "Realtime 网关 WebSocket 握手被服务端拒绝。请检查新网关 API Key 是否有效，并确认模型访问权限已开通。endpoint=\(endpoint.absoluteString)",
+                    retryable: true
+                )
+            }
+
+            let resourceDetail = resourceID.map { " resourceID=\($0)" } ?? ""
+            return .transport(
+                providerName: doubaoTranscriptionProviderName,
+                message: "OpenSpeech WebSocket 握手被服务端拒绝。请在转写服务中保存旧控制台 App ID + Access Token，并确认 Resource ID 已开通。endpoint=\(endpoint.absoluteString)\(resourceDetail)",
+                retryable: true
+            )
+        }
+
+        return .transport(
             providerName: doubaoTranscriptionProviderName,
             message: "WebSocket connect to \(endpoint.absoluteString) failed: \(error.localizedDescription)",
             retryable: true
@@ -305,6 +504,80 @@ public protocol DoubaoTranscriptionTransporting {
         request: DoubaoTranscriptionSessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession
+}
+
+@MainActor
+public protocol DoubaoRealtimeGatewayTranscriptionTransporting {
+    func transcribe(
+        request: DoubaoRealtimeGatewayTranscriptionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> TranscriptSnapshot
+
+    func startStreaming(
+        request: DoubaoRealtimeGatewaySessionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> any RealtimeTranscriptionSession
+}
+
+private struct DoubaoRealtimeGatewaySessionUpdateEvent: Encodable {
+    let type = "transcription_session.update"
+    let session: Session
+
+    struct Session: Encodable {
+        let inputAudioFormat: String
+        let inputAudioSampleRate: Int
+        let inputAudioChannels: Int
+        let inputAudioTranscription: Transcription
+
+        enum CodingKeys: String, CodingKey {
+            case inputAudioFormat = "input_audio_format"
+            case inputAudioSampleRate = "input_audio_sample_rate"
+            case inputAudioChannels = "input_audio_channels"
+            case inputAudioTranscription = "input_audio_transcription"
+        }
+    }
+
+    struct Transcription: Encodable {
+        let model: String
+    }
+}
+
+private struct DoubaoRealtimeGatewayAudioAppendEvent: Encodable {
+    let type = "input_audio_buffer.append"
+    let audio: String
+}
+
+private struct DoubaoRealtimeGatewayTypedEvent: Encodable {
+    let type: String
+}
+
+private struct DoubaoRealtimeGatewayServerPayload: Decodable {
+    let type: String
+    let transcript: String?
+    let delta: String?
+    let text: String?
+    let message: String?
+    let error: DoubaoRealtimeGatewayServerError?
+
+    var transcriptText: String? {
+        transcript ?? delta ?? text
+    }
+}
+
+private struct DoubaoRealtimeGatewayServerError: Decodable {
+    let message: String?
+}
+
+private extension Data {
+    init(pcm16LittleEndianBytes samples: [Int16]) {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(samples.count * 2)
+        for sample in samples {
+            bytes.append(UInt8(truncatingIfNeeded: sample))
+            bytes.append(UInt8(truncatingIfNeeded: sample >> 8))
+        }
+        self.init(bytes)
+    }
 }
 
 private struct DoubaoServerResponsePayload: Decodable {

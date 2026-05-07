@@ -60,9 +60,77 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(updated.partials, ["你好"])
     }
 
-    func testDoubaoRequestBuilderUsesAPIKeyHeadersWithoutLeakingSecret() throws {
+    func testDoubaoRequestBuilderRejectsSingleAPIKeyForOpenSpeechStreaming() {
+        XCTAssertThrowsError(
+            try DoubaoTranscriptionRequest.make(
+                apiKey: " sk-test-secret ",
+                audio: CapturedAudioSnapshot(
+                    durationSeconds: 1,
+                    sampleRate: 16_000,
+                    peakAmplitude: 0.2,
+                    pcm16Samples: [1, 2]
+                )
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? TranscriptionProviderError,
+                .authentication(
+                    providerName: "Doubao",
+                    message: "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
+                )
+            )
+        }
+    }
+
+    func testDoubaoRealtimeGatewayRequestBuilderUsesBearerAuthWithoutLeakingSecret() throws {
+        let request = try DoubaoRealtimeGatewayTranscriptionRequest.make(
+            apiKey: " sk-gateway-secret ",
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2]
+            )
+        )
+
+        XCTAssertEqual(
+            request.endpoint.absoluteString,
+            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+        )
+        XCTAssertEqual(request.model, "bigmodel")
+        XCTAssertEqual(request.headers["Authorization"], "Bearer sk-gateway-secret")
+        XCTAssertNil(request.headers["X-Api-Key"])
+        XCTAssertNil(request.safeDebugDescription.range(of: "sk-gateway-secret"))
+        XCTAssertTrue(request.safeDebugDescription.contains("Authorization"))
+    }
+
+    func testDoubaoRealtimeGatewayProtocolBuildsEventsAndParsesTranscriptEvents() throws {
+        let sessionUpdate = try DoubaoRealtimeGatewayProtocol.buildSessionUpdateEvent(model: "bigmodel")
+        XCTAssertTrue(sessionUpdate.contains(#""type":"transcription_session.update""#))
+        XCTAssertTrue(sessionUpdate.contains(#""input_audio_sample_rate":16000"#))
+        XCTAssertTrue(sessionUpdate.contains(#""model":"bigmodel""#))
+
+        let appendEvent = try DoubaoRealtimeGatewayProtocol.buildAudioAppendEvent(pcm16Samples: [1, -2])
+        XCTAssertTrue(appendEvent.contains(#""type":"input_audio_buffer.append""#))
+        XCTAssertTrue(appendEvent.contains(#""audio":"AQD+/w==""#))
+
+        XCTAssertEqual(
+            try DoubaoRealtimeGatewayProtocol.parseServerEvent(
+                #"{"type":"conversation.item.input_audio_transcription.result","transcript":"你好"}"#
+            ),
+            .partial(TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "Doubao"))
+        )
+        XCTAssertEqual(
+            try DoubaoRealtimeGatewayProtocol.parseServerEvent(
+                #"{"type":"conversation.item.input_audio_transcription.completed","transcript":"你好世界"}"#
+            ),
+            .final("你好世界")
+        )
+    }
+
+    func testDoubaoRequestBuilderUsesAppIDAccessTokenHeadersWithoutLeakingSecret() throws {
         let request = try DoubaoTranscriptionRequest.make(
-            apiKey: " sk-test-secret ",
+            auth: .appIDAccessToken(appID: " 3145608744 ", accessToken: " old-token "),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
                 sampleRate: 16_000,
@@ -76,9 +144,11 @@ final class TranscriptionModelsTests: XCTestCase {
             "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
         )
         XCTAssertEqual(request.resourceID, "volc.seedasr.sauc.duration")
-        XCTAssertEqual(request.headers["X-Api-Key"], "sk-test-secret")
+        XCTAssertEqual(request.headers["X-Api-App-Key"], "3145608744")
+        XCTAssertEqual(request.headers["X-Api-Access-Key"], "old-token")
+        XCTAssertNil(request.headers["X-Api-Key"])
         XCTAssertEqual(request.headers["X-Api-Resource-Id"], "volc.seedasr.sauc.duration")
-        XCTAssertNil(request.safeDebugDescription.range(of: "sk-test-secret"))
+        XCTAssertNil(request.safeDebugDescription.range(of: "old-token"))
         XCTAssertTrue(request.safeDebugDescription.contains("wss://openspeech.bytedance.com"))
     }
 
@@ -120,7 +190,7 @@ final class TranscriptionModelsTests: XCTestCase {
 
         XCTAssertThrowsError(
             try DoubaoTranscriptionRequest.make(
-                apiKey: "sk-test",
+                auth: .appIDAccessToken(appID: "3145608744", accessToken: "old-token"),
                 audio: CapturedAudioSnapshot(
                     durationSeconds: 0,
                     sampleRate: 16_000,
@@ -146,6 +216,44 @@ final class TranscriptionModelsTests: XCTestCase {
             DoubaoTranscriptionErrorMapper.providerError(code: 55000031, message: "busy"),
             .transport(providerName: "Doubao", message: "server busy (55000031): busy", retryable: true)
         )
+    }
+
+    func testDoubaoBadServerResponseMapsToActionableHandshakeError() {
+        let error = DoubaoTranscriptionErrorMapper.transportError(
+            URLError(.badServerResponse),
+            endpoint: URL(string: doubaoDefaultEndpoint)!,
+            resourceID: doubaoLegacyOpenSpeechResourceID
+        )
+
+        guard case .transport(let providerName, let message, let retryable) = error else {
+            XCTFail("Expected transport error, got \(error)")
+            return
+        }
+
+        XCTAssertEqual(providerName, "Doubao")
+        XCTAssertTrue(message.contains("OpenSpeech WebSocket 握手被服务端拒绝"))
+        XCTAssertTrue(message.contains("App ID + Access Token"))
+        XCTAssertTrue(message.contains(doubaoDefaultEndpoint))
+        XCTAssertTrue(message.contains(doubaoLegacyOpenSpeechResourceID))
+        XCTAssertTrue(retryable)
+    }
+
+    func testDoubaoRealtimeGatewayBadServerResponseMapsToAPIKeyHandshakeError() {
+        let error = DoubaoTranscriptionErrorMapper.transportError(
+            URLError(.badServerResponse),
+            endpoint: URL(string: doubaoRealtimeGatewayEndpoint)!
+        )
+
+        guard case .transport(let providerName, let message, let retryable) = error else {
+            XCTFail("Expected transport error, got \(error)")
+            return
+        }
+
+        XCTAssertEqual(providerName, "Doubao")
+        XCTAssertTrue(message.contains("Realtime 网关 WebSocket 握手被服务端拒绝"))
+        XCTAssertTrue(message.contains("API Key"))
+        XCTAssertTrue(message.contains(doubaoRealtimeGatewayEndpoint))
+        XCTAssertTrue(retryable)
     }
 
     func testDoubaoResponseParserExtractsPartialAndFinalText() throws {
@@ -212,13 +320,15 @@ final class TranscriptionModelsTests: XCTestCase {
             throw XCTSkip("Set VOCO_LIVE_DOUBAO_ASR=1 to run the live Doubao native smoke test.")
         }
 
-        guard let apiKey = ProcessInfo.processInfo.environment["VOCO_DOUBAO_API_KEY"], !apiKey.isEmpty else {
-            XCTFail("VOCO_LIVE_DOUBAO_ASR=1 requires VOCO_DOUBAO_API_KEY.")
+        guard let appID = ProcessInfo.processInfo.environment["VOCO_DOUBAO_APP_ID"], !appID.isEmpty,
+              let accessToken = ProcessInfo.processInfo.environment["VOCO_DOUBAO_ACCESS_TOKEN"], !accessToken.isEmpty
+        else {
+            XCTFail("VOCO_LIVE_DOUBAO_ASR=1 requires VOCO_DOUBAO_APP_ID and VOCO_DOUBAO_ACCESS_TOKEN.")
             return
         }
 
         let request = try DoubaoTranscriptionRequest.make(
-            apiKey: apiKey,
+            auth: .appIDAccessToken(appID: appID, accessToken: accessToken),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 0.1,
                 sampleRate: 16_000,
@@ -227,7 +337,10 @@ final class TranscriptionModelsTests: XCTestCase {
             )
         )
 
+        XCTAssertEqual(request.headers["X-Api-App-Key"], appID)
+        XCTAssertEqual(request.headers["X-Api-Access-Key"], accessToken)
+        XCTAssertNil(request.headers["X-Api-Key"])
         XCTAssertEqual(request.headers["X-Api-Resource-Id"], "volc.seedasr.sauc.duration")
-        XCTAssertNil(request.safeDebugDescription.range(of: apiKey))
+        XCTAssertNil(request.safeDebugDescription.range(of: accessToken))
     }
 }

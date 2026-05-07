@@ -22,7 +22,7 @@ public enum DoubaoCredentialMode: String, CaseIterable, Identifiable, Codable, S
     public var title: String {
         switch self {
         case .apiKey:
-            "新控制台 API Key"
+            "新网关 API Key"
         case .appIDAccessToken:
             "旧控制台 App ID + Token"
         }
@@ -31,9 +31,9 @@ public enum DoubaoCredentialMode: String, CaseIterable, Identifiable, Codable, S
     public var detail: String {
         switch self {
         case .apiKey:
-            "使用 X-Api-Key。推荐新建配置使用这个模式。"
+            "使用 Authorization: Bearer 连接新网关 Realtime ASR。"
         case .appIDAccessToken:
-            "使用 X-Api-App-Key 和 X-Api-Access-Key。仅用于旧控制台凭证。"
+            "使用 X-Api-App-Key 和 X-Api-Access-Key 连接 OpenSpeech 流式 ASR。"
         }
     }
 }

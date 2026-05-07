@@ -12,7 +12,7 @@ final class PrivacySettingsModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.transcriptRetention.title, "不保留转写文本")
         XCTAssertEqual(snapshot.transcriptRetention.detail, "转写文本仅用于本次插入和当前运行时诊断。")
         XCTAssertEqual(snapshot.logsPolicy.title, "日志默认脱敏")
-        XCTAssertEqual(snapshot.logsPolicy.detail, "诊断信息不记录完整 API Key 或完整转写正文。")
+        XCTAssertEqual(snapshot.logsPolicy.detail, "诊断信息不记录完整 Doubao 凭证或完整转写正文。")
     }
 
     func testStoredCredentialsShowMaskedKeychainStatus() {

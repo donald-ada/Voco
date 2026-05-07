@@ -3,22 +3,22 @@ import XCTest
 
 final class AppCoordinatorTests: XCTestCase {
     @MainActor
-    func testFinishingLaunchWithoutOnboardingShowsSetupState() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: false)
+    func testFinishingLaunchDoesNotGateReadyStateOnSetupCompletion() {
+        let coordinator = AppCoordinator()
 
         coordinator.finishLaunching()
 
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
-        XCTAssertEqual(coordinator.snapshot.title, "需要设置")
-        XCTAssertEqual(coordinator.snapshot.systemImage, "exclamationmark.triangle")
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.snapshot.title, "就绪")
+        XCTAssertEqual(coordinator.snapshot.systemImage, "waveform")
         XCTAssertEqual(coordinator.snapshot.templateIconResourceName, "VocoMenuBarIconTemplate")
         XCTAssertTrue(coordinator.snapshot.canOpenSettings)
     }
 
     @MainActor
-    func testFinishingLaunchWithOnboardingShowsReadyState() {
+    func testFinishingLaunchShowsReadyState() {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, hotkeyProvider: hotkeyProvider)
+        let coordinator = AppCoordinator(hotkeyProvider: hotkeyProvider)
 
         coordinator.finishLaunching()
 
@@ -32,7 +32,7 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testMenuRecordingToggleMovesThroughRecordingWorkflow() async {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -50,7 +50,7 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testTranscriptionCompletionReturnsToReadyOrError() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
         coordinator.toggleRecordingFromMenu()
         coordinator.toggleRecordingFromMenu()
@@ -71,7 +71,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testLaunchAtLoginToggleUsesProviderState() async {
         let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, launchAtLoginProvider: launchProvider)
+        let coordinator = AppCoordinator(launchAtLoginProvider: launchProvider)
 
         XCTAssertFalse(coordinator.launchAtLoginEnabled)
         XCTAssertEqual(coordinator.launchAtLoginState, .disabled)
@@ -93,7 +93,7 @@ final class AppCoordinatorTests: XCTestCase {
     func testLaunchAtLoginFailureSurfacesErrorAndRestoresProviderState() async {
         let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
         launchProvider.error = LaunchAtLoginTestError.failed
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, launchAtLoginProvider: launchProvider)
+        let coordinator = AppCoordinator(launchAtLoginProvider: launchProvider)
 
         await coordinator.setLaunchAtLoginEnabled(true)
 
@@ -103,20 +103,18 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testFinishingLaunchWithMissingPermissionUsesPermissionRecoveryAfterCompletedOnboarding() {
+    func testFinishingLaunchWithMissingPermissionUsesPermissionRecovery() {
         let provider = FakePermissionProvider(
             current: [
                 .microphone(.denied),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        let coordinator = AppCoordinator(permissionProvider: provider)
 
         coordinator.finishLaunching()
 
@@ -131,22 +129,19 @@ final class AppCoordinatorTests: XCTestCase {
             current: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        let coordinator = AppCoordinator(permissionProvider: provider)
         coordinator.finishLaunching()
         XCTAssertEqual(coordinator.status, .ready)
 
         provider.current = [
             .microphone(.granted),
             .accessibility(.denied),
-            .inputMonitoring(.granted)
         ]
         coordinator.refreshPermissions()
 
@@ -161,15 +156,13 @@ final class AppCoordinatorTests: XCTestCase {
             current: [
                 .microphone(.notDetermined),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        let coordinator = AppCoordinator(permissionProvider: provider)
         coordinator.finishLaunching()
         XCTAssertEqual(coordinator.status, .permissionNeeded)
 
@@ -186,21 +179,18 @@ final class AppCoordinatorTests: XCTestCase {
             current: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, permissionProvider: provider)
+        let coordinator = AppCoordinator(permissionProvider: provider)
         coordinator.finishLaunching()
 
         provider.current = [
             .microphone(.granted),
             .accessibility(.denied),
-            .inputMonitoring(.denied)
         ]
 
         coordinator.prepareForSettingsPresentation()
@@ -210,22 +200,19 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testRefreshingPermissionsAfterCompletedOnboardingRestoresReadyAndHotkey() {
+    func testRefreshingPermissionsRestoresReadyAndHotkey() {
         let permissionProvider = FakePermissionProvider(
             current: [
                 .microphone(.granted),
                 .accessibility(.denied),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             permissionProvider: permissionProvider,
             hotkeyProvider: hotkeyProvider
         )
@@ -236,7 +223,6 @@ final class AppCoordinatorTests: XCTestCase {
         permissionProvider.current = [
             .microphone(.granted),
             .accessibility(.granted),
-            .inputMonitoring(.granted)
         ]
         coordinator.refreshPermissions()
 
@@ -250,7 +236,6 @@ final class AppCoordinatorTests: XCTestCase {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let recordingWorkflow = FakeRecordingWorkflow()
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             recordingWorkflow: recordingWorkflow,
             hotkeyProvider: hotkeyProvider
         )
@@ -272,7 +257,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testRapidToggleDuringRecordingStartQueuesStopAfterStartCompletes() async {
         let recordingWorkflow = FakeRecordingWorkflow(pauseAfterStart: true)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         let startTask = Task {
@@ -300,7 +285,6 @@ final class AppCoordinatorTests: XCTestCase {
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let recordingWorkflow = FakeRecordingWorkflow()
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             recordingWorkflow: recordingWorkflow,
             hotkeyProvider: hotkeyProvider
         )
@@ -322,7 +306,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testRecordingWorkflowStartMovesToRecording() async {
         let recordingWorkflow = FakeRecordingWorkflow()
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -345,7 +329,7 @@ final class AppCoordinatorTests: XCTestCase {
             )
         )
         let recordingWorkflow = FakeRecordingWorkflow(result: result)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -370,7 +354,7 @@ final class AppCoordinatorTests: XCTestCase {
             partialsToEmit: [partial],
             pauseAfterPartials: true
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -395,7 +379,7 @@ final class AppCoordinatorTests: XCTestCase {
             providerName: "Fake ASR"
         )
         let recordingWorkflow = FakeRecordingWorkflow(partialsToEmitOnStart: [partial])
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -432,7 +416,7 @@ final class AppCoordinatorTests: XCTestCase {
                 )
             ]
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -455,7 +439,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testRecordingWorkflowStartFailureSurfacesError() async {
         let recordingWorkflow = FakeRecordingWorkflow(startError: RecordingWorkflowError("microphone unavailable"))
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -467,7 +451,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testRecordingWorkflowStopFailureSurfacesError() async {
         let recordingWorkflow = FakeRecordingWorkflow(stopError: RecordingWorkflowError("provider offline"))
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -475,12 +459,14 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.status, .error)
         XCTAssertEqual(coordinator.lastErrorMessage, "provider offline")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.recentChain[2].detail, "尚无近期转写")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.recentChain[2].status, .neutral)
     }
 
     @MainActor
     func testCoordinatorPublishesTranscriptionProviderStatus() {
         let recordingWorkflow = FakeRecordingWorkflow(transcriptionStatus: .authenticationRequired(providerName: "Doubao"))
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
 
         coordinator.finishLaunching()
 
@@ -490,7 +476,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testCoordinatorPublishesTranscriptionCredentialSnapshot() {
         let credentialStore = InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
 
         coordinator.finishLaunching()
 
@@ -501,7 +487,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testCoordinatorSavesAndClearsTranscriptionCredentials() async throws {
         let credentialStore = InMemoryTranscriptionCredentialStore()
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
 
         await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
 
@@ -522,7 +508,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testCoordinatorSavesLegacyDoubaoCredentialMode() async throws {
         let credentialStore = InMemoryTranscriptionCredentialStore()
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
 
         await coordinator.saveDoubaoAppIDAccessToken(
             appID: "3145608744",
@@ -544,7 +530,6 @@ final class AppCoordinatorTests: XCTestCase {
             transcriptionStatus: .authenticationRequired(providerName: "Doubao")
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: recordingWorkflow
         )
@@ -564,7 +549,6 @@ final class AppCoordinatorTests: XCTestCase {
             transcriptionStatus: .ready(providerName: "Doubao")
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             transcriptionCredentialStore: credentialStore,
             recordingWorkflow: recordingWorkflow
         )
@@ -582,7 +566,7 @@ final class AppCoordinatorTests: XCTestCase {
         let credentialStore = FakeTranscriptionCredentialStore(
             saveError: TranscriptionCredentialError.storeFailed(message: "Keychain denied")
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, transcriptionCredentialStore: credentialStore)
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
 
         await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
 
@@ -593,7 +577,7 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testCoordinatorPublishesRecordingHUDSnapshot() async {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -605,7 +589,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testCoordinatorPublishesFailureHUDSnapshot() async {
         let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -617,7 +601,7 @@ final class AppCoordinatorTests: XCTestCase {
 
     @MainActor
     func testCoordinatorPublishesDefaultSettingsSnapshots() {
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true)
+        let coordinator = AppCoordinator()
 
         XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "系统默认输入")
         XCTAssertEqual(coordinator.injectionSettingsSnapshot.strategy.title, "等待插入")
@@ -643,7 +627,6 @@ final class AppCoordinatorTests: XCTestCase {
             )
         )
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
             recordingWorkflow: FakeRecordingWorkflow(result: result)
         )
@@ -661,7 +644,7 @@ final class AppCoordinatorTests: XCTestCase {
     @MainActor
     func testUnavailableTranscriptionFailureSurfacesProviderMessage() async {
         let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, recordingWorkflow: recordingWorkflow)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
         coordinator.finishLaunching()
 
         await coordinator.toggleRecordingFromUserAction()
@@ -672,22 +655,78 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testWorkbenchMarksRecentDoubaoStepFailedAfterTranscriptionError() async {
+        let recordingWorkflow = FakeRecordingWorkflow(
+            transcriptionStatus: .ready(providerName: "Doubao"),
+            stopError: TranscriptionProviderError.provider(
+                providerName: "Doubao",
+                message: "server response contains no final text"
+            )
+        )
+        let coordinator = AppCoordinator(
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            recordingWorkflow: recordingWorkflow
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        let doubaoStep = coordinator.settingsWorkbenchSnapshot.recentChain[2]
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.title, "Doubao 转写失败")
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle, "前往转写服务")
+        XCTAssertEqual(doubaoStep.detail, "Doubao 转写失败：server response contains no final text")
+        XCTAssertEqual(doubaoStep.status, .needsAttention)
+        XCTAssertEqual(doubaoStep.action, .openTranscription)
+    }
+
+    @MainActor
+    func testWorkbenchKeepsDoubaoFailureWhenPartialArrivedBeforeTranscriptionError() async {
+        let partial = TranscriptPartialSnapshot(
+            text: "partial text",
+            stablePrefixLength: 0,
+            providerName: "Doubao"
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(
+            transcriptionStatus: .ready(providerName: "Doubao"),
+            stopError: TranscriptionProviderError.transport(
+                providerName: "Doubao",
+                message: "timeout",
+                retryable: true
+            ),
+            partialsToEmitBeforeStopError: [partial]
+        )
+        let coordinator = AppCoordinator(
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            recordingWorkflow: recordingWorkflow
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        let doubaoStep = coordinator.settingsWorkbenchSnapshot.recentChain[2]
+        XCTAssertEqual(coordinator.lastTranscript?.partials, ["partial text"])
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .transcription), .needsAttention)
+        XCTAssertEqual(doubaoStep.detail, "Doubao 网络错误：timeout")
+        XCTAssertEqual(doubaoStep.status, .needsAttention)
+        XCTAssertEqual(doubaoStep.action, .openTranscription)
+    }
+
+    @MainActor
     func testMissingHotkeyPermissionsDoNotInstallHotkey() {
         let permissionProvider = FakePermissionProvider(
             current: [
                 .microphone(.granted),
                 .accessibility(.denied),
-                .inputMonitoring(.granted)
             ],
             requested: [
                 .microphone(.granted),
                 .accessibility(.granted),
-                .inputMonitoring(.granted)
             ]
         )
         let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
             permissionProvider: permissionProvider,
             hotkeyProvider: hotkeyProvider
         )
@@ -699,170 +738,9 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testInputMonitoringPermissionDoesNotBlockHotkeyInstall() {
-        let permissionProvider = FakePermissionProvider(
-            current: [
-                .microphone(.granted),
-                .accessibility(.granted),
-                .inputMonitoring(.denied)
-            ],
-            requested: [
-                .microphone(.granted),
-                .accessibility(.granted),
-                .inputMonitoring(.denied)
-            ]
-        )
-        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: true,
-            permissionProvider: permissionProvider,
-            hotkeyProvider: hotkeyProvider
-        )
-
-        coordinator.finishLaunching()
-
-        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
-        XCTAssertEqual(hotkeyProvider.startRequests.count, 1)
-        XCTAssertEqual(coordinator.status, .ready)
-    }
-
-    @MainActor
-    func testFinishingLaunchPublishesOnboardingSnapshotWhenSetupIsIncomplete() {
-        let permissionProvider = FakePermissionProvider(
-            current: [
-                .microphone(.notDetermined),
-                .accessibility(.denied),
-                .inputMonitoring(.granted)
-            ],
-            requested: [
-                .microphone(.granted),
-                .accessibility(.denied),
-                .inputMonitoring(.granted)
-            ]
-        )
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            permissionProvider: permissionProvider,
-            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(),
-            installLocationProvider: StaticInstallLocationProvider(
-                snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Applications/Voco.app")
-            )
-        )
-
-        coordinator.finishLaunching()
-
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
-        XCTAssertEqual(coordinator.onboarding.steps.map(\.id), OnboardingStepID.ordered)
-        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .actionNeeded)
-        XCTAssertEqual(coordinator.onboarding.step(id: .accessibility)?.status, .blocked)
-        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .actionNeeded)
-        XCTAssertEqual(coordinator.installLocation.status, .final)
-    }
-
-    @MainActor
-    func testRequestingMicrophonePermissionRefreshesOnboardingStep() async {
-        let permissionProvider = FakePermissionProvider(
-            current: [
-                .microphone(.notDetermined),
-                .accessibility(.granted),
-                .inputMonitoring(.granted)
-            ],
-            requested: [
-                .microphone(.granted),
-                .accessibility(.granted),
-                .inputMonitoring(.granted)
-            ]
-        )
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            permissionProvider: permissionProvider,
-            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
-        )
-        coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .actionNeeded)
-
-        await coordinator.requestMicrophonePermission()
-
-        XCTAssertEqual(coordinator.onboarding.step(id: .microphone)?.status, .complete)
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
-    }
-
-    @MainActor
-    func testSavingASRKeyRefreshesOnboardingStep() async {
-        let credentialStore = InMemoryTranscriptionCredentialStore()
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            transcriptionCredentialStore: credentialStore
-        )
-        coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .actionNeeded)
-
-        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
-
-        XCTAssertEqual(coordinator.onboarding.step(id: .asrSetup)?.status, .complete)
-        XCTAssertTrue(coordinator.transcriptionCredentials.hasAPIKey)
-    }
-
-    @MainActor
-    func testLaunchAtLoginCanBeSkippedDuringOnboarding() {
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef")
-        )
-        coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.onboarding.step(id: .launchAtLogin)?.status, .actionNeeded)
-
-        coordinator.markLaunchAtLoginSkippedForOnboarding()
-
-        XCTAssertFalse(coordinator.launchAtLoginEnabled)
-        XCTAssertEqual(coordinator.onboarding.step(id: .launchAtLogin)?.status, .skipped)
-        XCTAssertEqual(coordinator.status, .needsOnboarding)
-    }
-
-    @MainActor
-    func testHotkeyVerificationCompletesHotkeyOnboardingStep() {
-        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
-            hotkeyProvider: hotkeyProvider
-        )
-        coordinator.finishLaunching()
-        XCTAssertEqual(coordinator.hotkeyRuntimeState, .listening)
-        XCTAssertEqual(coordinator.onboarding.step(id: .hotkeyTest)?.status, .actionNeeded)
-
-        coordinator.markHotkeyVerifiedForOnboarding()
-
-        XCTAssertEqual(coordinator.onboarding.step(id: .hotkeyTest)?.status, .complete)
-    }
-
-    @MainActor
-    func testCompletingOnboardingPersistsAndMovesReadyWhenRequiredSetupIsComplete() {
-        var persistedCompletion: Bool?
-        let hotkeyProvider = FakeHotkeyProvider(startState: .listening)
-        let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
-            setHasCompletedOnboarding: { persistedCompletion = $0 },
-            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
-            hotkeyProvider: hotkeyProvider
-        )
-        coordinator.finishLaunching()
-        coordinator.markLaunchAtLoginSkippedForOnboarding()
-        coordinator.markHotkeyVerifiedForOnboarding()
-
-        let didComplete = coordinator.completeOnboardingIfReady()
-
-        XCTAssertTrue(didComplete)
-        XCTAssertEqual(persistedCompletion, true)
-        XCTAssertEqual(coordinator.status, .ready)
-        XCTAssertTrue(coordinator.onboarding.isComplete)
-    }
-
-    @MainActor
     func testMountedImageLocationBlocksLaunchAtLoginEnable() async {
         let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
         let coordinator = AppCoordinator(
-            hasCompletedOnboarding: false,
             launchAtLoginProvider: launchProvider,
             installLocationProvider: StaticInstallLocationProvider(
                 snapshot: InstallLocationCheck.snapshot(forAppBundlePath: "/Volumes/Voco/Voco.app")
@@ -973,6 +851,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
     let stopError: Error?
     let partialsToEmitOnStart: [TranscriptPartialSnapshot]
     let partialsToEmit: [TranscriptPartialSnapshot]
+    let partialsToEmitBeforeStopError: [TranscriptPartialSnapshot]
     let pauseAfterStart: Bool
     let pauseAfterPartials: Bool
     private var storedProgress: TranscriptionProgressHandler?
@@ -994,6 +873,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         stopError: Error? = nil,
         partialsToEmitOnStart: [TranscriptPartialSnapshot] = [],
         partialsToEmit: [TranscriptPartialSnapshot] = [],
+        partialsToEmitBeforeStopError: [TranscriptPartialSnapshot] = [],
         pauseAfterStart: Bool = false,
         pauseAfterPartials: Bool = false
     ) {
@@ -1003,6 +883,7 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         self.stopError = stopError
         self.partialsToEmitOnStart = partialsToEmitOnStart
         self.partialsToEmit = partialsToEmit
+        self.partialsToEmitBeforeStopError = partialsToEmitBeforeStopError
         self.pauseAfterStart = pauseAfterStart
         self.pauseAfterPartials = pauseAfterPartials
     }
@@ -1038,6 +919,9 @@ private final class FakeRecordingWorkflow: RecordingWorkflowing {
         storedProgress = progress
 
         if let stopError {
+            for partial in partialsToEmitBeforeStopError {
+                progress?(partial)
+            }
             throw stopError
         }
 

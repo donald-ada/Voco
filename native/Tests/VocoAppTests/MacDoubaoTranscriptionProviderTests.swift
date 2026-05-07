@@ -40,26 +40,21 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty)
     }
 
-    func testProviderBuildsRequestFromStoredAPIKeyAndForwardsProgress() async throws {
-        let partial = TranscriptPartialSnapshot(
-            text: "hello",
-            stablePrefixLength: 0,
-            providerName: "Doubao"
-        )
-        let transport = FakeDoubaoTransport(
+    func testProviderBuildsRealtimeGatewayRequestFromStoredAPIKey() async throws {
+        let openSpeechTransport = FakeDoubaoTransport()
+        let gatewayTransport = FakeDoubaoRealtimeGatewayTransport(
             transcript: TranscriptSnapshot(
-                finalText: "hello world",
-                partials: ["hello"],
+                finalText: "hello gateway",
+                partials: [],
                 providerName: "Doubao",
                 latencyMilliseconds: 12
-            ),
-            partialsToEmit: [partial]
+            )
         )
         let provider = MacDoubaoTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
-            transport: transport
+            transport: openSpeechTransport,
+            realtimeGatewayTransport: gatewayTransport
         )
-        var received: [TranscriptPartialSnapshot] = []
 
         let transcript = try await provider.transcribe(
             CapturedAudioSnapshot(
@@ -68,16 +63,17 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
                 peakAmplitude: 0.2,
                 pcm16Samples: [1, 2]
             )
-        ) { progress in
-            received.append(progress)
-        }
+        )
 
         XCTAssertEqual(provider.status, .ready(providerName: "Doubao"))
-        XCTAssertEqual(transcript.finalText, "hello world")
-        XCTAssertEqual(received, [partial])
-        XCTAssertEqual(transport.requests.count, 1)
-        XCTAssertEqual(transport.requests.first?.headers["X-Api-Key"], "sk-test-secret")
-        XCTAssertNil(transport.requests.first?.safeDebugDescription.range(of: "sk-test-secret"))
+        XCTAssertEqual(transcript.finalText, "hello gateway")
+        XCTAssertTrue(openSpeechTransport.requests.isEmpty)
+        XCTAssertEqual(gatewayTransport.requests.count, 1)
+        XCTAssertEqual(
+            gatewayTransport.requests.first?.endpoint.absoluteString,
+            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+        )
+        XCTAssertEqual(gatewayTransport.requests.first?.headers["Authorization"], "Bearer sk-test-secret")
     }
 
     func testProviderBuildsRequestFromStoredAppIDAccessTokenCredential() async throws {
@@ -135,6 +131,50 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertNil(transport.streamingRequests.first?.headers["X-Api-Key"])
     }
 
+    func testProviderRetriesLegacyStreamingWithBigASRResourceIDAfterHandshakeRejection() async throws {
+        let transport = FakeDoubaoTransport()
+        let legacyHourlyResourceID = "volc.bigasr.sauc.duration"
+        transport.streamingErrorsByResourceID[doubaoDefaultResourceID] = TranscriptionProviderError.transport(
+            providerName: "Doubao",
+            message: "OpenSpeech WebSocket 握手被服务端拒绝。endpoint=\(doubaoDefaultEndpoint)",
+            retryable: true
+        )
+        let provider = MacDoubaoTranscriptionProvider(
+            credentialStore: InMemoryTranscriptionCredentialStore(
+                credential: .doubaoAppIDAccessToken(
+                    appID: "3145608744",
+                    accessToken: "legacy-token"
+                )
+            ),
+            transport: transport
+        )
+
+        _ = try await provider.startStreaming(progress: nil)
+
+        XCTAssertEqual(transport.streamingRequests.map(\.resourceID), [doubaoDefaultResourceID, legacyHourlyResourceID])
+        XCTAssertEqual(transport.streamingRequests.last?.headers["X-Api-Resource-Id"], legacyHourlyResourceID)
+    }
+
+    func testProviderStartsRealtimeGatewayStreamingFromStoredAPIKey() async throws {
+        let openSpeechTransport = FakeDoubaoTransport()
+        let gatewayTransport = FakeDoubaoRealtimeGatewayTransport()
+        let provider = MacDoubaoTranscriptionProvider(
+            credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
+            transport: openSpeechTransport,
+            realtimeGatewayTransport: gatewayTransport
+        )
+
+        _ = try await provider.startStreaming(progress: nil)
+
+        XCTAssertTrue(openSpeechTransport.streamingRequests.isEmpty)
+        XCTAssertEqual(gatewayTransport.streamingRequests.count, 1)
+        XCTAssertEqual(
+            gatewayTransport.streamingRequests.first?.endpoint.absoluteString,
+            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+        )
+        XCTAssertEqual(gatewayTransport.streamingRequests.first?.headers["Authorization"], "Bearer sk-test-secret")
+    }
+
     func testURLSessionTransportStreamsBinaryFramesAndReturnsFinalTranscript() async throws {
         let finalFrame = try DoubaoWireProtocol.buildTestServerResponseFrame(
             json: #"{"result":{"text":"hello world","utterances":[{"text":"hello world","start_time":0,"end_time":1000,"definite":true}]}}"#,
@@ -144,7 +184,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
         let request = try DoubaoTranscriptionRequest.make(
-            apiKey: "sk-test-secret",
+            auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
                 sampleRate: 16_000,
@@ -157,7 +197,9 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
 
         XCTAssertEqual(transcript.finalText, "hello world")
         XCTAssertEqual(session.requests.count, 1)
-        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-App-Key"), "3145608744")
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Access-Key"), "legacy-token")
+        XCTAssertNil(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"))
         XCTAssertEqual(task.resumeCount, 1)
         XCTAssertEqual(task.sentMessages.count, 2)
         XCTAssertEqual(task.cancelCodes, [.goingAway])
@@ -175,7 +217,9 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let request = try DoubaoTranscriptionSessionRequest.make(
+            auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token")
+        )
         var received: [TranscriptPartialSnapshot] = []
 
         let streamingSession = try await transport.startStreaming(request: request) { progress in
@@ -195,7 +239,9 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transcript.finalText, "hello world")
         XCTAssertEqual(received.map(\.text), ["hello"])
         XCTAssertEqual(session.requests.count, 1)
-        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"), "sk-test-secret")
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-App-Key"), "3145608744")
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "X-Api-Access-Key"), "legacy-token")
+        XCTAssertNil(session.requests.first?.value(forHTTPHeaderField: "X-Api-Key"))
         XCTAssertEqual(task.resumeCount, 1)
         XCTAssertEqual(task.sentMessages.count, 2)
         guard case .data(let lastFrame) = task.sentMessages.last else {
@@ -203,6 +249,44 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
             return
         }
         XCTAssertEqual(Array(lastFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
+        XCTAssertEqual(task.cancelCodes, [.goingAway])
+    }
+
+    func testURLSessionRealtimeGatewayTransportStreamsJSONEventsAndReturnsFinalTranscript() async throws {
+        let task = FakeDoubaoWebSocketTask(
+            receiveMessages: [
+                .string(#"{"type":"transcription_session.updated"}"#),
+                .string(#"{"type":"conversation.item.input_audio_transcription.result","transcript":"hello"}"#),
+                .string(#"{"type":"conversation.item.input_audio_transcription.completed","transcript":"hello world"}"#)
+            ]
+        )
+        let session = FakeDoubaoWebSocketSession(task: task)
+        let transport = URLSessionDoubaoRealtimeGatewayTranscriptionTransport(session: session)
+        let request = try DoubaoRealtimeGatewaySessionRequest.make(apiKey: "sk-gateway-secret")
+        var received: [TranscriptPartialSnapshot] = []
+
+        let streamingSession = try await transport.startStreaming(request: request) { partial in
+            received.append(partial)
+        }
+        await streamingSession.acceptAudioChunk([1, 2, 3])
+        let transcript = try await streamingSession.finish(
+            audio: CapturedAudioSnapshot(
+                durationSeconds: 1,
+                sampleRate: 16_000,
+                peakAmplitude: 0.2,
+                pcm16Samples: [1, 2, 3]
+            )
+        )
+
+        XCTAssertEqual(transcript.finalText, "hello world")
+        XCTAssertEqual(received.map(\.text), ["hello"])
+        XCTAssertEqual(session.requests.first?.url?.absoluteString, "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel")
+        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer sk-gateway-secret")
+        XCTAssertEqual(task.resumeCount, 1)
+        XCTAssertEqual(task.sentMessages.count, 3)
+        XCTAssertTrue(task.sentStringMessages[0].contains(#""type":"transcription_session.update""#))
+        XCTAssertTrue(task.sentStringMessages[1].contains(#""type":"input_audio_buffer.append""#))
+        XCTAssertTrue(task.sentStringMessages[2].contains(#""type":"input_audio_buffer.commit""#))
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
@@ -218,7 +302,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(partialFrame), .data(finalFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
         await streamingSession.acceptAudioChunk([1, 2, 3])
@@ -244,7 +328,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
         let transcript = try await streamingSession.finish(
@@ -269,7 +353,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
         let frameSamples = Array(repeating: Int16(1), count: 3_200)
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
@@ -309,7 +393,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let task = FakeDoubaoWebSocketTask(receiveMessages: [.data(finalFrame)])
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
-        let request = try DoubaoTranscriptionSessionRequest.make(apiKey: "sk-test-secret")
+        let request = try DoubaoTranscriptionSessionRequest.make(auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"))
         let samples = Array(repeating: Int16(1), count: 6_401)
 
         let streamingSession = try await transport.startStreaming(request: request, progress: nil)
@@ -349,7 +433,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
         let request = try DoubaoTranscriptionRequest.make(
-            apiKey: "sk-test-secret",
+            auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
                 sampleRate: 16_000,
@@ -373,7 +457,7 @@ final class MacDoubaoTranscriptionProviderTests: XCTestCase {
         let session = FakeDoubaoWebSocketSession(task: task)
         let transport = URLSessionDoubaoTranscriptionTransport(session: session)
         let request = try DoubaoTranscriptionRequest.make(
-            apiKey: "sk-test-secret",
+            auth: .appIDAccessToken(appID: "3145608744", accessToken: "legacy-token"),
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
                 sampleRate: 16_000,
@@ -410,6 +494,7 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
     let transcript: TranscriptSnapshot
     let partialsToEmit: [TranscriptPartialSnapshot]
     var error: Error?
+    var streamingErrorsByResourceID: [String: Error] = [:]
 
     init(
         transcript: TranscriptSnapshot = TranscriptSnapshot(
@@ -447,11 +532,60 @@ private final class FakeDoubaoTransport: DoubaoTranscriptionTransporting {
     ) async throws -> any RealtimeTranscriptionSession {
         streamingRequests.append(request)
 
+        if let error = streamingErrorsByResourceID[request.resourceID] {
+            throw error
+        }
+
         if let error {
             throw error
         }
 
         return FakeDoubaoStreamingSession(transcript: transcript, partialsToEmit: partialsToEmit, progress: progress)
+    }
+}
+
+@MainActor
+private final class FakeDoubaoRealtimeGatewayTransport: DoubaoRealtimeGatewayTranscriptionTransporting {
+    private(set) var requests: [DoubaoRealtimeGatewayTranscriptionRequest] = []
+    private(set) var streamingRequests: [DoubaoRealtimeGatewaySessionRequest] = []
+    let transcript: TranscriptSnapshot
+    var error: Error?
+
+    init(
+        transcript: TranscriptSnapshot = TranscriptSnapshot(
+            finalText: "",
+            partials: [],
+            providerName: "Doubao",
+            latencyMilliseconds: nil
+        )
+    ) {
+        self.transcript = transcript
+    }
+
+    func transcribe(
+        request: DoubaoRealtimeGatewayTranscriptionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> TranscriptSnapshot {
+        requests.append(request)
+
+        if let error {
+            throw error
+        }
+
+        return transcript
+    }
+
+    func startStreaming(
+        request: DoubaoRealtimeGatewaySessionRequest,
+        progress: TranscriptionProgressHandler?
+    ) async throws -> any RealtimeTranscriptionSession {
+        streamingRequests.append(request)
+
+        if let error {
+            throw error
+        }
+
+        return FakeDoubaoStreamingSession(transcript: transcript, partialsToEmit: [], progress: progress)
     }
 }
 
@@ -505,6 +639,14 @@ private final class FakeDoubaoWebSocketTask: DoubaoWebSocketTasking, @unchecked 
     private(set) var resumeCount = 0
     private(set) var sentMessages: [URLSessionWebSocketTask.Message] = []
     private(set) var cancelCodes: [URLSessionWebSocketTask.CloseCode] = []
+    var sentStringMessages: [String] {
+        sentMessages.compactMap { message in
+            guard case .string(let text) = message else {
+                return nil
+            }
+            return text
+        }
+    }
 
     init(
         sendError: Error? = nil,

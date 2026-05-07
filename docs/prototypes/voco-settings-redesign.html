@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voco 设置</title>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --page: #ecebea;
+    --window: #f8f8f6;
+    --window-2: #f1f1ee;
+    --fg: #161716;
+    --muted: #666a64;
+    --quiet: #8a8e87;
+    --line: rgba(22, 23, 22, 0.11);
+    --line-strong: rgba(22, 23, 22, 0.18);
+    --accent: #21b66f;
+    --accent-ink: #05391f;
+    --accent-soft: #dff7eb;
+    --warning: #b7791f;
+    --warning-soft: #fff0d1;
+    --danger: #c7352e;
+    --danger-soft: #ffe2df;
+    --blue: #2c6dd2;
+    --blue-soft: #e4eefc;
+    --black: #050505;
+    --white: #ffffff;
+    --font-body: "IBM Plex Sans", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select {
+    font-family: var(--font-body);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+    letter-spacing: 0;
+  }
+
+  p,
+  h1,
+  h2,
+  h3 {
+    text-wrap: pretty;
+  }
+
+  .page {
+    min-height: 100vh;
+    padding: 26px;
+  }
+
+  .shellTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    max-width: 1240px;
+    margin: 0 auto 18px;
+  }
+
+  .brandLockup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .appMark {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--black);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .brandText {
+    min-width: 0;
+  }
+
+  .brandText strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brandText span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .variantSwitch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.54);
+  }
+
+  .variantSwitch button {
+    min-height: 34px;
+    padding: 7px 13px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .variantSwitch button.active {
+    background: var(--fg);
+    color: var(--white);
+  }
+
+  .prototypeToast {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 30;
+    padding: 10px 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 16px 40px rgba(22, 23, 22, 0.16);
+    color: var(--fg);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .window {
+    max-width: 1240px;
+    min-height: 720px;
+    margin: 0 auto;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    background: var(--window);
+    box-shadow: 0 26px 70px rgba(22, 23, 22, 0.16);
+    overflow: hidden;
+  }
+
+  .titlebar {
+    height: 42px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(241, 241, 238, 0.92);
+    display: grid;
+    grid-template-columns: 96px 1fr 190px;
+    align-items: center;
+    padding: 0 14px;
+  }
+
+  .traffic {
+    display: flex;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+  }
+
+  .dot.red { background: #ff6159; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green { background: #28c840; }
+
+  .windowTitle {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #3b3d39;
+  }
+
+  .statusMini {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    min-height: 678px;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--line);
+    background: #efefec;
+    padding: 14px 10px;
+  }
+
+  .sidebarChrome {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    margin-bottom: 8px;
+  }
+
+  .sidebarHeader {
+    padding: 10px 12px 12px;
+  }
+
+  .sidebarHeader strong {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+
+  .sidebarHeader span {
+    display: block;
+    margin-top: 5px;
+    font-size: 13px;
+    color: var(--fg);
+    font-weight: 600;
+  }
+
+  .navBtn {
+    width: 100%;
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg);
+    text-align: left;
+  }
+
+  .navBtn:hover {
+    background: rgba(22, 23, 22, 0.05);
+  }
+
+  .navBtn.active {
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .navCopy strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  .navCopy span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .statePoint {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--quiet);
+    box-shadow: 0 0 0 4px rgba(138, 142, 135, 0.12);
+    justify-self: center;
+  }
+
+  .statePoint.ok {
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(33, 182, 111, 0.12);
+  }
+
+  .statePoint.warn {
+    background: var(--warning);
+    box-shadow: 0 0 0 4px rgba(183, 121, 31, 0.12);
+  }
+
+  .statePoint.bad {
+    background: var(--danger);
+    box-shadow: 0 0 0 4px rgba(199, 53, 46, 0.12);
+  }
+
+  .content {
+    padding: 26px;
+    overflow: auto;
+  }
+
+  .contentHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 22px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .contentHeader h1 {
+    margin-top: 5px;
+    font-size: 30px;
+    line-height: 1.14;
+  }
+
+  .contentHeader p {
+    margin-top: 8px;
+    color: var(--muted);
+    max-width: 660px;
+  }
+
+  .buttonRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    min-height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .btn.primary {
+    background: var(--fg);
+    color: var(--white);
+    border-color: var(--fg);
+  }
+
+  .btn.accent {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-color: rgba(33, 182, 111, 0.22);
+  }
+
+  .btn.danger {
+    background: #ffffff;
+    color: var(--danger);
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 16px;
+  }
+
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .grid4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .panelHeader {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 13px 15px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panelHeader h2,
+  .panelHeader h3 {
+    font-size: 16px;
+  }
+
+  .panelHeader p {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .panelBody {
+    padding: 14px 15px;
+  }
+
+  .panelBody.tight {
+    padding: 0;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 54px;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.main {
+    min-height: 66px;
+  }
+
+  .rowCopy strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .rowCopy span {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .sym {
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    background: var(--window-2);
+  }
+
+  .sym.ok {
+    background: var(--accent-soft);
+    border-color: rgba(33, 182, 111, 0.28);
+    color: var(--accent-ink);
+  }
+
+  .sym.warn {
+    background: var(--warning-soft);
+    border-color: rgba(183, 121, 31, 0.26);
+    color: var(--warning);
+  }
+
+  .sym.bad {
+    background: var(--danger-soft);
+    border-color: rgba(199, 53, 46, 0.28);
+    color: var(--danger);
+  }
+
+  .pill {
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    background: var(--window-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pill.ok {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-color: rgba(33, 182, 111, 0.24);
+  }
+
+  .pill.warn {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-color: rgba(183, 121, 31, 0.22);
+  }
+
+  .pill.bad {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: rgba(199, 53, 46, 0.22);
+  }
+
+  .heroStatus {
+    min-height: 246px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 370px;
+    gap: 20px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    align-items: stretch;
+  }
+
+  .heroStatus h2 {
+    font-size: 24px;
+    line-height: 1.18;
+  }
+
+  .heroStatus p {
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .commandKey {
+    min-width: 118px;
+    height: 72px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--window-2);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .voiceFlow {
+    min-height: 268px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #f6f6f3;
+    padding: 14px;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 12px;
+  }
+
+  .voiceFlowHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .voiceFlowGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .flowCard {
+    min-height: 58px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.82);
+    padding: 10px;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    text-align: center;
+    gap: 6px;
+  }
+
+  .flowCard strong {
+    font-size: 13px;
+  }
+
+  .flowCard span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .flowArrow {
+    color: var(--quiet);
+    font-family: var(--font-mono);
+    font-size: 0;
+    height: 10px;
+    position: relative;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .flowArrow::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1px;
+    height: 10px;
+    background: var(--line-strong);
+  }
+
+  .miniNotch {
+    width: 100%;
+    min-height: 78px;
+    border-radius: 24px;
+    background: #000000;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+    padding: 12px 15px;
+    color: #ffffff;
+  }
+
+  .miniNotch .notchText {
+    font-size: 12px;
+  }
+
+  .inputMock {
+    width: 100%;
+    min-height: 62px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.82);
+    padding: 10px;
+  }
+
+  .inputMock strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  .inputLine {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--window-2);
+    margin-top: 10px;
+  }
+
+  .inputLine.short {
+    width: 64%;
+  }
+
+  .inputLine.long {
+    width: 88%;
+  }
+
+  .chainStep {
+    min-height: 138px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 13px;
+    display: grid;
+    align-content: space-between;
+    gap: 12px;
+  }
+
+  .chainStepTop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .chainStep strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 15px;
+  }
+
+  .chainStep p {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .hudPreview {
+    min-height: 128px;
+    border-radius: 10px;
+    background: #1b1b1b;
+    padding: 18px;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+  }
+
+  .notch {
+    width: min(100%, 330px);
+    min-height: 76px;
+    border-radius: 28px;
+    background: #000000;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+    padding: 13px 18px;
+  }
+
+  .notchTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notchLabel {
+    color: #ffcc4d;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .wave {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+  }
+
+  .wave span {
+    width: 3px;
+    border-radius: 999px;
+    background: #32d67a;
+  }
+
+  .wave span:nth-child(1) { height: 12px; }
+  .wave span:nth-child(2) { height: 19px; }
+  .wave span:nth-child(3) { height: 24px; }
+  .wave span:nth-child(4) { height: 17px; }
+  .wave span:nth-child(5) { height: 13px; }
+  .wave span:nth-child(6) { height: 20px; }
+  .wave span:nth-child(7) { height: 14px; }
+
+  .notchText {
+    margin-top: 7px;
+    color: #8dffb5;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .formGrid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .fieldLabel {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .input,
+  .select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--fg);
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--window-2);
+  }
+
+  .segmented button {
+    min-height: 34px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .segmented button.active {
+    background: #ffffff;
+    color: var(--fg);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .meter {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--window-2);
+    overflow: hidden;
+  }
+
+  .meter span {
+    display: block;
+    height: 100%;
+    width: 67%;
+    background: var(--accent);
+    border-radius: inherit;
+  }
+
+  .menuMock {
+    width: 226px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 44px rgba(22, 23, 22, 0.18);
+    padding: 6px;
+  }
+
+  .menuItem {
+    min-height: 30px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 13px;
+  }
+
+  .menuItem.active {
+    background: var(--blue-soft);
+    color: var(--blue);
+  }
+
+  .menuItem.disabled {
+    color: var(--quiet);
+  }
+
+  .menuDivider {
+    height: 1px;
+    background: var(--line);
+    margin: 5px 8px;
+  }
+
+  .prefLayout {
+    padding: 18px;
+  }
+
+  .toolbarTabs {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--window-2);
+    margin-bottom: 18px;
+  }
+
+  .toolbarTabs button {
+    min-height: 40px;
+    flex: 1;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .toolbarTabs button.active {
+    background: #ffffff;
+    color: var(--fg);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .compactHero {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+  }
+
+  .topStrip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .stat {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 13px;
+  }
+
+  .stat span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .stat strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 18px;
+  }
+
+  .wizard {
+    display: grid;
+    grid-template-columns: 330px 1fr;
+    min-height: 678px;
+  }
+
+  .wizardRail {
+    background: #111211;
+    color: #f8f8f6;
+    padding: 22px;
+  }
+
+  .wizardRail h1 {
+    font-size: 29px;
+    line-height: 1.16;
+  }
+
+  .wizardRail p {
+    margin-top: 10px;
+    color: rgba(248, 248, 246, 0.68);
+  }
+
+  .stepBtn {
+    width: 100%;
+    min-height: 68px;
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 11px;
+    align-items: center;
+    margin-top: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: transparent;
+    color: #f8f8f6;
+    text-align: left;
+    padding: 10px;
+  }
+
+  .stepBtn.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  .stepNum {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 12px;
+  }
+
+  .stepText strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  .stepText span {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: rgba(248, 248, 246, 0.66);
+  }
+
+  .wizardMain {
+    padding: 28px;
+    overflow: auto;
+  }
+
+  .timeline {
+    display: grid;
+    gap: 10px;
+  }
+
+  .flowRow {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    min-height: 62px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 12px;
+  }
+
+  .bigPreview {
+    min-height: 220px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .settingsPair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  @media (max-width: 980px) {
+    .page {
+      padding: 14px;
+    }
+
+    .shellTop,
+    .contentHeader {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .layout,
+    .wizard,
+    .grid2,
+    .compactHero,
+    .heroStatus {
+      grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topStrip,
+    .grid3,
+    .settingsPair {
+      grid-template-columns: 1fr;
+    }
+
+    .titlebar {
+      grid-template-columns: 76px 1fr;
+    }
+
+    .statusMini {
+      display: none;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useEffect, useMemo, useState } = React;
+
+  const variants = [
+    { id: "workbench", label: "A 工作台式" },
+    { id: "compact", label: "B 偏好设置" },
+    { id: "recovery", label: "C 修复向导" }
+  ];
+
+  const navItems = [
+    { id: "overview", title: "总览", detail: "当前状态", icon: "gear", tone: "bad", statusLabel: "需要处理" },
+    { id: "voice", title: "语音输入", detail: "快捷键、音频、HUD", icon: "mic", tone: "ok", statusLabel: "正常" },
+    { id: "transcription", title: "转写服务", detail: "Doubao 和 Keychain", icon: "key", tone: "ok", statusLabel: "正常" },
+    { id: "permissions", title: "权限与输入", detail: "macOS 权限、插入策略", icon: "lock", tone: "bad", statusLabel: "需要处理" },
+    { id: "diagnostics", title: "诊断与隐私", detail: "记录、导出、脱敏", icon: "diag", tone: "", statusLabel: "无近期失败" }
+  ];
+
+  const permissions = [
+    { title: "麦克风", detail: "用于录制语音并生成转写文本", state: "已允许", tone: "ok", action: "重新检查" },
+    { title: "辅助功能", detail: "用于全局快捷键监听和文本插入", state: "需要处理", tone: "bad", action: "打开辅助功能设置" }
+  ];
+
+  const diagnostics = [
+    { title: "Command", detail: "Right Command · 切换录音 · 监听中", state: "正常", tone: "ok" },
+    { title: "录音", detail: "2.84s · 16,000 Hz · peak 0.67", state: "正常", tone: "ok" },
+    { title: "转写", detail: "Doubao · 42 字符 · 3 个 partial", state: "正常", tone: "ok" },
+    { title: "输入", detail: "Notion · 剪贴板回退 · 已恢复剪贴板", state: "正常", tone: "ok" }
+  ];
+
+  const wizardSteps = [
+    { id: "command", title: "Command 触发", detail: "确认 Right Command 和录音模式" },
+    { id: "listen", title: "录音和展示", detail: "HUD 第二行实时显示 partial" },
+    { id: "transcribe", title: "Doubao 转写", detail: "选择新旧凭证并测试连接" },
+    { id: "insert", title: "插入输入框", detail: "检查目标 App 和回退策略" }
+  ];
+
+  function SymbolBox({ label, tone = "" }) {
+    return <span className={"sym " + tone}>{label}</span>;
+  }
+
+  function StatePoint({ tone = "", label }) {
+    return <span className={"statePoint " + tone} title={label}></span>;
+  }
+
+  function Pill({ children, tone = "" }) {
+    return <span className={"pill " + tone}>{children}</span>;
+  }
+
+  function emitPrototypeAction(label) {
+    window.dispatchEvent(new CustomEvent("voco-prototype-action", { detail: String(label) }));
+  }
+
+  function Button({ children, tone = "", type = "button", onClick }) {
+    return (
+      <button
+        type={type}
+        className={"btn " + tone}
+        onClick={onClick || (() => emitPrototypeAction(children))}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  function Titlebar({ title = "Voco 设置" }) {
+    return (
+      <div className="titlebar">
+        <TrafficLights />
+        <div className="windowTitle">{title}</div>
+        <div className="statusMini"><span className="statusDot"></span>就绪</div>
+      </div>
+    );
+  }
+
+  function TrafficLights() {
+    return (
+      <div className="traffic">
+        <span className="dot red"></span>
+        <span className="dot yellow"></span>
+        <span className="dot green"></span>
+      </div>
+    );
+  }
+
+  function MenuMock() {
+    const items = [
+      ["gear", "设置...", "active"],
+      ["", "divider", ""],
+      ["quit", "退出 Voco", ""]
+    ];
+
+    return (
+      <div className="menuMock">
+        {items.map((item, index) => item[1] === "divider" ? (
+          <div className="menuDivider" key={index}></div>
+        ) : (
+          <div className={"menuItem " + item[2]} key={index}>
+            <span className="sym">{item[0]}</span>
+            <span>{item[1]}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function HudPreview({ compact = false }) {
+    return (
+      <div className="hudPreview">
+        <div className="notch" style={{ width: compact ? 286 : undefined }}>
+          <div className="notchTop">
+            <span className="notchLabel">语音输入</span>
+            <span className="wave">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </span>
+          </div>
+          <div className="notchText">把这段内容插入当前输入框，并保持剪贴板不变</div>
+        </div>
+      </div>
+    );
+  }
+
+  function VoiceFlowPreview() {
+    return (
+      <div className="voiceFlow">
+        <div className="voiceFlowHeader">
+          <span>语音输入流程</span>
+          <Pill tone="bad">需要辅助功能</Pill>
+        </div>
+        <div className="voiceFlowGrid">
+          <div className="flowCard">
+            <strong>Right Command</strong>
+            <span>切换录音</span>
+          </div>
+          <div className="flowArrow">down</div>
+          <div className="miniNotch">
+            <div className="notchTop">
+              <span className="notchLabel">语音输入</span>
+              <span className="wave">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </span>
+            </div>
+            <div className="notchText">第二行实时显示你正在说的内容</div>
+          </div>
+          <div className="flowArrow">down</div>
+          <div className="inputMock">
+            <strong>当前输入框</strong>
+            <div className="inputLine long"></div>
+            <div className="inputLine short"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function Sidebar({ active, onSelect }) {
+    return (
+      <aside className="sidebar">
+        <div className="sidebarChrome">
+          <TrafficLights />
+        </div>
+        <div className="sidebarHeader">
+          <strong>VOCAL INPUT</strong>
+          <span>语音输入、转写和权限</span>
+        </div>
+        {navItems.map((item) => (
+          <button
+            className={"navBtn " + (active === item.id ? "active" : "")}
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+          >
+            <StatePoint tone={item.tone} label={item.statusLabel} />
+            <span className="navCopy">
+              <strong>{item.title}</strong>
+              <span>{item.detail}</span>
+            </span>
+          </button>
+        ))}
+      </aside>
+    );
+  }
+
+  function PermissionRows() {
+    return (
+      <div className="panel">
+        <div className="panelHeader">
+          <div>
+            <h3>权限</h3>
+            <p>麦克风和辅助功能会影响语音输入。</p>
+          </div>
+          <Button>重新检查</Button>
+        </div>
+        <div className="panelBody tight">
+          {permissions.map((permission) => (
+            <div className="row" key={permission.title}>
+              <SymbolBox label={permission.title.slice(0, 2)} tone={permission.tone} />
+              <span className="rowCopy">
+                <strong>{permission.title}</strong>
+                <span>{permission.detail}</span>
+              </span>
+              <span className="buttonRow">
+                <Pill tone={permission.tone}>{permission.state}</Pill>
+                <Button>{permission.action}</Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function CredentialPanel() {
+    return (
+      <div className="panel">
+        <div className="panelHeader">
+          <div>
+            <h3>Doubao 凭证</h3>
+            <p>凭证会保存到 macOS Keychain，不会在界面中显示完整密钥。</p>
+          </div>
+          <Pill tone="ok">Keychain 已保存</Pill>
+        </div>
+        <div className="panelBody formGrid">
+          <div className="segmented">
+            <button className="active" onClick={() => emitPrototypeAction("新网关 API Key")}>新网关 API Key</button>
+            <button onClick={() => emitPrototypeAction("App ID + Token")}>App ID + Token</button>
+          </div>
+          <div>
+            <label className="fieldLabel">Doubao API Key</label>
+            <input className="input" value="•••••••••••••••••• 9K2D" readOnly />
+          </div>
+          <div className="buttonRow">
+            <Button tone="primary">保存到 Keychain</Button>
+            <Button tone="accent">测试连接</Button>
+            <Button tone="danger">清除凭证</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function DiagnosticsPanel() {
+    return (
+      <div className="panel">
+        <div className="panelHeader">
+          <div>
+            <h3>最近一次语音输入</h3>
+            <p>查看按键、录音、转写和输入是否正常。</p>
+          </div>
+          <Button>导出诊断包</Button>
+        </div>
+        <div className="panelBody tight">
+          {diagnostics.map((item) => (
+            <div className="row" key={item.title}>
+              <SymbolBox label={item.title.slice(0, 3)} tone={item.tone} />
+              <span className="rowCopy">
+                <strong>{item.title}</strong>
+                <span>{item.detail}</span>
+              </span>
+              <Pill tone={item.tone}>{item.state}</Pill>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function RecentChainPanel() {
+    const chain = [
+      {
+        title: "Command",
+        detail: "Right Command · 切换录音",
+        metric: "监听中",
+        tone: "ok",
+        icon: "cmd"
+      },
+      {
+        title: "录音",
+        detail: "2.84s · 16,000 Hz · peak 0.67",
+        metric: "正常",
+        tone: "ok",
+        icon: "mic"
+      },
+      {
+        title: "Doubao",
+        detail: "42 字符 · 3 个 partial · Keychain",
+        metric: "正常",
+        tone: "ok",
+        icon: "asr"
+      },
+      {
+        title: "输入",
+        detail: "辅助功能缺失，无法稳定插入当前输入框",
+        metric: "阻塞",
+        tone: "bad",
+        icon: "in"
+      }
+    ];
+
+    return (
+      <div className="panel">
+        <div className="panelHeader">
+          <div>
+            <h3>最近一次语音输入</h3>
+            <p>检查 Right Command、录音、Doubao 和文本输入。</p>
+          </div>
+        </div>
+        <div className="panelBody">
+          <div className="grid4">
+            {chain.map((item) => (
+              <div className="chainStep" key={item.title}>
+                <div>
+                  <div className="chainStepTop">
+                    <SymbolBox label={item.icon} tone={item.tone} />
+                    <Pill tone={item.tone}>{item.metric}</Pill>
+                  </div>
+                  <strong>{item.title}</strong>
+                  <p>{item.detail}</p>
+                </div>
+                {item.tone === "bad" ? <Button tone="primary">修复输入权限</Button> : <Button>查看详情</Button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function VoiceSettingsPanel() {
+    return (
+      <div className="panel">
+        <div className="panelHeader">
+          <div>
+            <h3>快捷键、音频和 HUD</h3>
+            <p>检查当前快捷键、录音输入和 HUD 预览。</p>
+          </div>
+          <Pill tone="ok">监听中</Pill>
+        </div>
+        <div className="panelBody">
+          <div className="settingsPair">
+            <div className="formGrid">
+              <div>
+                <label className="fieldLabel">快捷键</label>
+                <select className="select" value="right-command" readOnly>
+                  <option value="right-command">Right Command</option>
+                </select>
+              </div>
+              <div>
+                <label className="fieldLabel">录音模式</label>
+                <div className="segmented">
+                  <button className="active" onClick={() => emitPrototypeAction("切换录音")}>切换录音</button>
+                  <button onClick={() => emitPrototypeAction("按住录音")}>按住录音</button>
+                </div>
+              </div>
+              <div>
+                <label className="fieldLabel">输入设备</label>
+                <select className="select" value="default" readOnly>
+                  <option value="default">系统默认输入</option>
+                </select>
+              </div>
+              <div>
+                <label className="fieldLabel">最近峰值 67%</label>
+                <div className="meter"><span></span></div>
+              </div>
+            </div>
+            <HudPreview compact />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function OverviewContent() {
+    return (
+      <>
+        <div className="contentHeader">
+          <div>
+            <div className="eyebrow">Overview</div>
+            <h1>Voco 设置</h1>
+            <p>查看语音输入是否可用，并处理影响录音、转写或文本输入的问题。</p>
+          </div>
+        </div>
+
+        <div className="heroStatus">
+          <div>
+            <Pill tone="bad">需要处理 1 项</Pill>
+            <h2 style={{ marginTop: 12 }}>辅助功能权限缺失，Voco 可以录音，但不能稳定插入当前输入框。</h2>
+            <p>允许麦克风后，Voco 才能录制语音并生成转写文本。</p>
+            <div className="buttonRow" style={{ marginTop: 16 }}>
+              <Button tone="primary">打开辅助功能设置</Button>
+              <Button>我已授权，重新检查</Button>
+            </div>
+          </div>
+          <VoiceFlowPreview />
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <RecentChainPanel />
+        </div>
+      </>
+    );
+  }
+
+  function VoiceContent() {
+    return (
+      <>
+        <div className="contentHeader">
+          <div>
+            <div className="eyebrow">Voice Input</div>
+            <h1>语音输入体验</h1>
+            <p>调整快捷键、录音提示和顶部 HUD 显示。</p>
+          </div>
+          <Button tone="accent">试录 3 秒</Button>
+        </div>
+        <VoiceSettingsPanel />
+        <div className="grid3" style={{ marginTop: 16 }}>
+          <div className="stat"><span>采样率</span><strong>16,000 Hz</strong></div>
+          <div className="stat"><span>峰值电平</span><strong>67%</strong></div>
+          <div className="stat"><span>HUD 自动隐藏</span><strong>1.4s</strong></div>
+        </div>
+      </>
+    );
+  }
+
+  function TranscriptionContent() {
+    return (
+      <>
+        <div className="contentHeader">
+          <div>
+            <div className="eyebrow">Transcription</div>
+            <h1>Doubao 转写服务</h1>
+            <p>选择凭证模式，并将 Doubao 凭证保存到 macOS Keychain。</p>
+          </div>
+        </div>
+        <div className="grid2">
+          <CredentialPanel />
+          <div className="panel">
+            <div className="panelHeader">
+              <div>
+                <h3>服务状态</h3>
+                <p>查看 Doubao 服务连接状态和固定参数。</p>
+              </div>
+              <Pill tone="ok">Ready</Pill>
+            </div>
+            <div className="panelBody tight">
+              <div className="row main">
+                <SymbolBox label="ws" tone="ok" />
+                <span className="rowCopy">
+                  <strong>WebSocket endpoint</strong>
+                  <span>wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel</span>
+                </span>
+                <Button>复制</Button>
+              </div>
+              <div className="row main">
+                <SymbolBox label="res" tone="ok" />
+                <span className="rowCopy">
+                  <strong>Model</strong>
+                  <span>bigmodel</span>
+                </span>
+                <Pill>固定</Pill>
+              </div>
+              <div className="row main">
+                <SymbolBox label="log" />
+                <span className="rowCopy">
+                  <strong>日志脱敏</strong>
+                  <span>不记录完整 Doubao 凭证或完整转写正文</span>
+                </span>
+                <Pill tone="ok">开启</Pill>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function PermissionsContent() {
+    return (
+      <>
+        <div className="contentHeader">
+          <div>
+            <div className="eyebrow">Permissions and Injection</div>
+            <h1>权限与文本输入</h1>
+            <p>管理 macOS 授权，并查看最近一次文本输入方式。</p>
+          </div>
+        </div>
+        <div className="grid2">
+          <PermissionRows />
+          <div className="panel">
+            <div className="panelHeader">
+              <div>
+                <h3>文本输入策略</h3>
+                <p>查看最近目标 App 和文本插入方式。</p>
+              </div>
+              <Pill tone="ok">剪贴板回退</Pill>
+            </div>
+            <div className="panelBody tight">
+              <div className="row">
+                <SymbolBox label="app" tone="ok" />
+                <span className="rowCopy">
+                  <strong>最近目标 App</strong>
+                  <span>Notion · 当前输入框</span>
+                </span>
+                <Pill tone="ok">可插入</Pill>
+              </div>
+              <div className="row">
+                <SymbolBox label="clip" tone="ok" />
+                <span className="rowCopy">
+                  <strong>首选策略</strong>
+                  <span>剪贴板回退，插入后恢复原剪贴板</span>
+                </span>
+                <Button>测试插入</Button>
+              </div>
+              <div className="row">
+                <SymbolBox label="ax" tone="bad" />
+                <span className="rowCopy">
+                  <strong>辅助功能</strong>
+                  <span>缺失时无法监听全局快捷键，也不能保证输入成功</span>
+                </span>
+                <Button tone="primary">修复</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function DiagnosticsContent() {
+    return (
+      <>
+        <div className="contentHeader">
+          <div>
+            <div className="eyebrow">Diagnostics and Privacy</div>
+            <h1>诊断与隐私</h1>
+            <p>查看最近一次语音输入记录，导出已脱敏的诊断包。</p>
+          </div>
+        </div>
+        <DiagnosticsPanel />
+        <div className="grid3" style={{ marginTop: 16 }}>
+          <div className="stat"><span>Keychain</span><strong>已保存凭证</strong></div>
+          <div className="stat"><span>转写保留</span><strong>仅当前运行时</strong></div>
+          <div className="stat"><span>日志策略</span><strong>默认脱敏</strong></div>
+        </div>
+      </>
+    );
+  }
+
+  function WorkbenchVariant() {
+    const [active, setActive] = useState("overview");
+    const content = {
+      overview: <OverviewContent />,
+      voice: <VoiceContent />,
+      transcription: <TranscriptionContent />,
+      permissions: <PermissionsContent />,
+      diagnostics: <DiagnosticsContent />
+    }[active];
+
+    return (
+      <div className="window">
+        <div className="layout">
+          <Sidebar active={active} onSelect={setActive} />
+          <main className="content">{content}</main>
+        </div>
+      </div>
+    );
+  }
+
+  function CompactVariant() {
+    const [tab, setTab] = useState("transcription");
+    const tabs = [
+      ["overview", "总览"],
+      ["voice", "语音输入"],
+      ["transcription", "转写"],
+      ["permissions", "权限"],
+      ["diagnostics", "诊断"]
+    ];
+
+    return (
+      <div className="window" style={{ maxWidth: 1060 }}>
+        <Titlebar title="Voco 偏好设置" />
+        <main className="prefLayout">
+          <div className="toolbarTabs">
+            {tabs.map((item) => (
+              <button
+                key={item[0]}
+                className={tab === item[0] ? "active" : ""}
+                onClick={() => setTab(item[0])}
+              >
+                {item[1]}
+              </button>
+            ))}
+          </div>
+
+          <div className="topStrip">
+            <div className="stat"><span>菜单栏状态</span><strong>需要权限</strong></div>
+            <div className="stat"><span>当前快捷键</span><strong>Right Command</strong></div>
+            <div className="stat"><span>凭证来源</span><strong>Keychain</strong></div>
+          </div>
+
+          {tab === "overview" && (
+            <div className="compactHero">
+              <div>
+                <MenuMock />
+              </div>
+              <div className="panel">
+                <div className="panelHeader">
+                  <div>
+                    <h2>轻量偏好设置</h2>
+                    <p>管理语音输入、转写服务和 macOS 权限</p>
+                  </div>
+                  <Pill tone="bad">辅助功能缺失</Pill>
+                </div>
+                <div className="panelBody">
+                  <p style={{ color: "var(--muted)", marginBottom: 14 }}>当前辅助功能权限缺失，Voco 可能无法把转写文本插入前台 App。</p>
+                  <div className="buttonRow">
+                    <Button tone="primary">打开辅助功能设置</Button>
+                    <Button>开始测试录音</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "voice" && <VoiceSettingsPanel />}
+          {tab === "transcription" && (
+            <div className="grid2">
+              <CredentialPanel />
+              <div className="panel">
+                <div className="panelHeader">
+                  <div>
+                    <h3>连接测试</h3>
+                    <p>保存凭证后直接验证 Doubao 是否可用</p>
+                  </div>
+                  <Pill tone="ok">最近测试通过</Pill>
+                </div>
+                <div className="panelBody formGrid">
+                  <div className="row" style={{ paddingLeft: 0, paddingRight: 0 }}>
+                    <SymbolBox label="hdr" tone="ok" />
+                    <span className="rowCopy">
+                      <strong>Header 模式</strong>
+                      <span>Authorization: Bearer · 新网关 API Key</span>
+                    </span>
+                    <Button>查看</Button>
+                  </div>
+                  <Button tone="accent">测试连接</Button>
+                </div>
+              </div>
+            </div>
+          )}
+          {tab === "permissions" && <PermissionRows />}
+          {tab === "diagnostics" && <DiagnosticsPanel />}
+        </main>
+      </div>
+    );
+  }
+
+  function RecoveryVariant() {
+    const [step, setStep] = useState("command");
+    const activeIndex = wizardSteps.findIndex((item) => item.id === step);
+
+    return (
+      <div className="window">
+        <Titlebar title="Voco 语音输入修复向导" />
+        <div className="wizard">
+          <aside className="wizardRail">
+            <div className="eyebrow" style={{ color: "rgba(248,248,246,0.62)" }}>Recovery first</div>
+            <h1>修复语音输入</h1>
+            <p>按 Right Command、录音、转写和输入四步检查当前问题。</p>
+            <div style={{ marginTop: 20 }}>
+              {wizardSteps.map((item, index) => (
+                <button
+                  className={"stepBtn " + (step === item.id ? "active" : "")}
+                  key={item.id}
+                  onClick={() => setStep(item.id)}
+                >
+                  <span className="stepNum">{index + 1}</span>
+                  <span className="stepText">
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <main className="wizardMain">
+            <div className="contentHeader">
+              <div>
+                <div className="eyebrow">Step {activeIndex + 1} of {wizardSteps.length}</div>
+                <h1>{wizardSteps[activeIndex].title}</h1>
+                <p>{wizardSteps[activeIndex].detail}</p>
+              </div>
+              <Button tone="accent">运行本步测试</Button>
+            </div>
+
+            {step === "command" && (
+              <div className="grid2">
+                <div className="panel">
+                  <div className="panelHeader">
+                    <div>
+                      <h3>快捷键</h3>
+                      <p>Right Command 使用辅助功能权限监听</p>
+                    </div>
+                    <Pill tone="bad">需要辅助功能</Pill>
+                  </div>
+                  <div className="panelBody">
+                    <div className="commandKey">Right Command</div>
+                    <div className="buttonRow" style={{ marginTop: 14 }}>
+                      <Button tone="primary">打开辅助功能设置</Button>
+                      <Button>改成按住录音</Button>
+                    </div>
+                  </div>
+                </div>
+                <PermissionRows />
+              </div>
+            )}
+
+            {step === "listen" && (
+              <div className="grid2">
+                <div className="bigPreview"><HudPreview /></div>
+                <VoiceSettingsPanel />
+              </div>
+            )}
+
+            {step === "transcribe" && (
+              <div className="grid2">
+                <CredentialPanel />
+                <div className="panel">
+                  <div className="panelHeader">
+                    <div>
+                      <h3>错误解释</h3>
+                      <p>查看 Doubao 返回的错误和建议操作</p>
+                    </div>
+                    <Pill tone="warn">server response contains no final text</Pill>
+                  </div>
+                  <div className="panelBody">
+                    <p style={{ color: "var(--muted)" }}>如果两次 Command 间隔太短，Voco 会提示录音时间过短或 Doubao 尚未返回最终文本。</p>
+                    <div className="buttonRow" style={{ marginTop: 14 }}>
+                      <Button tone="accent">测试连接</Button>
+                      <Button>查看最近响应</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === "insert" && (
+              <>
+                <div className="timeline">
+                  {diagnostics.map((item) => (
+                    <div className="flowRow" key={item.title}>
+                      <SymbolBox label={item.title.slice(0, 3)} tone={item.tone} />
+                      <span className="rowCopy">
+                        <strong>{item.title}</strong>
+                        <span>{item.detail}</span>
+                      </span>
+                      <Pill tone={item.tone}>{item.state}</Pill>
+                    </div>
+                  ))}
+                </div>
+                <div className="buttonRow" style={{ marginTop: 16 }}>
+                  <Button tone="primary">在当前输入框测试插入</Button>
+                  <Button>切换到 Unicode 事件</Button>
+                  <Button>导出诊断包</Button>
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  function App() {
+    const [variant, setVariant] = useState(() => localStorage.getItem("voco.prototype.variant") || "workbench");
+    const [notice, setNotice] = useState("");
+
+    useEffect(() => {
+      localStorage.setItem("voco.prototype.variant", variant);
+    }, [variant]);
+
+    useEffect(() => {
+      const handler = (event) => {
+        setNotice(`${event.detail}：原型中仅展示反馈，真实操作在 native app 中完成`);
+        window.clearTimeout(window.__vocoPrototypeNoticeTimer);
+        window.__vocoPrototypeNoticeTimer = window.setTimeout(() => setNotice(""), 1800);
+      };
+
+      window.addEventListener("voco-prototype-action", handler);
+      return () => window.removeEventListener("voco-prototype-action", handler);
+    }, []);
+
+    const activeVariant = useMemo(() => {
+      if (variant === "compact") return <CompactVariant />;
+      if (variant === "recovery") return <RecoveryVariant />;
+      return <WorkbenchVariant />;
+    }, [variant]);
+
+    return (
+      <div className="page">
+        <div className="shellTop">
+          <div className="brandLockup">
+            <div className="appMark">VO</div>
+            <div className="brandText">
+              <strong>Voco GUI redesign prototype</strong>
+              <span>Voco 设置预览</span>
+            </div>
+          </div>
+          <div className="variantSwitch" aria-label="prototype variants">
+            {variants.map((item) => (
+              <button
+                key={item.id}
+                className={variant === item.id ? "active" : ""}
+                onClick={() => setVariant(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {activeVariant}
+        {notice ? <div className="prototypeToast">{notice}</div> : null}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

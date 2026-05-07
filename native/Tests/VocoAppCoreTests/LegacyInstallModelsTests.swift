@@ -46,7 +46,7 @@ final class LegacyInstallModelsTests: XCTestCase {
         let provider = FakeLegacyInstallProvider(
             current: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice"))
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, legacyInstallProvider: provider)
+        let coordinator = AppCoordinator(legacyInstallProvider: provider)
 
         coordinator.finishLaunching()
 
@@ -61,7 +61,7 @@ final class LegacyInstallModelsTests: XCTestCase {
             current: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice")),
             afterRemoval: .notFound(launchAgentURL: launchAgent)
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, legacyInstallProvider: provider)
+        let coordinator = AppCoordinator(legacyInstallProvider: provider)
 
         await coordinator.removeLegacyLaunchAgentFromUserAction()
 
@@ -77,7 +77,7 @@ final class LegacyInstallModelsTests: XCTestCase {
             current: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice")),
             result: .notFound(launchAgentURL: launchAgent)
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, legacyInstallProvider: provider)
+        let coordinator = AppCoordinator(legacyInstallProvider: provider)
 
         let firstRemoval = Task { await coordinator.removeLegacyLaunchAgentFromUserAction() }
         await provider.waitForRemoveCount(1)
@@ -108,7 +108,7 @@ final class LegacyInstallModelsTests: XCTestCase {
             current: .detected(homeDirectory: URL(fileURLWithPath: "/Users/alice")),
             removalError: LegacyInstallCleanupError.removeFailed(path: launchAgent.path, underlying: underlying)
         )
-        let coordinator = AppCoordinator(hasCompletedOnboarding: true, legacyInstallProvider: provider)
+        let coordinator = AppCoordinator(legacyInstallProvider: provider)
 
         await coordinator.removeLegacyLaunchAgentFromUserAction()
 
