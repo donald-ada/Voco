@@ -619,16 +619,16 @@ final class AppCoordinatorTests: XCTestCase {
         )
         coordinator.finishLaunching()
 
-        coordinator.setHotkeyPreset(.f19)
+        coordinator.setHotkeyPreset(.capsLock)
         coordinator.setHotkeyMode(.pressAndHold)
         coordinator.setAudioInputDevice(.device(id: "studio-mic", title: "Studio Mic"))
 
-        XCTAssertEqual(coordinator.hotkeyBinding, HotkeyPreset.f19.binding)
+        XCTAssertEqual(coordinator.hotkeyBinding, HotkeyPreset.capsLock.binding)
         XCTAssertEqual(coordinator.hotkeyMode, .pressAndHold)
         XCTAssertEqual(hotkeyProvider.stopCount, 2)
         XCTAssertEqual(
             hotkeyProvider.startRequests.map(\.binding),
-            [.default, HotkeyPreset.f19.binding, HotkeyPreset.f19.binding]
+            [.default, HotkeyPreset.capsLock.binding, HotkeyPreset.capsLock.binding]
         )
         XCTAssertEqual(
             hotkeyProvider.startRequests.map(\.mode),
@@ -636,9 +636,22 @@ final class AppCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(coordinator.audioSettingsSnapshot.inputDevice.title, "Studio Mic")
         XCTAssertEqual(recordingWorkflow.selectedAudioInputDevice, .device(id: "studio-mic", title: "Studio Mic"))
-        XCTAssertEqual(preferences.hotkeyPreset, .f19)
+        XCTAssertEqual(preferences.hotkeyPreset, .capsLock)
         XCTAssertEqual(preferences.hotkeyMode, .pressAndHold)
         XCTAssertEqual(preferences.audioInputDevice, .device(id: "studio-mic", title: "Studio Mic"))
+    }
+
+    @MainActor
+    func testCoordinatorLoadsAndPersistsSilentLaunchPreference() {
+        let preferences = FakeAppPreferenceStore(silentLaunchEnabled: true)
+        let coordinator = AppCoordinator(appPreferenceStore: preferences)
+
+        XCTAssertTrue(coordinator.silentLaunchEnabled)
+
+        coordinator.setSilentLaunchEnabled(false)
+
+        XCTAssertFalse(coordinator.silentLaunchEnabled)
+        XCTAssertEqual(preferences.savedSilentLaunchValues, [false])
     }
 
     @MainActor
@@ -1028,6 +1041,21 @@ private final class FakeVoiceInputPreferenceStore: VoiceInputPreferenceStoring {
 
     func saveAudioInputDevice(_ device: AudioInputDeviceSelection) {
         audioInputDevice = device
+    }
+}
+
+@MainActor
+private final class FakeAppPreferenceStore: AppPreferenceStoring {
+    private(set) var silentLaunchEnabled: Bool
+    private(set) var savedSilentLaunchValues: [Bool] = []
+
+    init(silentLaunchEnabled: Bool = false) {
+        self.silentLaunchEnabled = silentLaunchEnabled
+    }
+
+    func saveSilentLaunchEnabled(_ enabled: Bool) {
+        silentLaunchEnabled = enabled
+        savedSilentLaunchValues.append(enabled)
     }
 }
 

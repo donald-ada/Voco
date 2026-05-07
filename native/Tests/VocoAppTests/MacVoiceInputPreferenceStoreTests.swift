@@ -22,4 +22,17 @@ final class MacVoiceInputPreferenceStoreTests: XCTestCase {
         XCTAssertEqual(reloadedStore.hotkeyMode, .pressAndHold)
         XCTAssertEqual(reloadedStore.audioInputDevice, .device(id: "studio-mic", title: "Studio Mic"))
     }
+
+    func testRemovedF19HotkeyPreferenceIsIgnored() throws {
+        let suiteName = "VocoTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        defaults.set("f19", forKey: "voiceInput.hotkeyPreset")
+
+        let store = MacVoiceInputPreferenceStore(defaults: defaults)
+
+        XCTAssertNil(store.hotkeyPreset)
+    }
 }

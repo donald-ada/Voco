@@ -19,7 +19,6 @@ public enum HotkeyMode: String, CaseIterable, Identifiable, Equatable, Sendable 
 public enum HotkeyPreset: String, CaseIterable, Identifiable, Equatable, Sendable {
     case rightCommand
     case fn
-    case f19
     case capsLock
 
     public var id: String { rawValue }
@@ -30,8 +29,6 @@ public enum HotkeyPreset: String, CaseIterable, Identifiable, Equatable, Sendabl
             "Right Command"
         case .fn:
             "Fn"
-        case .f19:
-            "F19"
         case .capsLock:
             "Caps Lock"
         }
@@ -43,8 +40,6 @@ public enum HotkeyPreset: String, CaseIterable, Identifiable, Equatable, Sendabl
             .default
         case .fn:
             HotkeyBinding(keyCode: 63, modifierFlags: HotkeyMatcher.fnFlag, displayName: title)
-        case .f19:
-            HotkeyBinding(keyCode: 80, modifierFlags: 0, displayName: title)
         case .capsLock:
             HotkeyBinding(keyCode: 57, modifierFlags: 0, displayName: title)
         }

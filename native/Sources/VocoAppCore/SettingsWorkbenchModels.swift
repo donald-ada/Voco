@@ -2,8 +2,8 @@ import Foundation
 
 public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendable {
     case overview
-    case settings
     case model
+    case settings
 
     public var id: String { rawValue }
 
@@ -23,7 +23,7 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
         case .overview:
             "当前状态"
         case .settings:
-            "快捷键、模式、麦克风、权限"
+            "快捷键、麦克风、系统"
         case .model:
             "火山引擎和 Keychain"
         }

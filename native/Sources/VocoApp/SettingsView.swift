@@ -68,11 +68,7 @@ struct SettingsView: View {
                 detail: "查看语音输入是否可用，并处理影响录音、转写或文本输入的问题。"
             )
 
-            statusRow
-
             legacyInstallSection
-
-            launchAtLoginSection
 
             SettingsOverviewRecoveryCard(
                 snapshot: workbench,
@@ -115,6 +111,8 @@ struct SettingsView: View {
                 voiceInputControls(audio: audio)
             }
 
+            systemPanel
+
             permissionsPanel
         }
     }
@@ -129,37 +127,6 @@ struct SettingsView: View {
 
             credentialPanel
         }
-    }
-
-    private var statusRow: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: coordinator.snapshot.systemImage)
-                .font(SettingsWorkbenchVisual.controlFont)
-                .foregroundStyle(SettingsWorkbenchVisual.warning)
-                .frame(width: 18)
-
-            Text(coordinator.snapshot.title)
-                .font(SettingsWorkbenchVisual.controlFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-
-            if let message = coordinator.lastErrorMessage ?? settingsFeedbackMessage {
-                Text(message)
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(coordinator.lastErrorMessage == nil ? SettingsWorkbenchVisual.secondaryText : SettingsWorkbenchVisual.danger)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            SettingsWorkbenchVisual.warningSoft,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(SettingsWorkbenchVisual.warning.opacity(0.26), lineWidth: 1)
-        )
     }
 
     private func settingsPageHeader<Actions: View>(
@@ -459,47 +426,68 @@ struct SettingsView: View {
         }
     }
 
-    private var launchAtLoginSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("登录时启动")
-                    .font(SettingsWorkbenchVisual.sectionTitleFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                Spacer()
-                Toggle(
-                    "",
-                    isOn: Binding(
-                        get: { coordinator.launchAtLoginEnabled },
-                        set: { enabled in
-                            Task {
-                                await coordinator.setLaunchAtLoginEnabled(enabled)
+    private var systemPanel: some View {
+        workbenchPanel(
+            title: "系统",
+            detail: "配置 Voco 的启动方式。"
+        ) {
+            WorkbenchStatusPill(
+                coordinator.silentLaunchEnabled ? "静默启动" : "启动显示窗口",
+                systemImage: coordinator.silentLaunchEnabled ? "menubar.rectangle" : "macwindow",
+                color: SettingsWorkbenchVisual.neutral
+            )
+        } content: {
+            VStack(spacing: 10) {
+                VoiceInputSettingRow(
+                    label: "开机自启动",
+                    title: coordinator.launchAtLoginEnabled ? "已开启" : coordinator.launchAtLoginState.title,
+                    detail: "启用后，Voco将在系统启动时自动运行。可在系统设置 > 通用 > 登录项中管理。",
+                    systemImage: coordinator.launchAtLoginState.systemImage,
+                    color: launchAtLoginTint(coordinator.launchAtLoginState)
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { coordinator.launchAtLoginEnabled },
+                            set: { enabled in
+                                Task {
+                                    await coordinator.setLaunchAtLoginEnabled(enabled)
+                                }
                             }
-                        }
+                        )
                     )
-                )
-                .labelsHidden()
-            }
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
 
-            HStack(spacing: 8) {
-                Image(systemName: coordinator.launchAtLoginState.systemImage)
-                    .foregroundStyle(launchAtLoginTint(coordinator.launchAtLoginState))
-                Text(coordinator.launchAtLoginState.title)
-                    .font(SettingsWorkbenchVisual.controlFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                Text(coordinator.launchAtLoginState.detail)
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                if coordinator.launchAtLoginState == .requiresApproval {
+                    Text("请在系统设置 > 通用 > 登录项中批准 Voco。")
+                        .font(SettingsWorkbenchVisual.captionFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
-            if coordinator.launchAtLoginState == .requiresApproval {
-                Text("请在 System Settings → General → Login Items 中批准 Voco。")
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                VoiceInputSettingRow(
+                    label: "静默启动",
+                    title: coordinator.silentLaunchEnabled ? "仅在系统托盘运行" : "启动时显示主窗口",
+                    detail: "启用后，应用启动时不显示主窗口，仅在系统托盘运行。可随时通过托盘图标打开主窗口。",
+                    systemImage: coordinator.silentLaunchEnabled ? "menubar.rectangle" : "macwindow",
+                    color: SettingsWorkbenchVisual.neutral
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { coordinator.silentLaunchEnabled },
+                            set: { enabled in
+                                coordinator.setSilentLaunchEnabled(enabled)
+                            }
+                        )
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
             }
         }
-        .padding(12)
-        .workbenchPanel(cornerRadius: 12)
     }
 
     @ViewBuilder
@@ -554,16 +542,13 @@ struct SettingsView: View {
         switch selectedVolcengineCredentialMode {
         case .apiKey:
             SecureField("火山引擎 API Key", text: $transcriptionAPIKey)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .textFieldStyle(.roundedBorder)
+                .workbenchCredentialField()
         case .appIDAccessToken:
             TextField("火山引擎 App ID", text: $volcengineAppID)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .textFieldStyle(.roundedBorder)
+                .workbenchCredentialField()
 
             SecureField("火山引擎 Access Token", text: $volcengineAccessToken)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .textFieldStyle(.roundedBorder)
+                .workbenchCredentialField()
         }
     }
 
@@ -822,6 +807,22 @@ private extension View {
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(SettingsWorkbenchVisual.border, lineWidth: 1)
+            )
+    }
+
+    func workbenchCredentialField() -> some View {
+        textFieldStyle(.plain)
+            .font(SettingsWorkbenchVisual.bodyFont)
+            .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .background(
+                SettingsWorkbenchVisual.panelBackground,
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.strongBorder, lineWidth: 1)
             )
     }
 }

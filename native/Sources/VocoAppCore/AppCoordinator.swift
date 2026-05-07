@@ -60,6 +60,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var hotkeyBinding: HotkeyBinding
     @Published public private(set) var hotkeyMode: HotkeyMode
     @Published public private(set) var selectedAudioInputDevice: AudioInputDeviceSelection
+    @Published public private(set) var silentLaunchEnabled: Bool
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -69,6 +70,7 @@ public final class AppCoordinator: ObservableObject {
     private let installLocationProvider: any InstallLocationProviding
     private let legacyInstallProvider: any LegacyInstallProviding
     private let voiceInputPreferenceStore: any VoiceInputPreferenceStoring
+    private let appPreferenceStore: any AppPreferenceStoring
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
@@ -83,6 +85,7 @@ public final class AppCoordinator: ObservableObject {
         installLocationProvider: any InstallLocationProviding = StaticInstallLocationProvider(),
         legacyInstallProvider: any LegacyInstallProviding = StaticLegacyInstallProvider(),
         voiceInputPreferenceStore: any VoiceInputPreferenceStoring = NoOpVoiceInputPreferenceStore(),
+        appPreferenceStore: any AppPreferenceStoring = NoOpAppPreferenceStore(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -106,6 +109,7 @@ public final class AppCoordinator: ObservableObject {
         self.installLocationProvider = installLocationProvider
         self.legacyInstallProvider = legacyInstallProvider
         self.voiceInputPreferenceStore = voiceInputPreferenceStore
+        self.appPreferenceStore = appPreferenceStore
         self.permissions = initialPermissions
         self.launchAtLoginState = initialLaunchAtLoginState
         self.hotkeyRuntimeState = .inactive
@@ -120,6 +124,7 @@ public final class AppCoordinator: ObservableObject {
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
         self.selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
+        self.silentLaunchEnabled = appPreferenceStore.silentLaunchEnabled
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -291,6 +296,11 @@ public final class AppCoordinator: ObservableObject {
             launchAtLoginState = .failed(message)
             lastErrorMessage = "登录时启动设置失败：\(message)"
         }
+    }
+
+    public func setSilentLaunchEnabled(_ enabled: Bool) {
+        silentLaunchEnabled = enabled
+        appPreferenceStore.saveSilentLaunchEnabled(enabled)
     }
 
     public func setHotkeyPreset(_ preset: HotkeyPreset) {

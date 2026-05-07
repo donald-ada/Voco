@@ -5,18 +5,21 @@ import VocoAppCore
 @main
 @MainActor
 struct VocoNativeApp: App {
+    static let showSettingsMenuTitle = "显示 Voco"
+    static let quitMenuTitle = "退出"
+
     @StateObject private var coordinator: AppCoordinator
 
     var body: some Scene {
         MenuBarExtra {
-            Button("显示 Voco") {
+            Button(Self.showSettingsMenuTitle) {
                 coordinator.prepareForSettingsPresentation()
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 
             Divider()
 
-            Button("退出 Voco") {
+            Button(Self.quitMenuTitle) {
                 NSApp.terminate(nil)
             }
         } label: {
@@ -37,6 +40,7 @@ struct VocoNativeApp: App {
         let credentialStore = MacKeychainCredentialStore()
         let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
         let voiceInputPreferences = MacVoiceInputPreferenceStore()
+        let appPreferences = MacAppPreferenceStore()
         let audioCapture = MacAudioCaptureEngine()
         if let audioInputDevice = voiceInputPreferences.audioInputDevice {
             audioCapture.setInputDevice(audioInputDevice)
@@ -55,11 +59,19 @@ struct VocoNativeApp: App {
             installLocationProvider: MacInstallLocationProvider(),
             legacyInstallProvider: MacLegacyInstallProvider(),
             voiceInputPreferenceStore: voiceInputPreferences,
+            appPreferenceStore: appPreferences,
             hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
             hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
         )
         appCoordinator.finishLaunching()
         HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
         _coordinator = StateObject(wrappedValue: appCoordinator)
+
+        if AppLaunchPresentationPolicy(silentLaunchEnabled: appPreferences.silentLaunchEnabled).action == .showSettingsWindow {
+            DispatchQueue.main.async {
+                appCoordinator.prepareForSettingsPresentation()
+                SettingsWindowPresenter.shared.show(coordinator: appCoordinator)
+            }
+        }
     }
 }
