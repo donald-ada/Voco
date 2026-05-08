@@ -834,6 +834,27 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorMenuBarSnapshotUsesSelectedLanguage() {
+        let store = FakeAppPreferenceStore(appLanguage: .en)
+        let coordinator = AppCoordinator(appPreferenceStore: store)
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.snapshot.title, "Ready")
+    }
+
+    @MainActor
+    func testCoordinatorHUDSnapshotUsesSelectedLanguage() {
+        let store = FakeAppPreferenceStore(appLanguage: .en)
+        let coordinator = AppCoordinator(appPreferenceStore: store)
+
+        coordinator.fail("network down")
+
+        XCTAssertEqual(coordinator.hudSnapshot.title, "Needs Attention")
+        XCTAssertEqual(coordinator.hudSnapshot.detail, "network down")
+    }
+
+    @MainActor
     func testCoordinatorPersistsAppLanguageChanges() {
         let store = FakeAppPreferenceStore(appLanguage: .zhHans)
         let coordinator = AppCoordinator(appPreferenceStore: store)
@@ -1041,7 +1062,10 @@ final class AppCoordinatorTests: XCTestCase {
         await coordinator.toggleRecordingFromUserAction()
 
         XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.title, "火山引擎转写失败")
-        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle, "前往模型")
+        XCTAssertEqual(
+            coordinator.settingsWorkbenchSnapshot.overview.primaryActionID,
+            SettingsWorkbenchActionID.openModel
+        )
         XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .model), .needsAttention)
     }
 

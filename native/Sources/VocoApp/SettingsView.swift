@@ -797,9 +797,9 @@ struct SettingsView: View {
     }
 
     private func performOverviewPrimaryAction() {
-        let title = coordinator.settingsWorkbenchSnapshot.overview.primaryActionTitle
+        let actionID = coordinator.settingsWorkbenchSnapshot.overview.primaryActionID
 
-        switch SettingsOverviewPrimaryActionResolver.resolve(title: title) {
+        switch SettingsOverviewPrimaryActionResolver.resolve(actionID: actionID) {
         case .requestMicrophonePermission:
             Task {
                 await coordinator.requestMicrophonePermission()
@@ -815,6 +815,8 @@ struct SettingsView: View {
             settingsFeedbackMessage = "已重新检查状态。"
         case .startTestRecording:
             startTestRecordingFromSettings()
+        case .unknown:
+            coordinator.fail("Unknown settings action: \(actionID)")
         }
     }
 
@@ -1554,10 +1556,10 @@ private struct SettingsHomeHeroCard: View {
             }
 
             HStack(spacing: 8) {
-                Button(snapshot.overview.primaryActionTitle, action: primaryAction)
+                Button(snapshot.overview.primaryActionDisplayTitle, action: primaryAction)
                     .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
 
-                Button(snapshot.overview.secondaryActionTitle, action: secondaryAction)
+                Button(snapshot.overview.secondaryActionDisplayTitle, action: secondaryAction)
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
             }
             .padding(.top, 2)

@@ -25,17 +25,19 @@ public struct HUDSnapshot: Equatable, Sendable {
 
     public init(
         status: AppRuntimeStatus,
+        strings: VocoStrings = VocoStrings(),
         lastTranscript: TranscriptSnapshot?,
         currentTranscript: TranscriptSnapshot? = nil,
         lastInjection: TextInjectionSnapshot?,
         lastErrorMessage: String?
     ) {
+        let hudStrings = strings.hud
         switch status {
         case .recording:
             self = HUDSnapshot(
                 phase: .recording,
-                title: "正在听",
-                detail: "松开或再次按下快捷键结束录音",
+                title: hudStrings.recordingTitle,
+                detail: hudStrings.recordingDetail,
                 systemImage: "waveform.circle.fill",
                 transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
@@ -43,8 +45,8 @@ public struct HUDSnapshot: Equatable, Sendable {
         case .transcribing:
             self = HUDSnapshot(
                 phase: .transcribing,
-                title: "正在转写",
-                detail: "正在生成文字...",
+                title: hudStrings.transcribingTitle,
+                detail: hudStrings.transcribingDetail,
                 systemImage: "ellipsis.bubble.fill",
                 transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
@@ -52,8 +54,8 @@ public struct HUDSnapshot: Equatable, Sendable {
         case .injecting:
             self = HUDSnapshot(
                 phase: .injecting,
-                title: "正在插入",
-                detail: "正在把转写文本插入当前 App",
+                title: hudStrings.injectingTitle,
+                detail: hudStrings.injectingDetail,
                 systemImage: "text.cursor",
                 transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
@@ -61,8 +63,8 @@ public struct HUDSnapshot: Equatable, Sendable {
         case .providerOffline, .error:
             self = HUDSnapshot(
                 phase: .error,
-                title: "需要处理",
-                detail: lastErrorMessage ?? lastInjection?.detail ?? "Voco 遇到错误。",
+                title: hudStrings.errorTitle,
+                detail: lastErrorMessage ?? lastInjection?.detail ?? hudStrings.genericErrorDetail,
                 systemImage: "exclamationmark.triangle.fill",
                 transcriptPreview: nil,
                 autoHideAfterSeconds: nil

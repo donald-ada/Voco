@@ -170,7 +170,7 @@ public final class AppCoordinator: ObservableObject {
     public var snapshot: MenuBarSnapshot {
         MenuBarSnapshot(
             status: status,
-            title: status.menuBarTitle,
+            title: strings.runtime.menuBarTitle(for: status),
             systemImage: status.systemImage,
             templateIconResourceName: "VocoMenuBarIconTemplate",
             isRecordingActionEnabled: status == .ready,
@@ -181,6 +181,7 @@ public final class AppCoordinator: ObservableObject {
     public var hudSnapshot: HUDSnapshot {
         HUDSnapshot(
             status: status,
+            strings: strings,
             lastTranscript: lastTranscript,
             currentTranscript: currentTranscript,
             lastInjection: lastInjection,
@@ -190,6 +191,7 @@ public final class AppCoordinator: ObservableObject {
 
     public var settingsWorkbenchSnapshot: SettingsWorkbenchSnapshot {
         SettingsWorkbenchSnapshot.make(
+            strings: strings,
             statusTitle: snapshot.title,
             permissions: permissions,
             hotkeyState: hotkeyRuntimeState,
@@ -767,27 +769,6 @@ public final class AppCoordinator: ObservableObject {
 }
 
 private extension AppRuntimeStatus {
-    var menuBarTitle: String {
-        switch self {
-        case .launching:
-            "启动中"
-        case .ready:
-            "就绪"
-        case .recording:
-            "录音中"
-        case .transcribing:
-            "转写中"
-        case .injecting:
-            "插入中"
-        case .permissionNeeded:
-            "需要权限"
-        case .providerOffline:
-            "服务离线"
-        case .error:
-            "错误"
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .launching:

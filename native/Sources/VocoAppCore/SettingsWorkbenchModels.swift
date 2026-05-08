@@ -35,8 +35,13 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
     }
 }
 
-public enum SettingsWorkbenchActionTitle {
-    public static let checkMicrophone = "检查麦克风"
+public enum SettingsWorkbenchActionID {
+    public static let checkMicrophone = "checkMicrophone"
+    public static let openModel = "openModel"
+    public static let openSettings = "openSettings"
+    public static let openAccessibilitySettings = "openAccessibilitySettings"
+    public static let refresh = "refresh"
+    public static let startTestRecording = "startTestRecording"
 }
 
 public enum SettingsWorkbenchSectionStatus: Equatable, Sendable {
@@ -53,19 +58,25 @@ public enum SettingsWorkbenchSectionStatus: Equatable, Sendable {
 public struct SettingsWorkbenchOverviewSnapshot: Equatable, Sendable {
     public let title: String
     public let detail: String
-    public let primaryActionTitle: String
-    public let secondaryActionTitle: String
+    public let primaryActionID: String
+    public let secondaryActionID: String
+    public let primaryActionDisplayTitle: String
+    public let secondaryActionDisplayTitle: String
 
     public init(
         title: String,
         detail: String,
-        primaryActionTitle: String,
-        secondaryActionTitle: String = "重新检查"
+        primaryActionID: String,
+        secondaryActionID: String = SettingsWorkbenchActionID.refresh,
+        primaryActionDisplayTitle: String,
+        secondaryActionDisplayTitle: String
     ) {
         self.title = title
         self.detail = detail
-        self.primaryActionTitle = primaryActionTitle
-        self.secondaryActionTitle = secondaryActionTitle
+        self.primaryActionID = primaryActionID
+        self.secondaryActionID = secondaryActionID
+        self.primaryActionDisplayTitle = primaryActionDisplayTitle
+        self.secondaryActionDisplayTitle = secondaryActionDisplayTitle
     }
 }
 
@@ -104,6 +115,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
     }
 
     public static func make(
+        strings: VocoStrings = VocoStrings(),
         statusTitle: String,
         permissions: [PermissionSnapshot],
         hotkeyState: HotkeyRuntimeState,
@@ -123,53 +135,68 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         }
         let inputNeedsAttention = injection.map { !$0.succeeded } ?? false
         let transcriptionErrorMessage = transcriptionErrorMessage?.nonEmpty
+        let workbenchStrings = strings.workbench
 
         let overview: SettingsWorkbenchOverviewSnapshot
         if let requiredMissing {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "\(requiredMissing.kind.title)权限缺失",
-                detail: requiredMissing.kind == .accessibility
-                    ? "Voco 可以录音，但不能稳定插入当前输入框。"
-                    : "\(requiredMissing.kind.title)权限缺失，语音输入链路无法完成。",
-                primaryActionTitle: requiredMissing.kind == .microphone
-                    ? SettingsWorkbenchActionTitle.checkMicrophone
-                    : requiredMissing.kind.recoveryActionTitle
+                title: workbenchStrings.permissionMissingTitle(kind: requiredMissing.kind),
+                detail: workbenchStrings.permissionMissingDetail(kind: requiredMissing.kind),
+                primaryActionID: requiredMissing.kind == .microphone
+                    ? SettingsWorkbenchActionID.checkMicrophone
+                    : SettingsWorkbenchActionID.openAccessibilitySettings,
+                primaryActionDisplayTitle: requiredMissing.kind == .microphone
+                    ? workbenchStrings.checkMicrophoneAction
+                    : workbenchStrings.openAccessibilitySettingsAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else if !credentials.hasCredential || credentials.lastErrorMessage != nil {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: credentials.lastErrorMessage == nil ? "火山引擎凭证未保存" : "火山引擎凭证读取失败",
-                detail: credentials.storageDetail,
-                primaryActionTitle: "前往模型"
+                title: workbenchStrings.credentialTitle(hasError: credentials.lastErrorMessage != nil),
+                detail: workbenchStrings.credentialDetail(lastErrorMessage: credentials.lastErrorMessage),
+                primaryActionID: SettingsWorkbenchActionID.openModel,
+                primaryActionDisplayTitle: workbenchStrings.openModelAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else if let transcriptionErrorMessage {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "火山引擎转写失败",
-                detail: transcriptionErrorMessage,
-                primaryActionTitle: "前往模型"
+                title: workbenchStrings.transcriptionFailedTitle,
+                detail: workbenchStrings.transcriptionFailureDetail(transcriptionErrorMessage),
+                primaryActionID: SettingsWorkbenchActionID.openModel,
+                primaryActionDisplayTitle: workbenchStrings.openModelAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else if asrStatus.isWorkbenchAttention {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: asrStatus.workbenchIssueTitle,
-                detail: asrStatus.detail,
-                primaryActionTitle: "前往模型"
+                title: workbenchStrings.providerIssueTitle(for: asrStatus),
+                detail: workbenchStrings.providerIssueDetail(for: asrStatus),
+                primaryActionID: SettingsWorkbenchActionID.openModel,
+                primaryActionDisplayTitle: workbenchStrings.openModelAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else if let injection, !injection.succeeded {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "文本输入失败",
-                detail: injection.detail,
-                primaryActionTitle: "前往设置"
+                title: workbenchStrings.textInputFailedTitle,
+                detail: workbenchStrings.textInputFailureDetail(injection.detail),
+                primaryActionID: SettingsWorkbenchActionID.openSettings,
+                primaryActionDisplayTitle: workbenchStrings.openSettingsAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else if let lastErrorMessage, !lastErrorMessage.isEmpty {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "最近一次操作失败",
-                detail: lastErrorMessage,
-                primaryActionTitle: "重新检查"
+                title: workbenchStrings.recentOperationFailedTitle,
+                detail: workbenchStrings.recentOperationFailureDetail(lastErrorMessage),
+                primaryActionID: SettingsWorkbenchActionID.refresh,
+                primaryActionDisplayTitle: workbenchStrings.refreshAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         } else {
             overview = SettingsWorkbenchOverviewSnapshot(
-                title: "Voco 已就绪",
-                detail: "Right Command 可以触发录音、转写和文本输入。",
-                primaryActionTitle: "开始测试录音"
+                title: workbenchStrings.readyTitle,
+                detail: workbenchStrings.readyDetail,
+                primaryActionID: SettingsWorkbenchActionID.startTestRecording,
+                primaryActionDisplayTitle: workbenchStrings.startTestRecordingAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
         }
 
@@ -188,6 +215,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             settingsStatus = .ok
         }
         let homeIssueItems = makeHomeIssueItems(
+            strings: workbenchStrings,
             missingRequiredPermissions: missingRequiredPermissions,
             credentials: credentials,
             asrStatus: asrStatus,
@@ -212,6 +240,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
     }
 
     private static func makeHomeIssueItems(
+        strings: SettingsWorkbenchStrings,
         missingRequiredPermissions: [PermissionSnapshot],
         credentials: TranscriptionCredentialSnapshot,
         asrStatus: TranscriptionProviderStatus,
@@ -222,10 +251,8 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         var items = missingRequiredPermissions.map { permission in
             SettingsWorkbenchIssueItem(
                 id: "permission-\(permission.kind.rawValue)",
-                title: "\(permission.kind.title)权限缺失",
-                detail: permission.kind == .accessibility
-                    ? "允许后才能稳定插入当前输入框。"
-                    : "允许后才能完成录音链路。"
+                title: strings.permissionMissingTitle(kind: permission.kind),
+                detail: strings.permissionIssueDetail(kind: permission.kind)
             )
         }
 
@@ -233,24 +260,24 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "transcription-credential",
-                    title: credentials.lastErrorMessage == nil ? "火山引擎凭证未保存" : "火山引擎凭证读取失败",
-                    detail: credentials.storageDetail
+                    title: strings.credentialTitle(hasError: credentials.lastErrorMessage != nil),
+                    detail: strings.credentialDetail(lastErrorMessage: credentials.lastErrorMessage)
                 )
             )
         } else if let transcriptionErrorMessage {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "transcription-error",
-                    title: "火山引擎转写失败",
-                    detail: transcriptionErrorMessage
+                    title: strings.transcriptionFailedTitle,
+                    detail: strings.transcriptionFailureDetail(transcriptionErrorMessage)
                 )
             )
         } else if asrStatus.isWorkbenchAttention {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "transcription-provider",
-                    title: asrStatus.workbenchIssueTitle,
-                    detail: asrStatus.detail
+                    title: strings.providerIssueTitle(for: asrStatus),
+                    detail: strings.providerIssueDetail(for: asrStatus)
                 )
             )
         }
@@ -259,16 +286,16 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "text-injection",
-                    title: "文本输入失败",
-                    detail: injection.detail
+                    title: strings.textInputFailedTitle,
+                    detail: strings.textInputFailureDetail(injection.detail)
                 )
             )
         } else if let lastErrorMessage = lastErrorMessage?.nonEmpty, items.isEmpty {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "runtime-error",
-                    title: "最近一次操作失败",
-                    detail: lastErrorMessage
+                    title: strings.recentOperationFailedTitle,
+                    detail: strings.recentOperationFailureDetail(lastErrorMessage)
                 )
             )
         }
@@ -290,21 +317,6 @@ private extension TranscriptionProviderStatus {
             false
         case .notConfigured, .authenticationRequired, .offline, .failed:
             true
-        }
-    }
-
-    var workbenchIssueTitle: String {
-        switch self {
-        case .notConfigured:
-            "模型未配置"
-        case .ready(let providerName):
-            "\(providerName)已就绪"
-        case .authenticationRequired(let providerName):
-            "\(providerName)需要认证"
-        case .offline(let providerName):
-            "\(providerName)离线"
-        case .failed(let providerName, _):
-            "\(providerName)转写失败"
         }
     }
 }

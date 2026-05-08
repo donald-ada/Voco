@@ -9,33 +9,36 @@ enum SettingsOverviewPrimaryAction: Equatable {
     case selectModel
     case refresh
     case startTestRecording
+    case unknown
 }
 
 @MainActor
 enum SettingsOverviewPrimaryActionResolver {
-    static func resolve(title: String) -> SettingsOverviewPrimaryAction {
-        if title == SettingsWorkbenchActionTitle.checkMicrophone {
+    static func resolve(actionID: String) -> SettingsOverviewPrimaryAction {
+        if actionID == SettingsWorkbenchActionID.checkMicrophone {
             return .requestMicrophonePermission
         }
 
-        if title == PermissionKind.accessibility.recoveryActionTitle {
-            return .openAccessibilitySettings
-        }
-
-        if title == "前往设置" || title.contains("输入") {
-            return .selectSettings
-        }
-
-        if title == "前往模型" ||
-            title.contains("模型") ||
-            title.contains("Keychain") {
+        if actionID == SettingsWorkbenchActionID.openModel {
             return .selectModel
         }
 
-        if title == "重新检查" {
+        if actionID == SettingsWorkbenchActionID.openSettings {
+            return .selectSettings
+        }
+
+        if actionID == SettingsWorkbenchActionID.openAccessibilitySettings {
+            return .openAccessibilitySettings
+        }
+
+        if actionID == SettingsWorkbenchActionID.refresh {
             return .refresh
         }
 
-        return .startTestRecording
+        if actionID == SettingsWorkbenchActionID.startTestRecording {
+            return .startTestRecording
+        }
+
+        return .unknown
     }
 }
