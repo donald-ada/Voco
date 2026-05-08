@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var volcengineAppID = ""
     @State private var volcengineAccessToken = ""
     @State private var settingsFeedbackMessage: String?
+    @State private var voiceInputSessionPage = 1
+    @State private var selectedVoiceInputSession: VoiceInputSessionSnapshot?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -24,8 +26,7 @@ struct SettingsView: View {
                 detailContent(for: selectedSection)
                     .padding(.horizontal, 32)
                     .padding(.vertical, 30)
-                    .frame(maxWidth: 900, minHeight: 560, alignment: .topLeading)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 560, alignment: .topLeading)
             }
             .scrollIndicators(.hidden)
             .background(SettingsWorkbenchVisual.detailBackground)
@@ -43,6 +44,9 @@ struct SettingsView: View {
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
             syncSelectedVolcengineCredentialMode()
+        }
+        .sheet(item: $selectedVoiceInputSession) { session in
+            VoiceInputSessionDetailSheet(session: session)
         }
     }
 
@@ -63,14 +67,14 @@ struct SettingsView: View {
 
         return VStack(alignment: .leading, spacing: 16) {
             settingsPageHeader(
-                eyebrow: "OVERVIEW",
-                title: "Voco 设置",
-                detail: "查看语音输入是否可用，并处理影响录音、转写或文本输入的问题。"
+                eyebrow: "HOME",
+                title: "主页",
+                detail: "查看语音输入是否可用，并浏览最近会话。"
             )
 
             legacyInstallSection
 
-            SettingsOverviewRecoveryCard(
+            SettingsHomeHeroCard(
                 snapshot: workbench,
                 primaryAction: performOverviewPrimaryAction,
                 secondaryAction: {
@@ -79,6 +83,26 @@ struct SettingsView: View {
                 }
             )
 
+            homeMetricsRow
+
+            VoiceInputSessionsPanel(
+                sessions: coordinator.recentVoiceInputSessions,
+                currentPage: $voiceInputSessionPage,
+                selectedSession: $selectedVoiceInputSession
+            )
+        }
+    }
+
+    private var homeMetricsRow: some View {
+        let sessions = coordinator.recentVoiceInputSessions
+        let todaySessions = sessions.filter { Calendar.current.isDateInToday($0.createdAt) }
+        let totalWords = todaySessions.reduce(0) { $0 + $1.wordCount }
+        let latestSession = sessions.first
+
+        return HStack(spacing: 12) {
+            HomeMetricCard(label: "TODAY", value: "\(todaySessions.count) 次会话")
+            HomeMetricCard(label: "WORDS", value: "\(totalWords) 字")
+            HomeMetricCard(label: "LAST", value: latestSession?.timeTitle ?? "--")
         }
     }
 
@@ -219,18 +243,12 @@ struct SettingsView: View {
             ) {
                 WorkbenchMenuControl(
                     title: selectedHotkeyPresetBinding.wrappedValue.title,
-                    width: 156
-                ) {
-                    ForEach(HotkeyPreset.allCases) { preset in
-                        Button {
-                            selectedHotkeyPresetBinding.wrappedValue = preset
-                        } label: {
-                            WorkbenchMenuItemLabel(
-                                title: preset.title,
-                                isSelected: selectedHotkeyPresetBinding.wrappedValue == preset
-                            )
-                        }
-                    }
+                    width: 156,
+                    options: Array(HotkeyPreset.allCases),
+                    selected: selectedHotkeyPresetBinding.wrappedValue,
+                    titleForOption: \.title
+                ) { preset in
+                    selectedHotkeyPresetBinding.wrappedValue = preset
                 }
             }
 
@@ -261,18 +279,12 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     WorkbenchMenuControl(
                         title: selectedAudioInputDeviceBinding.wrappedValue.title,
-                        width: 168
-                    ) {
-                        ForEach(audioInputDevicesForPicker) { device in
-                            Button {
-                                selectedAudioInputDeviceBinding.wrappedValue = device
-                            } label: {
-                                WorkbenchMenuItemLabel(
-                                    title: device.title,
-                                    isSelected: selectedAudioInputDeviceBinding.wrappedValue == device
-                                )
-                            }
-                        }
+                        width: 168,
+                        options: audioInputDevicesForPicker,
+                        selected: selectedAudioInputDeviceBinding.wrappedValue,
+                        titleForOption: \.title
+                    ) { device in
+                        selectedAudioInputDeviceBinding.wrappedValue = device
                     }
 
                     Button {
@@ -383,7 +395,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(coordinator.permissions) { permission in
                     WorkbenchInfoRow(
-                        symbol: String(permission.kind.title.prefix(2)),
+                        systemImage: permission.kind.systemImage,
                         title: permission.kind.title,
                         detail: permission.kind.description,
                         color: permissionTint(permission.state)
@@ -452,6 +464,7 @@ struct SettingsView: View {
                     )
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .pointingHandCursor()
                 }
 
                 if coordinator.launchAtLoginState == .requiresApproval {
@@ -479,6 +492,7 @@ struct SettingsView: View {
                     )
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .pointingHandCursor()
                 }
 
                 VoiceInputSettingRow(
@@ -500,6 +514,52 @@ struct SettingsView: View {
                     )
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .pointingHandCursor()
+                }
+
+                VoiceInputSettingRow(
+                    label: "保存会话记录",
+                    title: coordinator.voiceInputSessionHistoryEnabled ? "已保存" : "不保存",
+                    detail: coordinator.voiceInputSessionHistoryEnabled
+                        ? "成功录音后写入本机 SQLite，会话列表下次启动仍可查看。"
+                        : "关闭后不再写入 SQLite，只保留当前运行中的临时列表。",
+                    systemImage: coordinator.voiceInputSessionHistoryEnabled ? "tray.full" : "tray",
+                    color: coordinator.voiceInputSessionHistoryEnabled
+                        ? SettingsWorkbenchVisual.accent
+                        : SettingsWorkbenchVisual.neutral
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { coordinator.voiceInputSessionHistoryEnabled },
+                            set: { enabled in
+                                coordinator.setVoiceInputSessionHistoryEnabled(enabled)
+                            }
+                        )
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .pointingHandCursor()
+                }
+
+                if coordinator.voiceInputSessionHistoryEnabled {
+                    VoiceInputSettingRow(
+                        label: "保留策略",
+                        title: coordinator.voiceInputSessionRetentionPolicy.title,
+                        detail: coordinator.voiceInputSessionRetentionPolicy.detail,
+                        systemImage: "clock.arrow.circlepath",
+                        color: SettingsWorkbenchVisual.neutral
+                    ) {
+                        WorkbenchMenuControl(
+                            title: coordinator.voiceInputSessionRetentionPolicy.title,
+                            width: 132,
+                            options: Array(VoiceInputSessionRetentionPolicy.allCases),
+                            selected: coordinator.voiceInputSessionRetentionPolicy,
+                            titleForOption: \.title
+                        ) { policy in
+                            coordinator.setVoiceInputSessionRetentionPolicy(policy)
+                        }
+                    }
                 }
             }
         }
@@ -791,6 +851,7 @@ private enum SettingsWorkbenchVisual {
 
     static let eyebrowFont = SettingsWorkbenchTypography.body(size: 11, weight: .heavy)
     static let pageTitleFont = SettingsWorkbenchTypography.body(size: 30, weight: .bold)
+    static let homeTitleFont = SettingsWorkbenchTypography.body(size: 34, weight: .bold)
     static let overviewTitleFont = SettingsWorkbenchTypography.body(size: 24, weight: .bold)
     static let sidebarTitleFont = SettingsWorkbenchTypography.body(size: 23, weight: .bold)
     static let bodyFont = SettingsWorkbenchTypography.body(size: 14)
@@ -805,6 +866,7 @@ private enum SettingsWorkbenchVisual {
     static let caption2SemiboldFont = SettingsWorkbenchTypography.body(size: 11, weight: .semibold)
     static let caption2BoldFont = SettingsWorkbenchTypography.body(size: 11, weight: .bold)
     static let tinyBoldFont = SettingsWorkbenchTypography.body(size: 10, weight: .bold)
+    static let monoTinyFont = SettingsWorkbenchTypography.mono(size: 11, weight: .medium)
     static let monoSymbolFont = SettingsWorkbenchTypography.mono(size: 11, weight: .semibold)
     static let monoBadgeFont = SettingsWorkbenchTypography.mono(size: 13, weight: .semibold)
 
@@ -920,6 +982,7 @@ private struct SettingsWorkbenchPrimaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .pointingHandCursor()
     }
 }
 
@@ -942,43 +1005,119 @@ private struct SettingsWorkbenchSecondaryButtonStyle: ButtonStyle {
                     .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .pointingHandCursor()
     }
 }
 
-private struct WorkbenchMenuControl<MenuContent: View>: View {
+private struct WorkbenchMenuControl<Option: Identifiable>: View {
     let title: String
     let width: CGFloat
-    private let menuContent: MenuContent
+    let options: [Option]
+    let selected: Option
+    let titleForOption: (Option) -> String
+    let onSelect: (Option) -> Void
 
     init(
         title: String,
         width: CGFloat,
-        @ViewBuilder content: () -> MenuContent
+        options: [Option],
+        selected: Option,
+        titleForOption: @escaping (Option) -> String,
+        onSelect: @escaping (Option) -> Void
     ) {
         self.title = title
         self.width = width
-        self.menuContent = content()
+        self.options = options
+        self.selected = selected
+        self.titleForOption = titleForOption
+        self.onSelect = onSelect
     }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(SettingsWorkbenchVisual.panelBackground)
+            WorkbenchMenuControlLabel(title: title)
+                .frame(width: width, height: 38)
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(SettingsWorkbenchVisual.controlBorder, lineWidth: 2)
-
-            Menu {
-                menuContent
-            } label: {
-                WorkbenchMenuControlLabel(title: title)
-            }
-            .menuStyle(.borderlessButton)
-            .buttonStyle(.plain)
+            WorkbenchPopUpButton(
+                options: options,
+                selectedID: selected.id,
+                titleForOption: titleForOption,
+                onSelect: onSelect
+            )
+            .frame(width: width, height: 38)
         }
         .frame(width: width, height: 38)
+        .background(
+            SettingsWorkbenchVisual.panelBackground,
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(SettingsWorkbenchVisual.controlBorder, lineWidth: 2)
+        )
         .shadow(color: SettingsWorkbenchVisual.primaryText.opacity(0.14), radius: 6, y: 2)
         .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .pointingHandCursor()
+        .accessibilityLabel(Text(title))
+    }
+}
+
+private struct WorkbenchPopUpButton<Option: Identifiable>: NSViewRepresentable {
+    let options: [Option]
+    let selectedID: Option.ID
+    let titleForOption: (Option) -> String
+    let onSelect: (Option) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(options: options, onSelect: onSelect)
+    }
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.isBordered = false
+        button.isTransparent = true
+        button.focusRingType = .none
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.selectOption(_:))
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        context.coordinator.options = options
+        context.coordinator.onSelect = onSelect
+
+        button.removeAllItems()
+        options.forEach { option in
+            button.addItem(withTitle: titleForOption(option))
+        }
+
+        if let selectedIndex = options.firstIndex(where: { $0.id == selectedID }) {
+            button.selectItem(at: selectedIndex)
+        } else {
+            button.selectItem(at: -1)
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var options: [Option]
+        var onSelect: (Option) -> Void
+
+        init(options: [Option], onSelect: @escaping (Option) -> Void) {
+            self.options = options
+            self.onSelect = onSelect
+        }
+
+        @MainActor
+        @objc
+        func selectOption(_ sender: NSPopUpButton) {
+            let selectedIndex = sender.indexOfSelectedItem
+            guard options.indices.contains(selectedIndex) else {
+                return
+            }
+
+            onSelect(options[selectedIndex])
+        }
     }
 }
 
@@ -1004,25 +1143,6 @@ private struct WorkbenchMenuControlLabel: View {
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: 34)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct WorkbenchMenuItemLabel: View {
-    let title: String
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .frame(width: 12)
-            } else {
-                Color.clear
-                    .frame(width: 12, height: 1)
-            }
-
-            Text(title)
-        }
     }
 }
 
@@ -1054,6 +1174,7 @@ private struct WorkbenchSegmentedControl<Option: Hashable>: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .pointingHandCursor()
             }
         }
         .padding(3)
@@ -1160,16 +1281,14 @@ private struct WorkbenchReadout: View {
     }
 }
 
-private struct WorkbenchSymbolBox: View {
-    let label: String
+private struct WorkbenchIconBox: View {
+    let systemImage: String
     let color: Color
 
     var body: some View {
-        Text(label)
-            .font(SettingsWorkbenchVisual.monoSymbolFont)
+        Image(systemName: systemImage)
+            .font(SettingsWorkbenchVisual.captionSemiboldFont)
             .foregroundStyle(color)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
             .frame(width: 34, height: 34)
             .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
@@ -1180,20 +1299,20 @@ private struct WorkbenchSymbolBox: View {
 }
 
 private struct WorkbenchInfoRow<Accessory: View>: View {
-    let symbol: String
+    let systemImage: String
     let title: String
     let detail: String
     let color: Color
     private let accessory: Accessory
 
     init(
-        symbol: String,
+        systemImage: String,
         title: String,
         detail: String,
         color: Color,
         @ViewBuilder accessory: () -> Accessory
     ) {
-        self.symbol = symbol
+        self.systemImage = systemImage
         self.title = title
         self.detail = detail
         self.color = color
@@ -1202,7 +1321,7 @@ private struct WorkbenchInfoRow<Accessory: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
-            WorkbenchSymbolBox(label: symbol, color: color)
+            WorkbenchIconBox(systemImage: systemImage, color: color)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -1300,19 +1419,19 @@ private struct VoiceInputSettingRow<Accessory: View>: View {
     }
 }
 
-private struct SettingsOverviewRecoveryCard: View {
+private struct SettingsHomeHeroCard: View {
     let snapshot: SettingsWorkbenchSnapshot
     let primaryAction: () -> Void
     let secondaryAction: () -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 22) {
+            HStack(alignment: .center, spacing: 24) {
                 statusContent
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VoiceInputFlowPreview()
-                    .frame(width: 310)
+                    .frame(width: 510)
             }
 
             VStack(alignment: .leading, spacing: 18) {
@@ -1320,33 +1439,35 @@ private struct SettingsOverviewRecoveryCard: View {
                 VoiceInputFlowPreview()
             }
         }
-        .padding(18)
-        .background(
-            LinearGradient(
-                colors: [
-                    statusColor.opacity(0.09),
-                    SettingsWorkbenchVisual.panelBackground
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .padding(25)
+        .background(statusColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(statusColor.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(statusColor.opacity(0.20), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.07), radius: 22, y: 12)
     }
 
     private var statusContent: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            WorkbenchStatusPill(statusLabel, systemImage: statusSystemImage, color: statusColor)
-
-            Text(snapshot.overview.title)
-                .font(SettingsWorkbenchVisual.overviewTitleFont)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(snapshot.homeIssueItems.isEmpty ? "Welcome" : "需要解决")
+                .font(SettingsWorkbenchVisual.homeTitleFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                .lineLimit(2)
+                .lineLimit(1)
+
+            if snapshot.homeIssueItems.isEmpty {
+                Text(snapshot.overview.detail)
+                    .font(SettingsWorkbenchVisual.bodyFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(snapshot.homeIssueItems) { item in
+                        HomeIssueRow(item: item, color: statusColor)
+                    }
+                }
+            }
 
             HStack(spacing: 8) {
                 Button(snapshot.overview.primaryActionTitle, action: primaryAction)
@@ -1359,126 +1480,378 @@ private struct SettingsOverviewRecoveryCard: View {
         }
     }
 
-    private var statusLabel: String {
-        switch snapshot.status(for: .overview) {
-        case .ok:
-            "已就绪"
-        case .needsAttention:
-            "需要处理 1 项"
-        case .warning:
-            "需要确认"
-        case .neutral:
-            "等待检查"
-        }
-    }
-
-    private var statusSystemImage: String {
-        switch snapshot.status(for: .overview) {
-        case .ok:
-            "checkmark.circle.fill"
-        case .needsAttention:
-            "exclamationmark.triangle.fill"
-        case .warning:
-            "exclamationmark.circle.fill"
-        case .neutral:
-            "circle.fill"
-        }
-    }
-
     private var statusColor: Color {
         snapshot.status(for: .overview).workbenchColor
     }
 }
 
-private struct VoiceInputFlowPreview: View {
+private struct HomeIssueRow: View {
+    let item: SettingsWorkbenchIssueItem
+    let color: Color
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("语音输入流程")
-                        .font(SettingsWorkbenchVisual.captionBoldFont)
+        HStack(alignment: .top, spacing: 9) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .lineLimit(1)
+
+                Text(item.detail)
+                    .font(SettingsWorkbenchVisual.captionFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+private struct HomeMetricCard: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(SettingsWorkbenchVisual.monoTinyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+
+            Text(value)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
+        .workbenchPanel(cornerRadius: 18)
+    }
+}
+
+private struct VoiceInputSessionsPanel: View {
+    let sessions: [VoiceInputSessionSnapshot]
+    @Binding var currentPage: Int
+    @Binding var selectedSession: VoiceInputSessionSnapshot?
+
+    private var sessionPage: VoiceInputSessionPage {
+        VoiceInputSessionPage(sessions: sessions, page: currentPage)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("会话记录")
+                    .font(SettingsWorkbenchVisual.panelTitleFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+
+                Spacer()
+
+                Text("内容预览 / 字数 / 时间 / 时长")
+                    .font(SettingsWorkbenchVisual.captionFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
+            .overlay(alignment: .bottom) {
+                Divider()
+            }
+
+            if sessionPage.entries.isEmpty {
+                emptyState
+            } else {
+                ForEach(sessionPage.entries) { session in
+                    VoiceInputSessionRow(session: session) {
+                        selectedSession = session
+                    }
+                    .overlay(alignment: .bottom) {
+                        Divider()
+                    }
+                }
+            }
+
+            paginationFooter
+        }
+        .workbenchPanel(cornerRadius: 20)
+        .shadow(color: Color.black.opacity(0.05), radius: 16, y: 10)
+        .onChange(of: sessions.count) { _, _ in
+            currentPage = VoiceInputSessionPage(sessions: sessions, page: currentPage).page
+        }
+    }
+
+    private var emptyState: some View {
+        Text("暂无会话记录")
+            .font(SettingsWorkbenchVisual.bodyFont)
+            .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+            .frame(maxWidth: .infinity, minHeight: 82)
+    }
+
+    private var paginationFooter: some View {
+        HStack(spacing: 10) {
+            Text(sessionPage.visibleRangeTitle)
+                .font(SettingsWorkbenchVisual.monoTinyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+
+            Spacer()
+
+            Button("上一页") {
+                currentPage = max(1, sessionPage.page - 1)
+            }
+            .buttonStyle(SettingsWorkbenchPaginationButtonStyle())
+            .disabled(sessionPage.page <= 1)
+
+            ForEach(1...sessionPage.totalPages, id: \.self) { page in
+                Button("\(page)") {
+                    currentPage = page
+                }
+                .buttonStyle(SettingsWorkbenchPaginationButtonStyle(isActive: page == sessionPage.page))
+                .disabled(page == sessionPage.page)
+            }
+
+            Button("下一页") {
+                currentPage = min(sessionPage.totalPages, sessionPage.page + 1)
+            }
+            .buttonStyle(SettingsWorkbenchPaginationButtonStyle())
+            .disabled(sessionPage.page >= sessionPage.totalPages)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+        .background(SettingsWorkbenchVisual.softPreviewBackground)
+    }
+}
+
+private struct VoiceInputSessionRow: View {
+    let session: VoiceInputSessionSnapshot
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 16) {
+                Text(session.previewText(maxLength: 58))
+                    .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("\(session.wordCount) 字")
+                    .frame(width: 58, alignment: .leading)
+
+                Text(session.timeTitle)
+                    .frame(width: 54, alignment: .leading)
+
+                Text(session.durationTitle)
+                    .frame(width: 44, alignment: .leading)
+
+                Text("详情")
+                    .font(SettingsWorkbenchVisual.caption2BoldFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(
+                        SettingsWorkbenchVisual.softPreviewBackground,
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+                    )
+            }
+            .font(SettingsWorkbenchVisual.caption2Font)
+            .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .pointingHandCursor()
+    }
+}
+
+private struct VoiceInputSessionDetailSheet: View {
+    let session: VoiceInputSessionSnapshot
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("会话详情")
+                        .font(SettingsWorkbenchVisual.panelTitleFont)
                         .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                    Text("Right Command -> HUD 胶囊 -> 当前输入框")
-                        .font(SettingsWorkbenchVisual.caption2Font)
-                        .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+
+                    Text(session.detailTimestampTitle)
+                        .font(SettingsWorkbenchVisual.captionFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                 }
 
                 Spacer()
-            }
 
-            VStack(spacing: 8) {
-                flowBox(systemImage: "command", title: "Right Command", detail: "长按开始，松开提交")
-                connector
-                notchPreview
-                connector
-                flowBox(systemImage: "text.cursor", title: "当前输入框", detail: "完成后插入前台应用")
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+            }
+            .padding(22)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                WorkbenchStatusPill("\(session.wordCount) 字", color: SettingsWorkbenchVisual.neutral)
+                WorkbenchStatusPill(session.durationTitle, color: SettingsWorkbenchVisual.neutral)
+                if let targetAppName = session.targetAppName {
+                    WorkbenchStatusPill(targetAppName, color: SettingsWorkbenchVisual.neutral)
+                }
+                WorkbenchStatusPill(session.providerName, color: SettingsWorkbenchVisual.neutral)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+
+            ScrollView {
+                Text(session.transcriptText)
+                    .font(SettingsWorkbenchVisual.bodyFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .lineSpacing(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(22)
             }
         }
-        .padding(12)
-        .workbenchPanel(cornerRadius: 14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SettingsWorkbenchVisual.border, lineWidth: 1)
-        )
+        .frame(width: 680, height: 460)
+        .background(SettingsWorkbenchVisual.panelBackground)
+    }
+}
+
+private struct SettingsWorkbenchPaginationButtonStyle: ButtonStyle {
+    let isActive: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    init(isActive: Bool = false) {
+        self.isActive = isActive
     }
 
-    private func flowBox(systemImage: String, title: String, detail: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage)
-                .font(SettingsWorkbenchVisual.cardTitleFont)
-                .foregroundStyle(SettingsWorkbenchVisual.accent)
-                .frame(width: 30, height: 30)
-                .background(SettingsWorkbenchVisual.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(SettingsWorkbenchVisual.caption2BoldFont)
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 11)
+            .frame(minWidth: 36, minHeight: 34)
+            .background(backgroundColor.opacity(configuration.isPressed ? 0.78 : 1), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isActive ? SettingsWorkbenchVisual.primaryText : SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+            )
+            .pointingHandCursor()
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(SettingsWorkbenchVisual.captionBoldFont)
+    private var foregroundColor: Color {
+        if isActive {
+            return Color.white
+        }
+
+        return isEnabled ? SettingsWorkbenchVisual.primaryText : SettingsWorkbenchVisual.tertiaryText
+    }
+
+    private var backgroundColor: Color {
+        if isActive {
+            return SettingsWorkbenchVisual.primaryText
+        }
+
+        return isEnabled ? SettingsWorkbenchVisual.panelBackground : SettingsWorkbenchVisual.smallCardBackground
+    }
+}
+
+private struct VoiceInputFlowPreview: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("语音输入流程")
+                    .font(SettingsWorkbenchVisual.panelTitleFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
 
-                Text(detail)
-                    .font(SettingsWorkbenchVisual.caption2Font)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                Spacer()
+
+                Text("R Cmd / HUD / Input")
+                    .font(SettingsWorkbenchVisual.monoTinyFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                    .lineLimit(1)
             }
 
-            Spacer(minLength: 0)
+            HStack(spacing: 9) {
+                flowNode(systemImage: "command")
+                flowConnector
+                notchPreview
+                flowConnector
+                flowNode(label: "A|")
+            }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-        .background(
-            SettingsWorkbenchVisual.panelBackground,
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
-        )
+        .padding(16)
+        .workbenchPanel(cornerRadius: 18)
     }
 
-    private var connector: some View {
+    private func flowNode(systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(SettingsWorkbenchVisual.panelTitleFont)
+            .foregroundStyle(SettingsWorkbenchVisual.accent)
+            .frame(width: 46, height: 46)
+            .background(SettingsWorkbenchVisual.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.accent.opacity(0.16), lineWidth: 1)
+            )
+    }
+
+    private func flowNode(label: String) -> some View {
+        Text(label)
+            .font(SettingsWorkbenchVisual.monoBadgeFont)
+            .foregroundStyle(SettingsWorkbenchVisual.accent)
+            .frame(width: 46, height: 46)
+            .background(SettingsWorkbenchVisual.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.accent.opacity(0.16), lineWidth: 1)
+            )
+    }
+
+    private var flowConnector: some View {
         Rectangle()
             .fill(SettingsWorkbenchVisual.strongBorder)
-            .frame(width: 1, height: 10)
+            .frame(width: 22, height: 1)
     }
 
     private var notchPreview: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("语音输入")
-                    .font(SettingsWorkbenchVisual.caption2SemiboldFont)
-                    .foregroundStyle(Color.yellow)
-                Spacer()
-                MiniWaveform()
-            }
+        HStack(spacing: 12) {
+            Text("语音输入")
+                .font(SettingsWorkbenchVisual.caption2BoldFont)
+                .foregroundStyle(SettingsWorkbenchVisual.warning)
+                .lineLimit(1)
 
-            Text("第二行实时显示你正在说的内容")
-                .font(SettingsWorkbenchVisual.caption2SemiboldFont)
-                .foregroundStyle(Color.green)
-                .lineLimit(2)
+            Spacer(minLength: 4)
+
+            MiniWaveform()
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 60)
-        .background(Color.black, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.18), radius: 14, y: 8)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background(Color.black, in: Capsule())
+        .shadow(color: Color.black.opacity(0.14), radius: 12, y: 6)
+    }
+}
+
+private extension VoiceInputSessionSnapshot {
+    var timeTitle: String {
+        createdAt.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+    }
+
+    var detailTimestampTitle: String {
+        createdAt.formatted(date: .numeric, time: .shortened)
     }
 }
 
@@ -1575,6 +1948,7 @@ private struct SettingsWorkbenchSidebarRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .pointingHandCursor()
     }
 }
 

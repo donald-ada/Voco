@@ -10,7 +10,7 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
     public var title: String {
         switch self {
         case .overview:
-            "总览"
+            "主页"
         case .settings:
             "设置"
         case .model:
@@ -64,19 +64,34 @@ public struct SettingsWorkbenchOverviewSnapshot: Equatable, Sendable {
     }
 }
 
+public struct SettingsWorkbenchIssueItem: Equatable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let detail: String
+
+    public init(id: String, title: String, detail: String) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+    }
+}
+
 public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
     public let statusTitle: String
     public let overview: SettingsWorkbenchOverviewSnapshot
     public let sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus]
+    public let homeIssueItems: [SettingsWorkbenchIssueItem]
 
     public init(
         statusTitle: String,
         overview: SettingsWorkbenchOverviewSnapshot,
-        sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus]
+        sectionStatuses: [SettingsWorkbenchSection: SettingsWorkbenchSectionStatus],
+        homeIssueItems: [SettingsWorkbenchIssueItem] = []
     ) {
         self.statusTitle = statusTitle
         self.overview = overview
         self.sectionStatuses = sectionStatuses
+        self.homeIssueItems = homeIssueItems
     }
 
     public func status(for section: SettingsWorkbenchSection) -> SettingsWorkbenchSectionStatus {
@@ -96,6 +111,9 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         transcriptionErrorMessage: String? = nil
     ) -> SettingsWorkbenchSnapshot {
         let requiredMissing = permissions.first { permission in
+            permission.isRequired && !permission.state.isGranted
+        }
+        let missingRequiredPermissions = permissions.filter { permission in
             permission.isRequired && !permission.state.isGranted
         }
         let inputNeedsAttention = injection.map { !$0.succeeded } ?? false
@@ -164,6 +182,14 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         } else {
             settingsStatus = .ok
         }
+        let homeIssueItems = makeHomeIssueItems(
+            missingRequiredPermissions: missingRequiredPermissions,
+            credentials: credentials,
+            asrStatus: asrStatus,
+            transcriptionErrorMessage: transcriptionErrorMessage,
+            injection: injection,
+            lastErrorMessage: lastErrorMessage
+        )
 
         return SettingsWorkbenchSnapshot(
             statusTitle: statusTitle,
@@ -174,8 +200,74 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                     : .ok,
                 .settings: settingsStatus,
                 .model: transcriptionNeedsAttention ? .needsAttention : .ok
-            ]
+            ],
+            homeIssueItems: homeIssueItems
         )
+    }
+
+    private static func makeHomeIssueItems(
+        missingRequiredPermissions: [PermissionSnapshot],
+        credentials: TranscriptionCredentialSnapshot,
+        asrStatus: TranscriptionProviderStatus,
+        transcriptionErrorMessage: String?,
+        injection: TextInjectionSnapshot?,
+        lastErrorMessage: String?
+    ) -> [SettingsWorkbenchIssueItem] {
+        var items = missingRequiredPermissions.map { permission in
+            SettingsWorkbenchIssueItem(
+                id: "permission-\(permission.kind.rawValue)",
+                title: "\(permission.kind.title)权限缺失",
+                detail: permission.kind == .accessibility
+                    ? "允许后才能稳定插入当前输入框。"
+                    : "允许后才能完成录音链路。"
+            )
+        }
+
+        if !credentials.hasCredential || credentials.lastErrorMessage != nil {
+            items.append(
+                SettingsWorkbenchIssueItem(
+                    id: "transcription-credential",
+                    title: credentials.lastErrorMessage == nil ? "火山引擎凭证未保存" : "火山引擎凭证读取失败",
+                    detail: credentials.storageDetail
+                )
+            )
+        } else if let transcriptionErrorMessage {
+            items.append(
+                SettingsWorkbenchIssueItem(
+                    id: "transcription-error",
+                    title: "火山引擎转写失败",
+                    detail: transcriptionErrorMessage
+                )
+            )
+        } else if asrStatus.isWorkbenchAttention {
+            items.append(
+                SettingsWorkbenchIssueItem(
+                    id: "transcription-provider",
+                    title: asrStatus.workbenchIssueTitle,
+                    detail: asrStatus.detail
+                )
+            )
+        }
+
+        if let injection, !injection.succeeded {
+            items.append(
+                SettingsWorkbenchIssueItem(
+                    id: "text-injection",
+                    title: "文本输入失败",
+                    detail: injection.detail
+                )
+            )
+        } else if let lastErrorMessage = lastErrorMessage?.nonEmpty, items.isEmpty {
+            items.append(
+                SettingsWorkbenchIssueItem(
+                    id: "runtime-error",
+                    title: "最近一次操作失败",
+                    detail: lastErrorMessage
+                )
+            )
+        }
+
+        return items
     }
 }
 

@@ -769,6 +769,26 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorLoadsAndPersistsVoiceInputSessionHistoryPreferences() {
+        let preferences = FakeAppPreferenceStore(
+            voiceInputSessionHistoryEnabled: false,
+            voiceInputSessionRetentionPolicy: .forever
+        )
+        let coordinator = AppCoordinator(appPreferenceStore: preferences)
+
+        XCTAssertFalse(coordinator.voiceInputSessionHistoryEnabled)
+        XCTAssertEqual(coordinator.voiceInputSessionRetentionPolicy, .forever)
+
+        coordinator.setVoiceInputSessionHistoryEnabled(true)
+        coordinator.setVoiceInputSessionRetentionPolicy(.last100)
+
+        XCTAssertTrue(coordinator.voiceInputSessionHistoryEnabled)
+        XCTAssertEqual(coordinator.voiceInputSessionRetentionPolicy, .last100)
+        XCTAssertEqual(preferences.savedVoiceInputSessionHistoryValues, [true])
+        XCTAssertEqual(preferences.savedVoiceInputSessionRetentionPolicies, [.last100])
+    }
+
+    @MainActor
     func testCoordinatorSettingsSnapshotsReflectRecentRuntimeState() async {
         let result = RecordingWorkflowResult(
             audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),
@@ -797,6 +817,140 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.audioSettingsSnapshot.levelMeter.title, "电平正常")
         XCTAssertEqual(coordinator.audioSettingsSnapshot.sampleRate.title, "16,000 Hz")
         XCTAssertEqual(coordinator.injectionSettingsSnapshot.focusedApp.title, "TextEdit")
+    }
+
+    @MainActor
+    func testSuccessfulRecordingAddsRawTranscriptToRecentVoiceInputSessions() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 42, sampleRate: 16_000, peakAmplitude: 0.42),
+            transcript: TranscriptSnapshot(
+                finalText: "把总览改成主页。右侧的语音输入流程不要再占四大行。",
+                partials: [],
+                providerName: "火山引擎",
+                latencyMilliseconds: 25
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "Codex",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "已通过 Unicode 事件插入文本。"
+            )
+        )
+        let coordinator = AppCoordinator(recordingWorkflow: FakeRecordingWorkflow(result: result))
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.recentVoiceInputSessions.count, 1)
+        XCTAssertEqual(coordinator.recentVoiceInputSessions[0].transcriptText, result.transcript.finalText)
+        XCTAssertEqual(coordinator.recentVoiceInputSessions[0].targetAppName, "Codex")
+        XCTAssertEqual(coordinator.recentVoiceInputSessions[0].durationTitle, "42s")
+    }
+
+    @MainActor
+    func testCoordinatorLoadsRecentVoiceInputSessionsFromStore() {
+        let session = VoiceInputSessionSnapshot(
+            transcriptText: "上次录音内容",
+            wordCount: 6,
+            durationSeconds: 4,
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+            targetAppName: "Codex",
+            providerName: "火山引擎"
+        )
+        let sessionStore = FakeVoiceInputSessionStore(storedSessions: [session])
+
+        let coordinator = AppCoordinator(voiceInputSessionStore: sessionStore)
+
+        XCTAssertEqual(coordinator.recentVoiceInputSessions, [session])
+        XCTAssertEqual(sessionStore.loadLimitRequests, [VoiceInputSessionRetentionPolicy.last1000.loadLimit])
+    }
+
+    @MainActor
+    func testSuccessfulRecordingPersistsRecentVoiceInputSessionToStore() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 42, sampleRate: 16_000, peakAmplitude: 0.42),
+            transcript: TranscriptSnapshot(
+                finalText: "持久化这条录音。",
+                partials: [],
+                providerName: "火山引擎",
+                latencyMilliseconds: 25
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "Codex",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "已通过 Unicode 事件插入文本。"
+            )
+        )
+        let sessionStore = FakeVoiceInputSessionStore()
+        let coordinator = AppCoordinator(
+            recordingWorkflow: FakeRecordingWorkflow(result: result),
+            voiceInputSessionStore: sessionStore
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(sessionStore.savedSessions.map(\.transcriptText), [result.transcript.finalText])
+        XCTAssertEqual(sessionStore.storedSessions.map(\.transcriptText), [result.transcript.finalText])
+    }
+
+    @MainActor
+    func testDisabledVoiceInputSessionHistoryDoesNotPersistRecording() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 42, sampleRate: 16_000, peakAmplitude: 0.42),
+            transcript: TranscriptSnapshot(
+                finalText: "这条只显示在当前运行。",
+                partials: [],
+                providerName: "火山引擎",
+                latencyMilliseconds: 25
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "Codex",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "已通过 Unicode 事件插入文本。"
+            )
+        )
+        let preferences = FakeAppPreferenceStore(voiceInputSessionHistoryEnabled: false)
+        let sessionStore = FakeVoiceInputSessionStore()
+        let coordinator = AppCoordinator(
+            recordingWorkflow: FakeRecordingWorkflow(result: result),
+            appPreferenceStore: preferences,
+            voiceInputSessionStore: sessionStore
+        )
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.recentVoiceInputSessions.map(\.transcriptText), [result.transcript.finalText])
+        XCTAssertTrue(sessionStore.savedSessions.isEmpty)
+        XCTAssertEqual(sessionStore.loadLimitRequests, [])
+    }
+
+    @MainActor
+    func testChangingVoiceInputSessionRetentionPolicyTrimsStoreAndReloadsSessions() {
+        let sessions = (1...105).map { index in
+            VoiceInputSessionSnapshot(
+                transcriptText: "录音 \(index)",
+                wordCount: 4,
+                durationSeconds: Double(index),
+                createdAt: Date(timeIntervalSince1970: TimeInterval(index)),
+                targetAppName: "Codex",
+                providerName: "火山引擎"
+            )
+        }
+        let sessionStore = FakeVoiceInputSessionStore(storedSessions: sessions.reversed())
+        let coordinator = AppCoordinator(voiceInputSessionStore: sessionStore)
+
+        coordinator.setVoiceInputSessionRetentionPolicy(.last100)
+
+        XCTAssertEqual(sessionStore.trimLimitRequests, [100])
+        XCTAssertEqual(sessionStore.loadLimitRequests.suffix(1), [100])
+        XCTAssertEqual(coordinator.recentVoiceInputSessions.count, 100)
     }
 
     @MainActor
@@ -1162,12 +1316,23 @@ private final class FakeVoiceInputPreferenceStore: VoiceInputPreferenceStoring {
 private final class FakeAppPreferenceStore: AppPreferenceStoring {
     private(set) var silentLaunchEnabled: Bool
     private(set) var displayInDockEnabled: Bool
+    private(set) var voiceInputSessionHistoryEnabled: Bool
+    private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
     private(set) var savedSilentLaunchValues: [Bool] = []
     private(set) var savedDisplayInDockValues: [Bool] = []
+    private(set) var savedVoiceInputSessionHistoryValues: [Bool] = []
+    private(set) var savedVoiceInputSessionRetentionPolicies: [VoiceInputSessionRetentionPolicy] = []
 
-    init(silentLaunchEnabled: Bool = false, displayInDockEnabled: Bool = false) {
+    init(
+        silentLaunchEnabled: Bool = false,
+        displayInDockEnabled: Bool = false,
+        voiceInputSessionHistoryEnabled: Bool = true,
+        voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy = .last1000
+    ) {
         self.silentLaunchEnabled = silentLaunchEnabled
         self.displayInDockEnabled = displayInDockEnabled
+        self.voiceInputSessionHistoryEnabled = voiceInputSessionHistoryEnabled
+        self.voiceInputSessionRetentionPolicy = voiceInputSessionRetentionPolicy
     }
 
     func saveSilentLaunchEnabled(_ enabled: Bool) {
@@ -1178,6 +1343,44 @@ private final class FakeAppPreferenceStore: AppPreferenceStoring {
     func saveDisplayInDockEnabled(_ enabled: Bool) {
         displayInDockEnabled = enabled
         savedDisplayInDockValues.append(enabled)
+    }
+
+    func saveVoiceInputSessionHistoryEnabled(_ enabled: Bool) {
+        voiceInputSessionHistoryEnabled = enabled
+        savedVoiceInputSessionHistoryValues.append(enabled)
+    }
+
+    func saveVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy) {
+        voiceInputSessionRetentionPolicy = policy
+        savedVoiceInputSessionRetentionPolicies.append(policy)
+    }
+}
+
+private final class FakeVoiceInputSessionStore: VoiceInputSessionStoring {
+    private(set) var storedSessions: [VoiceInputSessionSnapshot]
+    private(set) var savedSessions: [VoiceInputSessionSnapshot] = []
+    private(set) var loadLimitRequests: [Int] = []
+    private(set) var trimLimitRequests: [Int?] = []
+
+    init(storedSessions: [VoiceInputSessionSnapshot] = []) {
+        self.storedSessions = storedSessions
+    }
+
+    func loadRecentSessions(limit: Int) throws -> [VoiceInputSessionSnapshot] {
+        loadLimitRequests.append(limit)
+        return Array(storedSessions.prefix(max(0, limit)))
+    }
+
+    func save(_ session: VoiceInputSessionSnapshot) throws {
+        savedSessions.append(session)
+        storedSessions.insert(session, at: 0)
+    }
+
+    func trimRecentSessions(limit: Int?) throws {
+        trimLimitRequests.append(limit)
+        if let limit {
+            storedSessions = Array(storedSessions.prefix(limit))
+        }
     }
 }
 

@@ -57,12 +57,15 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
     @Published public private(set) var currentTranscript: TranscriptSnapshot?
+    @Published public private(set) var recentVoiceInputSessions: [VoiceInputSessionSnapshot]
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
     @Published public private(set) var hotkeyBinding: HotkeyBinding
     @Published public private(set) var hotkeyMode: HotkeyMode
     @Published public private(set) var selectedAudioInputDevice: AudioInputDeviceSelection
     @Published public private(set) var silentLaunchEnabled: Bool
     @Published public private(set) var displayInDockEnabled: Bool
+    @Published public private(set) var voiceInputSessionHistoryEnabled: Bool
+    @Published public private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -73,6 +76,7 @@ public final class AppCoordinator: ObservableObject {
     private let legacyInstallProvider: any LegacyInstallProviding
     private let voiceInputPreferenceStore: any VoiceInputPreferenceStoring
     private let appPreferenceStore: any AppPreferenceStoring
+    private let voiceInputSessionStore: any VoiceInputSessionStoring
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
@@ -88,6 +92,7 @@ public final class AppCoordinator: ObservableObject {
         legacyInstallProvider: any LegacyInstallProviding = StaticLegacyInstallProvider(),
         voiceInputPreferenceStore: any VoiceInputPreferenceStoring = NoOpVoiceInputPreferenceStore(),
         appPreferenceStore: any AppPreferenceStoring = NoOpAppPreferenceStore(),
+        voiceInputSessionStore: any VoiceInputSessionStoring = InMemoryVoiceInputSessionStore(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -95,14 +100,34 @@ public final class AppCoordinator: ObservableObject {
         let initialLaunchAtLoginState = launchAtLoginEnabled ? LaunchAtLoginState.enabled : launchAtLoginProvider.currentState()
         let initialTranscriptionCredentials = transcriptionCredentialStore.currentSnapshot()
         let initialInstallLocation = installLocationProvider.currentInstallLocation()
+        let initialVoiceInputSessionHistoryEnabled = appPreferenceStore.voiceInputSessionHistoryEnabled
+        let initialVoiceInputSessionRetentionPolicy = appPreferenceStore.voiceInputSessionRetentionPolicy
         let initialLegacyInstall = LegacyInstallSnapshot.notFound(
             launchAgentURL: LegacyInstallSnapshot.knownLaunchAgentURL(
                 homeDirectory: FileManager.default.homeDirectoryForCurrentUser
             )
         )
+        let initialSessionLoadResult: (sessions: [VoiceInputSessionSnapshot], errorMessage: String?)
+        if initialVoiceInputSessionHistoryEnabled {
+            do {
+                initialSessionLoadResult = (
+                    try voiceInputSessionStore.loadRecentSessions(limit: initialVoiceInputSessionRetentionPolicy.loadLimit),
+                    nil
+                )
+            } catch {
+                let message = Self.sessionStoreFailureMessage(prefix: "无法加载会话记录", error: error)
+                NSLog("Voco: \(message)")
+                initialSessionLoadResult = ([], message)
+            }
+        } else {
+            initialSessionLoadResult = (
+                [],
+                nil
+            )
+        }
 
         self.status = .launching
-        self.lastErrorMessage = nil
+        self.lastErrorMessage = initialSessionLoadResult.errorMessage
         self.permissionProvider = permissionProvider
         self.launchAtLoginProvider = launchAtLoginProvider
         self.recordingWorkflow = recordingWorkflow
@@ -112,6 +137,7 @@ public final class AppCoordinator: ObservableObject {
         self.legacyInstallProvider = legacyInstallProvider
         self.voiceInputPreferenceStore = voiceInputPreferenceStore
         self.appPreferenceStore = appPreferenceStore
+        self.voiceInputSessionStore = voiceInputSessionStore
         self.permissions = initialPermissions
         self.launchAtLoginState = initialLaunchAtLoginState
         self.hotkeyRuntimeState = .inactive
@@ -123,12 +149,15 @@ public final class AppCoordinator: ObservableObject {
         self.lastAudio = nil
         self.lastTranscript = nil
         self.currentTranscript = nil
+        self.recentVoiceInputSessions = initialSessionLoadResult.sessions
         self.lastInjection = nil
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
         self.selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
         self.silentLaunchEnabled = appPreferenceStore.silentLaunchEnabled
         self.displayInDockEnabled = appPreferenceStore.displayInDockEnabled
+        self.voiceInputSessionHistoryEnabled = initialVoiceInputSessionHistoryEnabled
+        self.voiceInputSessionRetentionPolicy = initialVoiceInputSessionRetentionPolicy
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -311,6 +340,31 @@ public final class AppCoordinator: ObservableObject {
     public func setDisplayInDockEnabled(_ enabled: Bool) {
         displayInDockEnabled = enabled
         appPreferenceStore.saveDisplayInDockEnabled(enabled)
+    }
+
+    public func setVoiceInputSessionHistoryEnabled(_ enabled: Bool) {
+        guard voiceInputSessionHistoryEnabled != enabled else {
+            appPreferenceStore.saveVoiceInputSessionHistoryEnabled(enabled)
+            return
+        }
+
+        voiceInputSessionHistoryEnabled = enabled
+        appPreferenceStore.saveVoiceInputSessionHistoryEnabled(enabled)
+
+        if enabled {
+            lastErrorMessage = reloadRecentVoiceInputSessions()
+        }
+    }
+
+    public func setVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy) {
+        guard voiceInputSessionRetentionPolicy != policy else {
+            appPreferenceStore.saveVoiceInputSessionRetentionPolicy(policy)
+            return
+        }
+
+        voiceInputSessionRetentionPolicy = policy
+        appPreferenceStore.saveVoiceInputSessionRetentionPolicy(policy)
+        lastErrorMessage = applyVoiceInputSessionRetentionPolicy()
     }
 
     public func setHotkeyPreset(_ preset: HotkeyPreset) {
@@ -542,13 +596,14 @@ public final class AppCoordinator: ObservableObject {
             lastTranscript = result.transcript
             currentTranscript = result.transcript
             lastInjection = result.injection
+            let sessionPersistenceErrorMessage = appendRecentVoiceInputSession(from: result)
 
             if result.injection.strategy != .skippedEmpty {
                 status = .injecting
             }
 
             if result.injection.succeeded {
-                lastErrorMessage = nil
+                lastErrorMessage = sessionPersistenceErrorMessage
                 status = .ready
             } else {
                 fail(result.injection.detail)
@@ -584,6 +639,84 @@ public final class AppCoordinator: ObservableObject {
         let liveTranscript = baseTranscript.appendingPartial(partial)
         currentTranscript = liveTranscript
         lastTranscript = liveTranscript
+    }
+
+    private func appendRecentVoiceInputSession(from result: RecordingWorkflowResult) -> String? {
+        let session = VoiceInputSessionSnapshot(result: result)
+        guard !session.transcriptText.isEmpty else {
+            return nil
+        }
+
+        recentVoiceInputSessions.removeAll { $0.id == session.id }
+        recentVoiceInputSessions.insert(session, at: 0)
+        if let limit = voiceInputSessionRetentionPolicy.limit {
+            recentVoiceInputSessions = Array(recentVoiceInputSessions.prefix(limit))
+        }
+
+        guard voiceInputSessionHistoryEnabled else {
+            return nil
+        }
+
+        do {
+            try voiceInputSessionStore.save(session)
+            try voiceInputSessionStore.trimRecentSessions(limit: voiceInputSessionRetentionPolicy.limit)
+            recentVoiceInputSessions = try voiceInputSessionStore.loadRecentSessions(
+                limit: voiceInputSessionRetentionPolicy.loadLimit
+            )
+            return nil
+        } catch {
+            let message = Self.sessionStoreFailureMessage(prefix: "无法保存会话记录", error: error)
+            NSLog("Voco: \(message)")
+            return message
+        }
+    }
+
+    private func applyVoiceInputSessionRetentionPolicy() -> String? {
+        guard voiceInputSessionHistoryEnabled else {
+            if let limit = voiceInputSessionRetentionPolicy.limit {
+                recentVoiceInputSessions = Array(recentVoiceInputSessions.prefix(limit))
+            }
+            return nil
+        }
+
+        do {
+            try voiceInputSessionStore.trimRecentSessions(limit: voiceInputSessionRetentionPolicy.limit)
+            recentVoiceInputSessions = try voiceInputSessionStore.loadRecentSessions(
+                limit: voiceInputSessionRetentionPolicy.loadLimit
+            )
+            return nil
+        } catch {
+            let message = Self.sessionStoreFailureMessage(prefix: "无法更新会话记录保留策略", error: error)
+            NSLog("Voco: \(message)")
+            return message
+        }
+    }
+
+    private func reloadRecentVoiceInputSessions() -> String? {
+        do {
+            recentVoiceInputSessions = try voiceInputSessionStore.loadRecentSessions(
+                limit: voiceInputSessionRetentionPolicy.loadLimit
+            )
+            return nil
+        } catch {
+            let message = Self.sessionStoreFailureMessage(prefix: "无法加载会话记录", error: error)
+            NSLog("Voco: \(message)")
+            return message
+        }
+    }
+
+    private static func sessionStoreFailureMessage(prefix: String, error: Error) -> String {
+        let detail: String
+        switch error {
+        case let VoiceInputSessionStoreError.loadFailed(message):
+            detail = message
+        case let VoiceInputSessionStoreError.saveFailed(message):
+            detail = message
+        default:
+            detail = error.localizedDescription
+        }
+
+        return "\(prefix)：\(detail)"
     }
 }
 

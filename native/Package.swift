@@ -18,7 +18,8 @@ let package = Package(
             name: "VocoApp",
             dependencies: ["VocoAppCore"],
             path: "Sources/VocoApp",
-            resources: [.process("Resources")]
+            resources: [.process("Resources")],
+            linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .testTarget(
             name: "VocoAppCoreTests",

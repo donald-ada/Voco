@@ -12,7 +12,7 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
     func testWorkbenchSectionsExposeUserVisibleCopy() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.title),
-            ["总览", "模型", "设置"]
+            ["主页", "模型", "设置"]
         )
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.summary),
@@ -48,6 +48,47 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.overview.primaryActionTitle, "打开辅助功能设置")
         XCTAssertEqual(snapshot.status(for: .overview), .needsAttention)
         XCTAssertEqual(snapshot.status(for: .settings), .needsAttention)
+    }
+
+    func testHomeIssueItemsListEveryProblemThatNeedsResolution() {
+        let snapshot = SettingsWorkbenchSnapshot.make(
+            statusTitle: "需要权限",
+            permissions: [
+                .microphone(.denied),
+                .accessibility(.denied),
+            ],
+            hotkeyState: .permissionNeeded,
+            hotkeyBinding: .default,
+            hotkeyMode: .toggle,
+            asrStatus: .authenticationRequired(providerName: "火山引擎"),
+            credentials: .missing(provider: .volcengine),
+            injection: nil,
+            lastErrorMessage: nil
+        )
+
+        XCTAssertEqual(
+            snapshot.homeIssueItems.map(\.title),
+            ["麦克风权限缺失", "辅助功能权限缺失", "火山引擎凭证未保存"]
+        )
+    }
+
+    func testReadyHomeHasNoIssueItems() {
+        let snapshot = SettingsWorkbenchSnapshot.make(
+            statusTitle: "就绪",
+            permissions: [
+                .microphone(.granted),
+                .accessibility(.granted),
+            ],
+            hotkeyState: .listening,
+            hotkeyBinding: .default,
+            hotkeyMode: .toggle,
+            asrStatus: .ready(providerName: "火山引擎"),
+            credentials: .stored(provider: .volcengine, apiKey: "sk-test-abcdef"),
+            injection: nil,
+            lastErrorMessage: nil
+        )
+
+        XCTAssertTrue(snapshot.homeIssueItems.isEmpty)
     }
 
     func testMicrophonePermissionProblemUsesPromptRecoveryAction() {

@@ -40,6 +40,7 @@ struct VocoNativeApp: App {
         let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
         let voiceInputPreferences = MacVoiceInputPreferenceStore()
         let appPreferences = MacAppPreferenceStore()
+        let voiceInputSessionStore = MacVoiceInputSessionStore.makeDefault()
         MacDockPresentationController.apply(displayInDockEnabled: appPreferences.displayInDockEnabled)
         let audioCapture = MacAudioCaptureEngine()
         if let audioInputDevice = voiceInputPreferences.audioInputDevice {
@@ -60,6 +61,7 @@ struct VocoNativeApp: App {
             legacyInstallProvider: MacLegacyInstallProvider(),
             voiceInputPreferenceStore: voiceInputPreferences,
             appPreferenceStore: appPreferences,
+            voiceInputSessionStore: voiceInputSessionStore,
             hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
             hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
         )
