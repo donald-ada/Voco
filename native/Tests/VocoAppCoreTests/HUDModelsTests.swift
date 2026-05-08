@@ -18,6 +18,7 @@ final class HUDModelsTests: XCTestCase {
         let recording = HUDSnapshot(
             status: .recording,
             lastTranscript: nil,
+            currentTranscript: nil,
             lastInjection: nil,
             lastErrorMessage: nil
         )
@@ -29,6 +30,7 @@ final class HUDModelsTests: XCTestCase {
         let transcribing = HUDSnapshot(
             status: .transcribing,
             lastTranscript: nil,
+            currentTranscript: nil,
             lastInjection: nil,
             lastErrorMessage: nil
         )
@@ -37,7 +39,63 @@ final class HUDModelsTests: XCTestCase {
         XCTAssertTrue(transcribing.isVisible)
     }
 
-    func testSuccessShowsInjectionTargetAndTranscriptPreview() {
+    func testRecordingPreviewUsesOnlyCurrentTranscript() {
+        let previousTranscript = TranscriptSnapshot(
+            finalText: "old completed words",
+            partials: [],
+            providerName: "Fake ASR",
+            latencyMilliseconds: 42
+        )
+        let currentTranscript = TranscriptSnapshot(
+            finalText: "",
+            partials: ["new live words"],
+            providerName: "Fake ASR",
+            latencyMilliseconds: nil
+        )
+
+        let recordingWithoutCurrentText = HUDSnapshot(
+            status: .recording,
+            lastTranscript: previousTranscript,
+            currentTranscript: nil,
+            lastInjection: nil,
+            lastErrorMessage: nil
+        )
+        XCTAssertNil(recordingWithoutCurrentText.transcriptPreview)
+
+        let recordingWithCurrentText = HUDSnapshot(
+            status: .recording,
+            lastTranscript: previousTranscript,
+            currentTranscript: currentTranscript,
+            lastInjection: nil,
+            lastErrorMessage: nil
+        )
+        XCTAssertEqual(recordingWithCurrentText.transcriptPreview, "new live words")
+    }
+
+    func testLongRecordingPreviewUsesLatestTailWindowOnly() {
+        let longText = String(
+            repeating: "第一段内容会被新的实时转写逐渐替换第二段内容继续说话第三段内容仍在更新",
+            count: 3
+        )
+        let currentTranscript = TranscriptSnapshot(
+            finalText: "",
+            partials: [longText],
+            providerName: "Fake ASR",
+            latencyMilliseconds: nil
+        )
+
+        let snapshot = HUDSnapshot(
+            status: .recording,
+            lastTranscript: nil,
+            currentTranscript: currentTranscript,
+            lastInjection: nil,
+            lastErrorMessage: nil
+        )
+
+        XCTAssertEqual(snapshot.transcriptPreview, String(longText.suffix(64)))
+    }
+
+    func testReadyAfterSuccessfulInsertionIsHidden() {
         let transcript = TranscriptSnapshot(
             finalText: "hello from Voco",
             partials: ["hello"],
@@ -58,11 +116,10 @@ final class HUDModelsTests: XCTestCase {
             lastErrorMessage: nil
         )
 
-        XCTAssertEqual(snapshot.phase, .success)
-        XCTAssertEqual(snapshot.title, "已插入")
-        XCTAssertEqual(snapshot.detail, "Notes · 辅助功能直接插入")
-        XCTAssertEqual(snapshot.transcriptPreview, "hello from Voco")
-        XCTAssertEqual(snapshot.autoHideAfterSeconds, 1.4)
+        XCTAssertEqual(snapshot.phase, .hidden)
+        XCTAssertFalse(snapshot.isVisible)
+        XCTAssertNil(snapshot.transcriptPreview)
+        XCTAssertNil(snapshot.autoHideAfterSeconds)
     }
 
     func testFailureUsesErrorMessageAndFailedInjectionDetail() {

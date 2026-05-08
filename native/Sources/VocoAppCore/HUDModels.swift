@@ -1,5 +1,7 @@
 import Foundation
 
+private let hudTranscriptPreviewMaxCharacters = 64
+
 public enum HUDPhase: Equatable, Sendable {
     case hidden
     case recording
@@ -24,6 +26,7 @@ public struct HUDSnapshot: Equatable, Sendable {
     public init(
         status: AppRuntimeStatus,
         lastTranscript: TranscriptSnapshot?,
+        currentTranscript: TranscriptSnapshot? = nil,
         lastInjection: TextInjectionSnapshot?,
         lastErrorMessage: String?
     ) {
@@ -34,7 +37,7 @@ public struct HUDSnapshot: Equatable, Sendable {
                 title: "正在听",
                 detail: "松开或再次按下快捷键结束录音",
                 systemImage: "waveform.circle.fill",
-                transcriptPreview: hudTranscriptPreview(from: lastTranscript),
+                transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
             )
         case .transcribing:
@@ -43,7 +46,7 @@ public struct HUDSnapshot: Equatable, Sendable {
                 title: "正在转写",
                 detail: "正在生成文字...",
                 systemImage: "ellipsis.bubble.fill",
-                transcriptPreview: hudTranscriptPreview(from: lastTranscript),
+                transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
             )
         case .injecting:
@@ -52,7 +55,7 @@ public struct HUDSnapshot: Equatable, Sendable {
                 title: "正在插入",
                 detail: "正在把转写文本插入当前 App",
                 systemImage: "text.cursor",
-                transcriptPreview: hudTranscriptPreview(from: lastTranscript),
+                transcriptPreview: hudTranscriptPreview(from: currentTranscript),
                 autoHideAfterSeconds: nil
             )
         case .providerOffline, .error:
@@ -65,18 +68,7 @@ public struct HUDSnapshot: Equatable, Sendable {
                 autoHideAfterSeconds: nil
             )
         case .ready:
-            if let lastInjection, lastInjection.succeeded, lastInjection.strategy != .skippedEmpty {
-                self = HUDSnapshot(
-                    phase: .success,
-                    title: "已插入",
-                    detail: "\(lastInjection.targetAppName ?? "当前 App") · \(lastInjection.strategy.title)",
-                    systemImage: "checkmark.circle.fill",
-                    transcriptPreview: hudTranscriptPreview(from: lastTranscript),
-                    autoHideAfterSeconds: 1.4
-                )
-            } else {
-                self = .hidden
-            }
+            self = .hidden
         case .launching, .permissionNeeded:
             self = .hidden
         }
@@ -121,10 +113,9 @@ private func hudTranscriptPreview(from transcript: TranscriptSnapshot?) -> Strin
         return nil
     }
 
-    if trimmed.count <= 80 {
+    if trimmed.count <= hudTranscriptPreviewMaxCharacters {
         return trimmed
     }
 
-    let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 80)
-    return "\(trimmed[..<endIndex])..."
+    return String(trimmed.suffix(hudTranscriptPreviewMaxCharacters))
 }

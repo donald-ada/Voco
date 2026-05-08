@@ -132,8 +132,10 @@ private struct HUDNotchIslandOverlay: View {
             ))
             .foregroundStyle(HUDOverlayChrome.ColorToken.transcriptLive.color)
             .lineLimit(HUDOverlayChrome.Layout.transcriptLineLimit)
+            .truncationMode(.head)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentTransition(.opacity)
     }
 }
 

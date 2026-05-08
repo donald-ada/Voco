@@ -15,14 +15,10 @@ public struct TranscriptPartialSnapshot: Equatable, Sendable {
 public typealias TranscriptionProgressHandler = @MainActor @Sendable (TranscriptPartialSnapshot) -> Void
 
 public let volcengineTranscriptionProviderName = "火山引擎"
-public let volcengineDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+public let volcengineDefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
 public let volcengineSeedASRResourceID = "volc.seedasr.sauc.duration"
 public let volcengineLegacyOpenSpeechResourceID = "volc.bigasr.sauc.duration"
 public let volcengineDefaultResourceID = volcengineSeedASRResourceID
-public let volcengineRealtimeGatewayModel = "bigmodel"
-public let volcengineRealtimeGatewayEndpoint = "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
-public let volcengineSingleAPIKeyUnsupportedMessage =
-    "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
 
 public enum VolcengineTranscriptionAuth: Equatable, Sendable {
     case apiKey(String)
@@ -132,10 +128,13 @@ public struct VolcengineTranscriptionSessionRequest: Equatable, Sendable {
                     message: "Keychain 中没有保存火山引擎 API Key。"
                 )
             }
-            throw TranscriptionProviderError.authentication(
-                providerName: volcengineTranscriptionProviderName,
-                message: volcengineSingleAPIKeyUnsupportedMessage
-            )
+            headers = [
+                "X-Api-Key": trimmedAPIKey,
+                "X-Api-Resource-Id": resourceID,
+                "X-Api-Request-Id": UUID().uuidString,
+                "X-Api-Connect-Id": UUID().uuidString,
+                "X-Api-Sequence": "-1"
+            ]
         case .appIDAccessToken(let appID, let accessToken):
             let trimmedAppID = appID.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedAccessToken = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -150,7 +149,8 @@ public struct VolcengineTranscriptionSessionRequest: Equatable, Sendable {
                 "X-Api-Access-Key": trimmedAccessToken,
                 "X-Api-Resource-Id": resourceID,
                 "X-Api-Request-Id": UUID().uuidString,
-                "X-Api-Connect-Id": UUID().uuidString
+                "X-Api-Connect-Id": UUID().uuidString,
+                "X-Api-Sequence": "-1"
             ]
         }
 
@@ -173,179 +173,6 @@ public struct VolcengineTranscriptionSessionRequest: Equatable, Sendable {
             headers: headers,
             safeDebugDescription: safeDebugDescription
         )
-    }
-}
-
-public struct VolcengineRealtimeGatewayTranscriptionRequest: Equatable, Sendable {
-    public let endpoint: URL
-    public let model: String
-    public let headers: [String: String]
-    public let audio: CapturedAudioSnapshot
-    public let safeDebugDescription: String
-
-    public static func make(
-        apiKey: String?,
-        audio: CapturedAudioSnapshot,
-        endpoint: String = volcengineRealtimeGatewayEndpoint,
-        model: String = volcengineRealtimeGatewayModel
-    ) throws -> VolcengineRealtimeGatewayTranscriptionRequest {
-        let sessionRequest = try VolcengineRealtimeGatewaySessionRequest.make(
-            apiKey: apiKey,
-            endpoint: endpoint,
-            model: model
-        )
-
-        guard !audio.pcm16Samples.isEmpty else {
-            throw TranscriptionProviderError.emptyAudio
-        }
-
-        let safeDebugDescription = [
-            sessionRequest.safeDebugDescription,
-            "samples=\(audio.pcm16Samples.count)"
-        ].joined(separator: " ")
-
-        return VolcengineRealtimeGatewayTranscriptionRequest(
-            endpoint: sessionRequest.endpoint,
-            model: sessionRequest.model,
-            headers: sessionRequest.headers,
-            audio: audio,
-            safeDebugDescription: safeDebugDescription
-        )
-    }
-}
-
-public struct VolcengineRealtimeGatewaySessionRequest: Equatable, Sendable {
-    public let endpoint: URL
-    public let model: String
-    public let headers: [String: String]
-    public let safeDebugDescription: String
-
-    public static func make(
-        apiKey: String?,
-        endpoint: String = volcengineRealtimeGatewayEndpoint,
-        model: String = volcengineRealtimeGatewayModel
-    ) throws -> VolcengineRealtimeGatewaySessionRequest {
-        let trimmedAPIKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmedAPIKey.isEmpty else {
-            throw TranscriptionProviderError.authentication(
-                providerName: volcengineTranscriptionProviderName,
-                message: "Keychain 中没有保存火山引擎 API Key。"
-            )
-        }
-
-        guard let endpointURL = URL(string: endpoint), endpointURL.scheme?.hasPrefix("ws") == true else {
-            throw TranscriptionProviderError.provider(
-                providerName: volcengineTranscriptionProviderName,
-                message: "火山引擎 Realtime endpoint 无效：\(endpoint)"
-            )
-        }
-
-        let headers = [
-            "Authorization": "Bearer \(trimmedAPIKey)"
-        ]
-        let safeDebugDescription = [
-            "endpoint=\(endpointURL.absoluteString)",
-            "model=\(model)",
-            "headers=\(headers.keys.sorted().joined(separator: ","))"
-        ].joined(separator: " ")
-
-        return VolcengineRealtimeGatewaySessionRequest(
-            endpoint: endpointURL,
-            model: model,
-            headers: headers,
-            safeDebugDescription: safeDebugDescription
-        )
-    }
-}
-
-public enum VolcengineRealtimeGatewayServerEvent: Equatable, Sendable {
-    case sessionUpdated
-    case partial(TranscriptPartialSnapshot)
-    case final(String)
-    case error(String)
-    case ignored
-}
-
-public enum VolcengineRealtimeGatewayProtocol {
-    public static func buildSessionUpdateEvent(model: String = volcengineRealtimeGatewayModel) throws -> String {
-        try encodeJSONString(
-            VolcengineRealtimeGatewaySessionUpdateEvent(
-                session: .init(
-                    inputAudioFormat: "pcm16",
-                    inputAudioSampleRate: 16_000,
-                    inputAudioChannels: 1,
-                    inputAudioTranscription: .init(model: model)
-                )
-            )
-        )
-    }
-
-    public static func buildAudioAppendEvent(pcm16Samples: [Int16]) throws -> String {
-        try encodeJSONString(
-            VolcengineRealtimeGatewayAudioAppendEvent(
-                audio: Data(pcm16LittleEndianBytes: pcm16Samples).base64EncodedString()
-            )
-        )
-    }
-
-    public static func buildAudioCommitEvent() throws -> String {
-        try encodeJSONString(VolcengineRealtimeGatewayTypedEvent(type: "input_audio_buffer.commit"))
-    }
-
-    public static func parseServerEvent(_ text: String) throws -> VolcengineRealtimeGatewayServerEvent {
-        guard let data = text.data(using: .utf8) else {
-            throw TranscriptionProviderError.provider(
-                providerName: volcengineTranscriptionProviderName,
-                message: "Realtime event is not UTF-8 text"
-            )
-        }
-
-        let payload: VolcengineRealtimeGatewayServerPayload
-        do {
-            payload = try JSONDecoder().decode(VolcengineRealtimeGatewayServerPayload.self, from: data)
-        } catch {
-            throw TranscriptionProviderError.provider(
-                providerName: volcengineTranscriptionProviderName,
-                message: "Realtime event json: \(error.localizedDescription)"
-            )
-        }
-
-        switch payload.type {
-        case "transcription_session.updated", "session.updated":
-            return .sessionUpdated
-        case "conversation.item.input_audio_transcription.result",
-             "conversation.item.input_audio_transcription.delta":
-            guard let text = payload.transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else {
-                return .ignored
-            }
-            return .partial(
-                TranscriptPartialSnapshot(
-                    text: text,
-                    stablePrefixLength: 0,
-                    providerName: volcengineTranscriptionProviderName
-                )
-            )
-        case "conversation.item.input_audio_transcription.completed":
-            return .final(payload.transcriptText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
-        case "error":
-            return .error(payload.error?.message ?? payload.message ?? "Realtime gateway error")
-        default:
-            return .ignored
-        }
-    }
-
-    private static func encodeJSONString<T: Encodable>(_ value: T) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let data = try encoder.encode(value)
-        guard let string = String(data: data, encoding: .utf8) else {
-            throw TranscriptionProviderError.provider(
-                providerName: volcengineTranscriptionProviderName,
-                message: "Realtime event encode failed"
-            )
-        }
-        return string
     }
 }
 
@@ -397,18 +224,10 @@ public enum VolcengineTranscriptionErrorMapper {
     ) -> TranscriptionProviderError {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain && nsError.code == URLError.badServerResponse.rawValue {
-            if endpoint.host?.contains("ai-gateway.vei.volces.com") == true {
-                return .transport(
-                    providerName: volcengineTranscriptionProviderName,
-                    message: "Realtime 网关 WebSocket 握手被服务端拒绝。请检查新网关 API Key 是否有效，并确认模型访问权限已开通。endpoint=\(endpoint.absoluteString)",
-                    retryable: true
-                )
-            }
-
             let resourceDetail = resourceID.map { " resourceID=\($0)" } ?? ""
             return .transport(
                 providerName: volcengineTranscriptionProviderName,
-                message: "OpenSpeech WebSocket 握手被服务端拒绝。请在模型中保存旧控制台 App ID + Access Token，并确认 Resource ID 已开通。endpoint=\(endpoint.absoluteString)\(resourceDetail)",
+                message: "OpenSpeech WebSocket 握手被服务端拒绝。请检查火山引擎凭证，并确认 Resource ID 已开通。endpoint=\(endpoint.absoluteString)\(resourceDetail)",
                 retryable: true
             )
         }
@@ -504,80 +323,6 @@ public protocol VolcengineTranscriptionTransporting {
         request: VolcengineTranscriptionSessionRequest,
         progress: TranscriptionProgressHandler?
     ) async throws -> any RealtimeTranscriptionSession
-}
-
-@MainActor
-public protocol VolcengineRealtimeGatewayTranscriptionTransporting {
-    func transcribe(
-        request: VolcengineRealtimeGatewayTranscriptionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> TranscriptSnapshot
-
-    func startStreaming(
-        request: VolcengineRealtimeGatewaySessionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> any RealtimeTranscriptionSession
-}
-
-private struct VolcengineRealtimeGatewaySessionUpdateEvent: Encodable {
-    let type = "transcription_session.update"
-    let session: Session
-
-    struct Session: Encodable {
-        let inputAudioFormat: String
-        let inputAudioSampleRate: Int
-        let inputAudioChannels: Int
-        let inputAudioTranscription: Transcription
-
-        enum CodingKeys: String, CodingKey {
-            case inputAudioFormat = "input_audio_format"
-            case inputAudioSampleRate = "input_audio_sample_rate"
-            case inputAudioChannels = "input_audio_channels"
-            case inputAudioTranscription = "input_audio_transcription"
-        }
-    }
-
-    struct Transcription: Encodable {
-        let model: String
-    }
-}
-
-private struct VolcengineRealtimeGatewayAudioAppendEvent: Encodable {
-    let type = "input_audio_buffer.append"
-    let audio: String
-}
-
-private struct VolcengineRealtimeGatewayTypedEvent: Encodable {
-    let type: String
-}
-
-private struct VolcengineRealtimeGatewayServerPayload: Decodable {
-    let type: String
-    let transcript: String?
-    let delta: String?
-    let text: String?
-    let message: String?
-    let error: VolcengineRealtimeGatewayServerError?
-
-    var transcriptText: String? {
-        transcript ?? delta ?? text
-    }
-}
-
-private struct VolcengineRealtimeGatewayServerError: Decodable {
-    let message: String?
-}
-
-private extension Data {
-    init(pcm16LittleEndianBytes samples: [Int16]) {
-        var bytes: [UInt8] = []
-        bytes.reserveCapacity(samples.count * 2)
-        for sample in samples {
-            bytes.append(UInt8(truncatingIfNeeded: sample))
-            bytes.append(UInt8(truncatingIfNeeded: sample >> 8))
-        }
-        self.init(bytes)
-    }
 }
 
 private struct VolcengineServerResponsePayload: Decodable {

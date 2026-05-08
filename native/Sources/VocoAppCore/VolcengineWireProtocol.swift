@@ -31,8 +31,7 @@ public enum VolcengineWireProtocol {
     private static let headerSizeWords: UInt8 = 1
 
     public static func buildFullClientRequestFrame() throws -> Data {
-        let payload = VolcengineFullClientRequestPayload.vocoDefaults()
-        let json = try JSONEncoder().encode(payload)
+        let json = try buildFullClientRequestPayloadJSON()
         return try sizePrefixedFrame(
             messageType: .fullClientRequest,
             flags: .noSequence,
@@ -40,6 +39,11 @@ public enum VolcengineWireProtocol {
             compression: .gzip,
             payload: gzip(json)
         )
+    }
+
+    static func buildFullClientRequestPayloadJSON() throws -> Data {
+        let payload = VolcengineFullClientRequestPayload.vocoDefaults()
+        return try JSONEncoder().encode(payload)
     }
 
     public static func buildAudioFrame(
@@ -399,9 +403,11 @@ private struct VolcengineFullClientRequestPayload: Encodable {
             audio: AudioPayload(format: "pcm", codec: "raw", rate: 16_000, bits: 16, channel: 1),
             request: RequestPayload(
                 modelName: "bigmodel",
+                enableNonstream: true,
                 enablePunc: true,
                 enableItn: true,
                 enableDdc: false,
+                showUtterances: true,
                 resultType: "full",
                 endWindowSize: 800
             )
@@ -424,17 +430,21 @@ private struct AudioPayload: Encodable {
 
 private struct RequestPayload: Encodable {
     let modelName: String
+    let enableNonstream: Bool
     let enablePunc: Bool
     let enableItn: Bool
     let enableDdc: Bool
+    let showUtterances: Bool
     let resultType: String
     let endWindowSize: Int
 
     enum CodingKeys: String, CodingKey {
         case modelName = "model_name"
+        case enableNonstream = "enable_nonstream"
         case enablePunc = "enable_punc"
         case enableItn = "enable_itn"
         case enableDdc = "enable_ddc"
+        case showUtterances = "show_utterances"
         case resultType = "result_type"
         case endWindowSize = "end_window_size"
     }

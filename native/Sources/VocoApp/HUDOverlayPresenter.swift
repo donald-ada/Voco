@@ -10,6 +10,7 @@ final class HUDOverlayPresenter {
     private var panel: NSPanel?
     private var cancellables: Set<AnyCancellable> = []
     private var autoHideTask: Task<Void, Never>?
+    private var deferredUpdateTask: Task<Void, Never>?
     private var lastSnapshot: HUDSnapshot = .hidden
     private var presentationState = HUDOverlayPresentationState()
 
@@ -21,18 +22,31 @@ final class HUDOverlayPresenter {
         }
 
         cancellables.removeAll()
+        deferredUpdateTask?.cancel()
+        deferredUpdateTask = nil
         coordinator.objectWillChange
             .sink { [weak self, weak coordinator] _ in
                 Task { @MainActor in
                     guard let coordinator else {
                         return
                     }
-                    self?.update(with: coordinator.hudSnapshot)
+                    self?.scheduleDeferredUpdate(coordinator: coordinator)
                 }
             }
             .store(in: &cancellables)
 
         update(with: coordinator.hudSnapshot)
+    }
+
+    private func scheduleDeferredUpdate(coordinator: AppCoordinator) {
+        deferredUpdateTask?.cancel()
+        deferredUpdateTask = Task { @MainActor [weak self, weak coordinator] in
+            await Task.yield()
+            guard !Task.isCancelled, let coordinator else {
+                return
+            }
+            self?.update(with: coordinator.hudSnapshot)
+        }
     }
 
     private func createPanel(coordinator: AppCoordinator) {

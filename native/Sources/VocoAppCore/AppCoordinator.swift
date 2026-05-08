@@ -56,6 +56,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var isRemovingLegacyLaunchAgent: Bool
     @Published public private(set) var lastAudio: CapturedAudioSnapshot?
     @Published public private(set) var lastTranscript: TranscriptSnapshot?
+    @Published public private(set) var currentTranscript: TranscriptSnapshot?
     @Published public private(set) var lastInjection: TextInjectionSnapshot?
     @Published public private(set) var hotkeyBinding: HotkeyBinding
     @Published public private(set) var hotkeyMode: HotkeyMode
@@ -121,6 +122,7 @@ public final class AppCoordinator: ObservableObject {
         self.isRemovingLegacyLaunchAgent = false
         self.lastAudio = nil
         self.lastTranscript = nil
+        self.currentTranscript = nil
         self.lastInjection = nil
         self.hotkeyBinding = hotkeyBinding
         self.hotkeyMode = hotkeyMode
@@ -147,6 +149,7 @@ public final class AppCoordinator: ObservableObject {
         HUDSnapshot(
             status: status,
             lastTranscript: lastTranscript,
+            currentTranscript: currentTranscript,
             lastInjection: lastInjection,
             lastErrorMessage: lastErrorMessage
         )
@@ -491,7 +494,7 @@ public final class AppCoordinator: ObservableObject {
         isRecordingWorkflowTransitionActive = true
         lastErrorMessage = nil
         lastAudio = nil
-        lastTranscript = nil
+        currentTranscript = nil
         lastInjection = nil
         status = .recording
         let transcriptionSessionID = UUID()
@@ -537,6 +540,7 @@ public final class AppCoordinator: ObservableObject {
             activeTranscriptionSessionID = nil
             lastAudio = result.audio
             lastTranscript = result.transcript
+            currentTranscript = result.transcript
             lastInjection = result.injection
 
             if result.injection.strategy != .skippedEmpty {
@@ -571,13 +575,15 @@ public final class AppCoordinator: ObservableObject {
             return
         }
 
-        let baseTranscript = lastTranscript ?? TranscriptSnapshot(
+        let baseTranscript = currentTranscript ?? TranscriptSnapshot(
             finalText: "",
             partials: [],
             providerName: partial.providerName,
             latencyMilliseconds: nil
         )
-        lastTranscript = baseTranscript.appendingPartial(partial)
+        let liveTranscript = baseTranscript.appendingPartial(partial)
+        currentTranscript = liveTranscript
+        lastTranscript = liveTranscript
     }
 }
 

@@ -22,7 +22,7 @@ final class HUDOverlayChromeTests: XCTestCase {
         XCTAssertEqual(HUDOverlayChrome.Layout.notchTopOffset, -1)
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptStatusFontSize, 13)
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptFontSize, 17)
-        XCTAssertEqual(HUDOverlayChrome.Layout.transcriptLineLimit, 2)
+        XCTAssertEqual(HUDOverlayChrome.Layout.transcriptLineLimit, 1)
         XCTAssertEqual(HUDOverlayChrome.Layout.transcriptRevealOffsetY, -5)
     }
 

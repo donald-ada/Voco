@@ -5,17 +5,13 @@ import VocoAppCore
 final class MacVolcengineTranscriptionProvider: TranscriptionProviding, RealtimeTranscriptionProviding {
     private let credentialStore: any TranscriptionCredentialStoring
     private let openSpeechTransport: any VolcengineTranscriptionTransporting
-    private let realtimeGatewayTransport: any VolcengineRealtimeGatewayTranscriptionTransporting
 
     init(
         credentialStore: any TranscriptionCredentialStoring,
-        transport: any VolcengineTranscriptionTransporting = URLSessionVolcengineTranscriptionTransport(),
-        realtimeGatewayTransport: any VolcengineRealtimeGatewayTranscriptionTransporting =
-            URLSessionVolcengineRealtimeGatewayTranscriptionTransport()
+        transport: any VolcengineTranscriptionTransporting = URLSessionVolcengineTranscriptionTransport()
     ) {
         self.credentialStore = credentialStore
         self.openSpeechTransport = transport
-        self.realtimeGatewayTransport = realtimeGatewayTransport
     }
 
     var status: TranscriptionProviderStatus {
@@ -34,34 +30,19 @@ final class MacVolcengineTranscriptionProvider: TranscriptionProviding, Realtime
         progress: TranscriptionProgressHandler?
     ) async throws -> TranscriptSnapshot {
         let credential = try await volcengineCredential()
-        switch credential.mode {
-        case .apiKey:
-            let request = try VolcengineRealtimeGatewayTranscriptionRequest.make(
-                apiKey: credential.apiKey,
-                audio: audio
-            )
-            return try await realtimeGatewayTransport.transcribe(request: request, progress: progress)
-        case .appIDAccessToken:
-            return try await transcribeUsingOpenSpeechCredential(
-                credential,
-                audio: audio,
-                progress: progress
-            )
-        }
+        return try await transcribeUsingOpenSpeechCredential(
+            credential,
+            audio: audio,
+            progress: progress
+        )
     }
 
     func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession {
         let credential = try await volcengineCredential()
-        switch credential.mode {
-        case .apiKey:
-            let request = try VolcengineRealtimeGatewaySessionRequest.make(apiKey: credential.apiKey)
-            return try await realtimeGatewayTransport.startStreaming(request: request, progress: progress)
-        case .appIDAccessToken:
-            return try await startOpenSpeechStreaming(
-                credential: credential,
-                progress: progress
-            )
-        }
+        return try await startOpenSpeechStreaming(
+            credential: credential,
+            progress: progress
+        )
     }
 
     private func transcribeUsingOpenSpeechCredential(
@@ -71,10 +52,7 @@ final class MacVolcengineTranscriptionProvider: TranscriptionProviding, Realtime
     ) async throws -> TranscriptSnapshot {
         try await withOpenSpeechResourceFallback { resourceID in
             let request = try VolcengineTranscriptionRequest.make(
-                auth: .appIDAccessToken(
-                    appID: credential.appID ?? "",
-                    accessToken: credential.accessToken ?? ""
-                ),
+                auth: credential.openSpeechAuth,
                 audio: audio,
                 resourceID: resourceID
             )
@@ -88,10 +66,7 @@ final class MacVolcengineTranscriptionProvider: TranscriptionProviding, Realtime
     ) async throws -> any RealtimeTranscriptionSession {
         try await withOpenSpeechResourceFallback { resourceID in
             let request = try VolcengineTranscriptionSessionRequest.make(
-                auth: .appIDAccessToken(
-                    appID: credential.appID ?? "",
-                    accessToken: credential.accessToken ?? ""
-                ),
+                auth: credential.openSpeechAuth,
                 resourceID: resourceID
             )
             return try await openSpeechTransport.startStreaming(request: request, progress: progress)
@@ -169,220 +144,13 @@ final class MacVolcengineTranscriptionProvider: TranscriptionProviding, Realtime
     }
 }
 
-@MainActor
-final class URLSessionVolcengineRealtimeGatewayTranscriptionTransport: VolcengineRealtimeGatewayTranscriptionTransporting {
-    private let session: any VolcengineWebSocketSessioning
-
-    init(session: any VolcengineWebSocketSessioning = URLSession.shared) {
-        self.session = session
-    }
-
-    func transcribe(
-        request: VolcengineRealtimeGatewayTranscriptionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> TranscriptSnapshot {
-        let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
-        let task = session.webSocketTask(with: urlRequest)
-        task.resume()
-
-        do {
-            try await task.send(
-                .string(try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
-            )
-            let streamingSession = URLSessionVolcengineRealtimeGatewayStreamingSession(
-                task: task,
-                endpoint: request.endpoint,
-                model: request.model,
-                progress: progress,
-                startedAt: Date()
-            )
-            await streamingSession.acceptAudioChunk(request.audio.pcm16Samples)
-            return try await streamingSession.finish(audio: request.audio)
-        } catch let providerError as TranscriptionProviderError {
-            task.cancel(with: .goingAway, reason: nil)
-            throw providerError
-        } catch {
-            task.cancel(with: .goingAway, reason: nil)
-            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
-        }
-    }
-
-    func startStreaming(
-        request: VolcengineRealtimeGatewaySessionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> any RealtimeTranscriptionSession {
-        let urlRequest = Self.urlRequest(endpoint: request.endpoint, headers: request.headers)
-        let task = session.webSocketTask(with: urlRequest)
-        task.resume()
-
-        do {
-            try await task.send(
-                .string(try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: request.model))
-            )
-            return URLSessionVolcengineRealtimeGatewayStreamingSession(
-                task: task,
-                endpoint: request.endpoint,
-                model: request.model,
-                progress: progress,
-                startedAt: Date()
-            )
-        } catch {
-            task.cancel(with: .goingAway, reason: nil)
-            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: request.endpoint)
-        }
-    }
-
-    private static func urlRequest(endpoint: URL, headers: [String: String]) -> URLRequest {
-        var urlRequest = URLRequest(url: endpoint)
-        for (name, value) in headers {
-            urlRequest.setValue(value, forHTTPHeaderField: name)
-        }
-        return urlRequest
-    }
-}
-
-private actor URLSessionVolcengineRealtimeGatewayStreamingSession: RealtimeTranscriptionSession {
-    private let task: any VolcengineWebSocketTasking
-    private let endpoint: URL
-    private let model: String
-    private let receiveTask: Task<TranscriptSnapshot, Error>
-    private var pendingError: TranscriptionProviderError?
-    private var isFinished = false
-    private var sentAudioSampleCount = 0
-
-    init(
-        task: any VolcengineWebSocketTasking,
-        endpoint: URL,
-        model: String,
-        progress: TranscriptionProgressHandler?,
-        startedAt: Date
-    ) {
-        self.task = task
-        self.endpoint = endpoint
-        self.model = model
-        self.receiveTask = Task {
-            try await Self.receiveTranscript(
-                from: task,
-                progress: progress,
-                startedAt: startedAt
-            )
-        }
-    }
-
-    func acceptAudioChunk(_ pcm16Samples: [Int16]) async {
-        guard !isFinished, !pcm16Samples.isEmpty, pendingError == nil else {
-            return
-        }
-
-        do {
-            try await task.send(
-                .string(
-                    try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(
-                        pcm16Samples: pcm16Samples
-                    )
-                )
-            )
-            sentAudioSampleCount += pcm16Samples.count
-        } catch let providerError as TranscriptionProviderError {
-            pendingError = providerError
-            receiveTask.cancel()
-            await cancelTask()
-        } catch {
-            pendingError = VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
-            receiveTask.cancel()
-            await cancelTask()
-        }
-    }
-
-    func finish(audio: CapturedAudioSnapshot) async throws -> TranscriptSnapshot {
-        if let pendingError {
-            throw pendingError
-        }
-
-        isFinished = true
-
-        do {
-            if audio.pcm16Samples.count > sentAudioSampleCount {
-                let remainder = Array(audio.pcm16Samples[sentAudioSampleCount...])
-                if !remainder.isEmpty {
-                    try await task.send(
-                        .string(
-                            try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(
-                                pcm16Samples: remainder
-                            )
-                        )
-                    )
-                    sentAudioSampleCount += remainder.count
-                }
-            }
-
-            try await task.send(.string(try VolcengineRealtimeGatewayProtocol.buildAudioCommitEvent()))
-            let transcript = try await receiveTask.value
-            await cancelTask()
-            return transcript
-        } catch let providerError as TranscriptionProviderError {
-            await cancelTask()
-            throw providerError
-        } catch {
-            await cancelTask()
-            throw VolcengineTranscriptionErrorMapper.transportError(error, endpoint: endpoint)
-        }
-    }
-
-    func cancel() async {
-        isFinished = true
-        receiveTask.cancel()
-        await cancelTask()
-    }
-
-    private func cancelTask() async {
-        await MainActor.run {
-            task.cancel(with: .goingAway, reason: nil)
-        }
-    }
-
-    private static func receiveTranscript(
-        from task: any VolcengineWebSocketTasking,
-        progress: TranscriptionProgressHandler?,
-        startedAt: Date
-    ) async throws -> TranscriptSnapshot {
-        var partials: [String] = []
-
-        while true {
-            let message = try await task.receive()
-            let text: String
-            switch message {
-            case .string(let eventText):
-                text = eventText
-            case .data(let data):
-                guard let eventText = String(data: data, encoding: .utf8) else {
-                    continue
-                }
-                text = eventText
-            @unknown default:
-                continue
-            }
-
-            switch try VolcengineRealtimeGatewayProtocol.parseServerEvent(text) {
-            case .sessionUpdated, .ignored:
-                continue
-            case .partial(let partial):
-                partials.append(partial.text)
-                await progress?(partial)
-            case .final(let finalText):
-                let latency = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                return TranscriptSnapshot(
-                    finalText: finalText,
-                    partials: partials,
-                    providerName: volcengineTranscriptionProviderName,
-                    latencyMilliseconds: latency
-                )
-            case .error(let message):
-                throw TranscriptionProviderError.provider(
-                    providerName: volcengineTranscriptionProviderName,
-                    message: message
-                )
-            }
+private extension TranscriptionCredential {
+    var openSpeechAuth: VolcengineTranscriptionAuth {
+        switch mode {
+        case .apiKey:
+            .apiKey(apiKey ?? "")
+        case .appIDAccessToken:
+            .appIDAccessToken(appID: appID ?? "", accessToken: accessToken ?? "")
         }
     }
 }

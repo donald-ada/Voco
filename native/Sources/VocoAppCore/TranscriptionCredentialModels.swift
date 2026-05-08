@@ -22,7 +22,7 @@ public enum VolcengineCredentialMode: String, CaseIterable, Identifiable, Codabl
     public var title: String {
         switch self {
         case .apiKey:
-            "新网关 API Key"
+            "新控制台 API Key"
         case .appIDAccessToken:
             "旧控制台 App ID + Token"
         }
@@ -31,7 +31,7 @@ public enum VolcengineCredentialMode: String, CaseIterable, Identifiable, Codabl
     public var detail: String {
         switch self {
         case .apiKey:
-            "使用 Authorization: Bearer 连接新网关 Realtime ASR。"
+            "使用 X-Api-Key 连接 OpenSpeech 流式 ASR。"
         case .appIDAccessToken:
             "使用 X-Api-App-Key 和 X-Api-Access-Key 连接 OpenSpeech 流式 ASR。"
         }

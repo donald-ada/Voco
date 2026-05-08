@@ -2,30 +2,60 @@
 
 Terminal-controlled local/cloud STT voice input tool for macOS.
 
-See `docs/superpowers/specs/2026-05-01-voco-design.md` for the full design.
+Voco is now developed primarily as a native macOS app. Older Rust daemon notes
+remain in this repository for legacy development and migration reference.
 
 ## Status
 
-Native rewrite development: Voco now has a native macOS menu bar app with
-onboarding, Settings, Diagnostics, Keychain-backed credentials, audio capture,
-hotkey recording, Volcengine model transcription, text injection, HUD overlay,
-launch at login, and native release packaging. The user-facing install path is
-the native `Voco.app` distributed through `dist/Voco.dmg`.
+Native rewrite development: Voco now has a native macOS menu bar app with a
+settings workbench, Keychain-backed Volcengine model credentials, microphone
+capture, selectable hotkey recording, realtime top HUD overlay, text insertion,
+launch-at-login, silent launch, optional Dock visibility, and native release
+packaging. The user-facing install path is the native `Voco.app` distributed
+through `dist/Voco.dmg`.
 
 The older Rust CLI/daemon, user LaunchAgent template, and Swift HUD helper
 packaging remain in the repository for development reference until the final
 feature-parity and manual UX gate passes. They are not the native user install
 path.
 
+## Current Native App
+
+The native app runs from the menu bar by default. The menu bar menu intentionally
+stays minimal:
+
+- `显示 Voco`: opens the main settings window.
+- `退出`: quits the app.
+
+The settings window currently has three sections:
+
+- `总览`: shows whether voice input is ready and routes the primary recovery
+  action. Missing microphone permission triggers the macOS permission prompt
+  when possible; previously denied microphone permission must still be changed
+  in System Settings because macOS will not show the prompt again.
+- `模型`: stores Volcengine credentials in macOS Keychain. The UI supports the
+  new gateway API Key mode and the legacy App ID + Access Token mode.
+- `设置`: controls the voice-input hotkey, recording mode, microphone input,
+  permissions, launch-at-login, silent launch, and optional Dock visibility.
+
+Native permissions are microphone and accessibility. Input Monitoring is not a
+native app requirement.
+
 ## Native Build
 
 ```sh
-cd native
-swift build
-swift test
+swift build --package-path native
+swift test --package-path native
 ```
 
-Build a local native app bundle and run the bundle smoke test:
+Build a local native app bundle:
+
+```bash
+packaging/build_native_app_bundle.sh --profile debug
+open target/native/Voco.app
+```
+
+Run the native bundle smoke test:
 
 ```bash
 packaging/tests/native_app_bundle_smoke.sh
@@ -48,9 +78,18 @@ packaging/build_native_dmg.sh --profile release --signing-style developer-id
 ```
 
 Open the DMG, drag `Voco.app` to `/Applications`, then launch Voco from the app.
-Grant the requested macOS permissions during onboarding. Login behavior is
+Grant microphone and accessibility permissions when requested. Login behavior is
 managed by the native app through macOS Login Items; the native app does not
 install `~/Library/LaunchAgents/com.voco.daemon.plist`.
+
+Credentials are configured inside Voco:
+
+1. Open `显示 Voco` from the menu bar.
+2. Go to `模型`.
+3. Choose `新控制台 API Key` or `旧控制台 App ID + Token`.
+4. Save the credential to Keychain.
+
+The native app does not read Volcengine tokens from local config files.
 
 ## Migration Cleanup
 

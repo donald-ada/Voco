@@ -874,52 +874,32 @@ private extension VolcengineCredentialMode {
     var fieldLabel: String {
         switch self {
         case .apiKey:
-            "新网关 API Key"
+            "新控制台 API Key"
         case .appIDAccessToken:
             "火山引擎 App ID + Access Token"
         }
     }
 
     var endpointDetail: String {
-        switch self {
-        case .apiKey:
-            volcengineRealtimeGatewayEndpoint
-        case .appIDAccessToken:
-            volcengineDefaultEndpoint
-        }
+        volcengineDefaultEndpoint
     }
 
     var routingParameterTitle: String {
-        switch self {
-        case .apiKey:
-            "Model"
-        case .appIDAccessToken:
-            "Resource ID"
-        }
+        "Resource ID"
     }
 
     var routingParameterDetail: String {
-        switch self {
-        case .apiKey:
-            volcengineRealtimeGatewayModel
-        case .appIDAccessToken:
-            "\(volcengineDefaultResourceID) / \(volcengineLegacyOpenSpeechResourceID)"
-        }
+        "\(volcengineDefaultResourceID) / \(volcengineLegacyOpenSpeechResourceID)"
     }
 
     var routingParameterBadgeTitle: String {
-        switch self {
-        case .apiKey:
-            "固定"
-        case .appIDAccessToken:
-            "自动重试"
-        }
+        "自动重试"
     }
 
     var authHeaderDetail: String {
         switch self {
         case .apiKey:
-            "Authorization: Bearer"
+            "X-Api-Key"
         case .appIDAccessToken:
             "X-Api-App-Key + X-Api-Access-Key"
         }

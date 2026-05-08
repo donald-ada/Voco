@@ -344,6 +344,107 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testSuccessfulRecordingCompletionHidesHUDImmediately() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
+            transcript: TranscriptSnapshot(
+                finalText: "hello",
+                partials: ["he"],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 33
+            ),
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted through unicode events"
+            )
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(result: result)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .ready)
+        XCTAssertEqual(coordinator.hudSnapshot.phase, .hidden)
+        XCTAssertFalse(coordinator.hudSnapshot.isVisible)
+    }
+
+    @MainActor
+    func testNewRecordingClearsHUDPreviewWithoutDroppingLastCompletedTranscript() async {
+        let completedTranscript = TranscriptSnapshot(
+            finalText: "first session words",
+            partials: ["first session"],
+            providerName: "Fake ASR",
+            latencyMilliseconds: 33
+        )
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
+            transcript: completedTranscript,
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted through unicode events"
+            )
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(result: result)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+        XCTAssertEqual(coordinator.hudSnapshot.phase, .hidden)
+
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(coordinator.lastTranscript, completedTranscript)
+        XCTAssertNil(coordinator.hudSnapshot.transcriptPreview)
+    }
+
+    @MainActor
+    func testNewRecordingPartialDoesNotReusePreviousFinalText() async {
+        let completedTranscript = TranscriptSnapshot(
+            finalText: "first session words",
+            partials: ["first session"],
+            providerName: "Fake ASR",
+            latencyMilliseconds: 33
+        )
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 1.1, sampleRate: 16_000, peakAmplitude: 0.61),
+            transcript: completedTranscript,
+            injection: TextInjectionSnapshot(
+                targetAppName: "TextEdit",
+                strategy: .unicodeEvent,
+                succeeded: true,
+                detail: "Inserted through unicode events"
+            )
+        )
+        let recordingWorkflow = FakeRecordingWorkflow(
+            result: result,
+            partialsToEmitOnStart: [
+                TranscriptPartialSnapshot(
+                    text: "second session live",
+                    stablePrefixLength: 0,
+                    providerName: "Fake ASR"
+                )
+            ]
+        )
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .recording)
+        XCTAssertEqual(coordinator.hudSnapshot.transcriptPreview, "second session live")
+    }
+
+    @MainActor
     func testCoordinatorPublishesPartialTranscriptToHUDWhileTranscribing() async {
         let partial = TranscriptPartialSnapshot(
             text: "live words",

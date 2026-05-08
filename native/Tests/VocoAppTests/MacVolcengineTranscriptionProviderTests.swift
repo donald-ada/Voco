@@ -40,11 +40,10 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty)
     }
 
-    func testProviderBuildsRealtimeGatewayRequestFromStoredAPIKey() async throws {
-        let openSpeechTransport = FakeVolcengineTransport()
-        let gatewayTransport = FakeVolcengineRealtimeGatewayTransport(
+    func testProviderBuildsOpenSpeechRequestFromStoredAPIKey() async throws {
+        let openSpeechTransport = FakeVolcengineTransport(
             transcript: TranscriptSnapshot(
-                finalText: "hello gateway",
+                finalText: "hello openspeech",
                 partials: [],
                 providerName: "火山引擎",
                 latencyMilliseconds: 12
@@ -52,8 +51,7 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         )
         let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
-            transport: openSpeechTransport,
-            realtimeGatewayTransport: gatewayTransport
+            transport: openSpeechTransport
         )
 
         let transcript = try await provider.transcribe(
@@ -66,14 +64,14 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         )
 
         XCTAssertEqual(provider.status, .ready(providerName: "火山引擎"))
-        XCTAssertEqual(transcript.finalText, "hello gateway")
-        XCTAssertTrue(openSpeechTransport.requests.isEmpty)
-        XCTAssertEqual(gatewayTransport.requests.count, 1)
+        XCTAssertEqual(transcript.finalText, "hello openspeech")
+        XCTAssertEqual(openSpeechTransport.requests.count, 1)
         XCTAssertEqual(
-            gatewayTransport.requests.first?.endpoint.absoluteString,
-            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+            openSpeechTransport.requests.first?.endpoint.absoluteString,
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
-        XCTAssertEqual(gatewayTransport.requests.first?.headers["Authorization"], "Bearer sk-test-secret")
+        XCTAssertEqual(openSpeechTransport.requests.first?.headers["X-Api-Key"], "sk-test-secret")
+        XCTAssertNil(openSpeechTransport.requests.first?.headers["Authorization"])
     }
 
     func testProviderBuildsRequestFromStoredAppIDAccessTokenCredential() async throws {
@@ -100,7 +98,7 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 1)
         XCTAssertEqual(
             transport.requests.first?.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
         XCTAssertEqual(transport.requests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.requests.first?.headers["X-Api-Access-Key"], "legacy-token")
@@ -124,7 +122,7 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.streamingRequests.count, 1)
         XCTAssertEqual(
             transport.streamingRequests.first?.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-App-Key"], "3145608744")
         XCTAssertEqual(transport.streamingRequests.first?.headers["X-Api-Access-Key"], "legacy-token")
@@ -155,24 +153,22 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
         XCTAssertEqual(transport.streamingRequests.last?.headers["X-Api-Resource-Id"], legacyHourlyResourceID)
     }
 
-    func testProviderStartsRealtimeGatewayStreamingFromStoredAPIKey() async throws {
+    func testProviderStartsOpenSpeechStreamingFromStoredAPIKey() async throws {
         let openSpeechTransport = FakeVolcengineTransport()
-        let gatewayTransport = FakeVolcengineRealtimeGatewayTransport()
         let provider = MacVolcengineTranscriptionProvider(
             credentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-secret"),
-            transport: openSpeechTransport,
-            realtimeGatewayTransport: gatewayTransport
+            transport: openSpeechTransport
         )
 
         _ = try await provider.startStreaming(progress: nil)
 
-        XCTAssertTrue(openSpeechTransport.streamingRequests.isEmpty)
-        XCTAssertEqual(gatewayTransport.streamingRequests.count, 1)
+        XCTAssertEqual(openSpeechTransport.streamingRequests.count, 1)
         XCTAssertEqual(
-            gatewayTransport.streamingRequests.first?.endpoint.absoluteString,
-            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+            openSpeechTransport.streamingRequests.first?.endpoint.absoluteString,
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
-        XCTAssertEqual(gatewayTransport.streamingRequests.first?.headers["Authorization"], "Bearer sk-test-secret")
+        XCTAssertEqual(openSpeechTransport.streamingRequests.first?.headers["X-Api-Key"], "sk-test-secret")
+        XCTAssertNil(openSpeechTransport.streamingRequests.first?.headers["Authorization"])
     }
 
     func testURLSessionTransportStreamsBinaryFramesAndReturnsFinalTranscript() async throws {
@@ -249,44 +245,6 @@ final class MacVolcengineTranscriptionProviderTests: XCTestCase {
             return
         }
         XCTAssertEqual(Array(lastFrame.prefix(4)), [0x11, 0x22, 0x01, 0x00])
-        XCTAssertEqual(task.cancelCodes, [.goingAway])
-    }
-
-    func testURLSessionRealtimeGatewayTransportStreamsJSONEventsAndReturnsFinalTranscript() async throws {
-        let task = FakeVolcengineWebSocketTask(
-            receiveMessages: [
-                .string(#"{"type":"transcription_session.updated"}"#),
-                .string(#"{"type":"conversation.item.input_audio_transcription.result","transcript":"hello"}"#),
-                .string(#"{"type":"conversation.item.input_audio_transcription.completed","transcript":"hello world"}"#)
-            ]
-        )
-        let session = FakeVolcengineWebSocketSession(task: task)
-        let transport = URLSessionVolcengineRealtimeGatewayTranscriptionTransport(session: session)
-        let request = try VolcengineRealtimeGatewaySessionRequest.make(apiKey: "sk-gateway-secret")
-        var received: [TranscriptPartialSnapshot] = []
-
-        let streamingSession = try await transport.startStreaming(request: request) { partial in
-            received.append(partial)
-        }
-        await streamingSession.acceptAudioChunk([1, 2, 3])
-        let transcript = try await streamingSession.finish(
-            audio: CapturedAudioSnapshot(
-                durationSeconds: 1,
-                sampleRate: 16_000,
-                peakAmplitude: 0.2,
-                pcm16Samples: [1, 2, 3]
-            )
-        )
-
-        XCTAssertEqual(transcript.finalText, "hello world")
-        XCTAssertEqual(received.map(\.text), ["hello"])
-        XCTAssertEqual(session.requests.first?.url?.absoluteString, "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel")
-        XCTAssertEqual(session.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer sk-gateway-secret")
-        XCTAssertEqual(task.resumeCount, 1)
-        XCTAssertEqual(task.sentMessages.count, 3)
-        XCTAssertTrue(task.sentStringMessages[0].contains(#""type":"transcription_session.update""#))
-        XCTAssertTrue(task.sentStringMessages[1].contains(#""type":"input_audio_buffer.append""#))
-        XCTAssertTrue(task.sentStringMessages[2].contains(#""type":"input_audio_buffer.commit""#))
         XCTAssertEqual(task.cancelCodes, [.goingAway])
     }
 
@@ -541,51 +499,6 @@ private final class FakeVolcengineTransport: VolcengineTranscriptionTransporting
         }
 
         return FakeVolcengineStreamingSession(transcript: transcript, partialsToEmit: partialsToEmit, progress: progress)
-    }
-}
-
-@MainActor
-private final class FakeVolcengineRealtimeGatewayTransport: VolcengineRealtimeGatewayTranscriptionTransporting {
-    private(set) var requests: [VolcengineRealtimeGatewayTranscriptionRequest] = []
-    private(set) var streamingRequests: [VolcengineRealtimeGatewaySessionRequest] = []
-    let transcript: TranscriptSnapshot
-    var error: Error?
-
-    init(
-        transcript: TranscriptSnapshot = TranscriptSnapshot(
-            finalText: "",
-            partials: [],
-            providerName: "火山引擎",
-            latencyMilliseconds: nil
-        )
-    ) {
-        self.transcript = transcript
-    }
-
-    func transcribe(
-        request: VolcengineRealtimeGatewayTranscriptionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> TranscriptSnapshot {
-        requests.append(request)
-
-        if let error {
-            throw error
-        }
-
-        return transcript
-    }
-
-    func startStreaming(
-        request: VolcengineRealtimeGatewaySessionRequest,
-        progress: TranscriptionProgressHandler?
-    ) async throws -> any RealtimeTranscriptionSession {
-        streamingRequests.append(request)
-
-        if let error {
-            throw error
-        }
-
-        return FakeVolcengineStreamingSession(transcript: transcript, partialsToEmit: [], progress: progress)
     }
 }
 

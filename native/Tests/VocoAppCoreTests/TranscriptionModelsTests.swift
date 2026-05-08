@@ -60,31 +60,9 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertEqual(updated.partials, ["你好"])
     }
 
-    func testVolcengineRequestBuilderRejectsSingleAPIKeyForOpenSpeechStreaming() {
-        XCTAssertThrowsError(
-            try VolcengineTranscriptionRequest.make(
-                apiKey: " sk-test-secret ",
-                audio: CapturedAudioSnapshot(
-                    durationSeconds: 1,
-                    sampleRate: 16_000,
-                    peakAmplitude: 0.2,
-                    pcm16Samples: [1, 2]
-                )
-            )
-        ) { error in
-            XCTAssertEqual(
-                error as? TranscriptionProviderError,
-                .authentication(
-                    providerName: "火山引擎",
-                    message: "OpenSpeech 流式 ASR 需要 App ID 和 Access Token；单个 API Key 属于新网关协议，当前版本不会用它连接 wss://openspeech.bytedance.com。"
-                )
-            )
-        }
-    }
-
-    func testVolcengineRealtimeGatewayRequestBuilderUsesBearerAuthWithoutLeakingSecret() throws {
-        let request = try VolcengineRealtimeGatewayTranscriptionRequest.make(
-            apiKey: " sk-gateway-secret ",
+    func testVolcengineRequestBuilderSupportsNewConsoleAPIKeyCredentials() throws {
+        let request = try VolcengineTranscriptionRequest.make(
+            apiKey: " sk-test-secret ",
             audio: CapturedAudioSnapshot(
                 durationSeconds: 1,
                 sampleRate: 16_000,
@@ -95,37 +73,13 @@ final class TranscriptionModelsTests: XCTestCase {
 
         XCTAssertEqual(
             request.endpoint.absoluteString,
-            "wss://ai-gateway.vei.volces.com/v1/realtime?model=bigmodel"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
-        XCTAssertEqual(request.model, "bigmodel")
-        XCTAssertEqual(request.headers["Authorization"], "Bearer sk-gateway-secret")
-        XCTAssertNil(request.headers["X-Api-Key"])
-        XCTAssertNil(request.safeDebugDescription.range(of: "sk-gateway-secret"))
-        XCTAssertTrue(request.safeDebugDescription.contains("Authorization"))
-    }
-
-    func testVolcengineRealtimeGatewayProtocolBuildsEventsAndParsesTranscriptEvents() throws {
-        let sessionUpdate = try VolcengineRealtimeGatewayProtocol.buildSessionUpdateEvent(model: "bigmodel")
-        XCTAssertTrue(sessionUpdate.contains(#""type":"transcription_session.update""#))
-        XCTAssertTrue(sessionUpdate.contains(#""input_audio_sample_rate":16000"#))
-        XCTAssertTrue(sessionUpdate.contains(#""model":"bigmodel""#))
-
-        let appendEvent = try VolcengineRealtimeGatewayProtocol.buildAudioAppendEvent(pcm16Samples: [1, -2])
-        XCTAssertTrue(appendEvent.contains(#""type":"input_audio_buffer.append""#))
-        XCTAssertTrue(appendEvent.contains(#""audio":"AQD+/w==""#))
-
-        XCTAssertEqual(
-            try VolcengineRealtimeGatewayProtocol.parseServerEvent(
-                #"{"type":"conversation.item.input_audio_transcription.result","transcript":"你好"}"#
-            ),
-            .partial(TranscriptPartialSnapshot(text: "你好", stablePrefixLength: 0, providerName: "火山引擎"))
-        )
-        XCTAssertEqual(
-            try VolcengineRealtimeGatewayProtocol.parseServerEvent(
-                #"{"type":"conversation.item.input_audio_transcription.completed","transcript":"你好世界"}"#
-            ),
-            .final("你好世界")
-        )
+        XCTAssertEqual(request.headers["X-Api-Key"], "sk-test-secret")
+        XCTAssertEqual(request.headers["X-Api-Resource-Id"], "volc.seedasr.sauc.duration")
+        XCTAssertNil(request.headers["X-Api-App-Key"])
+        XCTAssertNil(request.headers["X-Api-Access-Key"])
+        XCTAssertNil(request.safeDebugDescription.range(of: "sk-test-secret"))
     }
 
     func testVolcengineRequestBuilderUsesAppIDAccessTokenHeadersWithoutLeakingSecret() throws {
@@ -141,7 +95,7 @@ final class TranscriptionModelsTests: XCTestCase {
 
         XCTAssertEqual(
             request.endpoint.absoluteString,
-            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+            "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
         )
         XCTAssertEqual(request.resourceID, "volc.seedasr.sauc.duration")
         XCTAssertEqual(request.headers["X-Api-App-Key"], "3145608744")
@@ -232,27 +186,9 @@ final class TranscriptionModelsTests: XCTestCase {
 
         XCTAssertEqual(providerName, "火山引擎")
         XCTAssertTrue(message.contains("OpenSpeech WebSocket 握手被服务端拒绝"))
-        XCTAssertTrue(message.contains("App ID + Access Token"))
+        XCTAssertTrue(message.contains("火山引擎凭证"))
         XCTAssertTrue(message.contains(volcengineDefaultEndpoint))
         XCTAssertTrue(message.contains(volcengineLegacyOpenSpeechResourceID))
-        XCTAssertTrue(retryable)
-    }
-
-    func testVolcengineRealtimeGatewayBadServerResponseMapsToAPIKeyHandshakeError() {
-        let error = VolcengineTranscriptionErrorMapper.transportError(
-            URLError(.badServerResponse),
-            endpoint: URL(string: volcengineRealtimeGatewayEndpoint)!
-        )
-
-        guard case .transport(let providerName, let message, let retryable) = error else {
-            XCTFail("Expected transport error, got \(error)")
-            return
-        }
-
-        XCTAssertEqual(providerName, "火山引擎")
-        XCTAssertTrue(message.contains("Realtime 网关 WebSocket 握手被服务端拒绝"))
-        XCTAssertTrue(message.contains("API Key"))
-        XCTAssertTrue(message.contains(volcengineRealtimeGatewayEndpoint))
         XCTAssertTrue(retryable)
     }
 
@@ -293,6 +229,14 @@ final class TranscriptionModelsTests: XCTestCase {
     func testVolcengineWireProtocolBuildsClientFramesAndParsesFinalServerFrame() throws {
         let fullClientRequest = try VolcengineWireProtocol.buildFullClientRequestFrame()
         XCTAssertEqual(Array(fullClientRequest.prefix(4)), [0x11, 0x10, 0x11, 0x00])
+        let payloadJSON = try VolcengineWireProtocol.buildFullClientRequestPayloadJSON()
+        let payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: payloadJSON) as? [String: Any]
+        )
+        let request = try XCTUnwrap(payload["request"] as? [String: Any])
+        XCTAssertEqual(request["model_name"] as? String, "bigmodel")
+        XCTAssertEqual(request["enable_nonstream"] as? Bool, true)
+        XCTAssertEqual(request["show_utterances"] as? Bool, true)
 
         let audioFrame = try VolcengineWireProtocol.buildAudioFrame(
             pcm16Samples: [1, -2],

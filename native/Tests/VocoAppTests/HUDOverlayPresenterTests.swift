@@ -5,13 +5,13 @@ import VocoAppCore
 final class HUDOverlayPresenterTests: XCTestCase {
     func testAutoHiddenSnapshotDoesNotPresentAgainUntilSnapshotChanges() {
         var state = HUDOverlayPresentationState()
-        let success = successSnapshot(text: "hello from Voco")
+        let visible = visibleSnapshot(text: "hello from Voco")
 
-        XCTAssertEqual(state.presentationDecision(for: success), .show)
+        XCTAssertEqual(state.presentationDecision(for: visible), .show)
 
-        state.markAutoHidden(success)
+        state.markAutoHidden(visible)
 
-        XCTAssertEqual(state.presentationDecision(for: success), .ignore)
+        XCTAssertEqual(state.presentationDecision(for: visible), .ignore)
 
         let recording = HUDSnapshot(
             status: .recording,
@@ -22,21 +22,17 @@ final class HUDOverlayPresenterTests: XCTestCase {
         XCTAssertEqual(state.presentationDecision(for: recording), .show)
     }
 
-    private func successSnapshot(text: String) -> HUDSnapshot {
+    private func visibleSnapshot(text: String) -> HUDSnapshot {
         HUDSnapshot(
-            status: .ready,
-            lastTranscript: TranscriptSnapshot(
-                finalText: text,
-                partials: [],
+            status: .recording,
+            lastTranscript: nil,
+            currentTranscript: TranscriptSnapshot(
+                finalText: "",
+                partials: [text],
                 providerName: "Fake ASR",
-                latencyMilliseconds: 42
+                latencyMilliseconds: nil
             ),
-            lastInjection: TextInjectionSnapshot(
-                targetAppName: "Notes",
-                strategy: .clipboardFallback,
-                succeeded: true,
-                detail: "Inserted"
-            ),
+            lastInjection: nil,
             lastErrorMessage: nil
         )
     }

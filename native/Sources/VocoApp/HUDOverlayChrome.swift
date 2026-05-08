@@ -23,7 +23,7 @@ enum HUDOverlayChrome {
         static let notchTopOffset: CGFloat = -1
         static let transcriptFontSize: CGFloat = 17
         static let transcriptStatusFontSize: CGFloat = 13
-        static let transcriptLineLimit = 2
+        static let transcriptLineLimit = 1
         static let transcriptRevealOffsetY: CGFloat = -5
     }
 
