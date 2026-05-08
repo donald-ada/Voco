@@ -2,6 +2,12 @@ import XCTest
 @testable import VocoAppCore
 
 final class VoiceInputSessionModelsTests: XCTestCase {
+    func testVoiceInputSessionPageUsesEnglishRangeTitle() {
+        let page = VoiceInputSessionPage(sessions: [], page: 1)
+
+        XCTAssertEqual(page.visibleRangeTitle(strings: VocoStrings(language: .en)), "0 / 0 items")
+    }
+
     func testSessionSnapshotUsesRawTranscriptPreviewWithoutGeneratedTitle() {
         let session = VoiceInputSessionSnapshot(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

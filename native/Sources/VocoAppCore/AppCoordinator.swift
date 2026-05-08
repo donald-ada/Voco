@@ -101,14 +101,12 @@ public final class AppCoordinator: ObservableObject {
         let initialPermissions = permissionProvider.currentSnapshots()
         let initialLaunchAtLoginState = launchAtLoginEnabled ? LaunchAtLoginState.enabled : launchAtLoginProvider.currentState()
         let initialTranscriptionCredentials = transcriptionCredentialStore.currentSnapshot()
-        let initialInstallLocation = installLocationProvider.currentInstallLocation()
+        let initialAppLanguage = appPreferenceStore.appLanguage
+        let initialStrings = VocoStrings(language: initialAppLanguage)
+        let initialInstallLocation = installLocationProvider.currentInstallLocation(strings: initialStrings)
         let initialVoiceInputSessionHistoryEnabled = appPreferenceStore.voiceInputSessionHistoryEnabled
         let initialVoiceInputSessionRetentionPolicy = appPreferenceStore.voiceInputSessionRetentionPolicy
-        let initialLegacyInstall = LegacyInstallSnapshot.notFound(
-            launchAgentURL: LegacyInstallSnapshot.knownLaunchAgentURL(
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
-            )
-        )
+        let initialLegacyInstall = legacyInstallProvider.currentSnapshot(strings: initialStrings)
         let initialSessionLoadResult: (sessions: [VoiceInputSessionSnapshot], errorMessage: String?)
         if initialVoiceInputSessionHistoryEnabled {
             do {
@@ -160,7 +158,7 @@ public final class AppCoordinator: ObservableObject {
         self.displayInDockEnabled = appPreferenceStore.displayInDockEnabled
         self.voiceInputSessionHistoryEnabled = initialVoiceInputSessionHistoryEnabled
         self.voiceInputSessionRetentionPolicy = initialVoiceInputSessionRetentionPolicy
-        self.appLanguage = appPreferenceStore.appLanguage
+        self.appLanguage = initialAppLanguage
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -208,6 +206,7 @@ public final class AppCoordinator: ObservableObject {
     public var audioSettingsSnapshot: AudioSettingsSnapshot {
         AudioSettingsSnapshot(
             lastAudio: lastAudio,
+            strings: strings,
             inputDevice: selectedAudioInputDevice
         )
     }
@@ -218,11 +217,11 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public var injectionSettingsSnapshot: InjectionSettingsSnapshot {
-        InjectionSettingsSnapshot(lastInjection: lastInjection)
+        InjectionSettingsSnapshot(lastInjection: lastInjection, strings: strings)
     }
 
     public var hudSettingsSnapshot: HUDSettingsSnapshot {
-        HUDSettingsSnapshot()
+        HUDSettingsSnapshot(strings: strings)
     }
 
     public var isRecording: Bool {
@@ -243,7 +242,7 @@ public final class AppCoordinator: ObservableObject {
 
     public func finishLaunching() {
         lastErrorMessage = nil
-        installLocation = installLocationProvider.currentInstallLocation()
+        installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         refreshLegacyInstall()
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
@@ -276,7 +275,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func refreshLegacyInstall() {
-        legacyInstall = legacyInstallProvider.currentSnapshot()
+        legacyInstall = legacyInstallProvider.currentSnapshot(strings: strings)
     }
 
     public func refreshTranscriptionCredentials() {
@@ -352,9 +351,9 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func setLaunchAtLoginEnabled(_ enabled: Bool) async {
-        installLocation = installLocationProvider.currentInstallLocation()
+        installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         if enabled, !installLocation.allowsLaunchAtLogin {
-            let message = installLocation.warningDetail ?? "当前运行位置不支持登录时启动。"
+            let message = installLocation.warningDetail ?? strings.settings.launchAtLoginUnsupportedDetail
             launchAtLoginState = .unavailable
             lastErrorMessage = message
             return
@@ -366,7 +365,7 @@ public final class AppCoordinator: ObservableObject {
         } catch {
             let message = error.localizedDescription
             launchAtLoginState = .failed(message)
-            lastErrorMessage = "登录时启动设置失败：\(message)"
+            lastErrorMessage = strings.settings.launchAtLoginSetupFailedMessage(message)
         }
     }
 
@@ -450,6 +449,7 @@ public final class AppCoordinator: ObservableObject {
 
         appLanguage = language
         appPreferenceStore.saveAppLanguage(language)
+        refreshLocalizedRuntimeSnapshots()
     }
 
     public func setAudioInputDevice(_ device: AudioInputDeviceSelection) {
@@ -509,11 +509,11 @@ public final class AppCoordinator: ObservableObject {
         }
 
         do {
-            legacyInstall = try await legacyInstallProvider.removeKnownLaunchAgent()
+            legacyInstall = try await legacyInstallProvider.removeKnownLaunchAgent(strings: strings)
             lastErrorMessage = nil
         } catch {
             let message = error.localizedDescription
-            legacyInstall = .failed(launchAgentURL: legacyInstall.launchAgentURL, message: message)
+            legacyInstall = .failed(launchAgentURL: legacyInstall.launchAgentURL, message: message, strings: strings)
             lastErrorMessage = message
         }
     }
@@ -521,6 +521,11 @@ public final class AppCoordinator: ObservableObject {
     public func fail(_ message: String) {
         lastErrorMessage = message
         status = .error
+    }
+
+    private func refreshLocalizedRuntimeSnapshots() {
+        installLocation = installLocationProvider.currentInstallLocation(strings: strings)
+        legacyInstall = legacyInstallProvider.currentSnapshot(strings: strings)
     }
 
     private func runtimeStatusAfterPermissionCheck() -> AppRuntimeStatus {

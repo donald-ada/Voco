@@ -4,9 +4,9 @@ public struct InjectionSettingsSnapshot: Equatable, Sendable {
     public let strategy: InjectionStrategySettingsSnapshot
     public let focusedApp: FocusedAppSettingsSnapshot
 
-    public init(lastInjection: TextInjectionSnapshot?) {
-        self.strategy = InjectionStrategySettingsSnapshot(lastInjection: lastInjection)
-        self.focusedApp = FocusedAppSettingsSnapshot(lastInjection: lastInjection)
+    public init(lastInjection: TextInjectionSnapshot?, strings: VocoStrings = VocoStrings()) {
+        self.strategy = InjectionStrategySettingsSnapshot(lastInjection: lastInjection, strings: strings)
+        self.focusedApp = FocusedAppSettingsSnapshot(lastInjection: lastInjection, strings: strings)
     }
 }
 
@@ -16,10 +16,10 @@ public struct InjectionStrategySettingsSnapshot: Equatable, Sendable {
     public let systemImage: String
     public let succeeded: Bool?
 
-    public init(lastInjection: TextInjectionSnapshot?) {
+    public init(lastInjection: TextInjectionSnapshot?, strings: VocoStrings = VocoStrings()) {
         guard let lastInjection else {
-            self.title = "等待插入"
-            self.detail = "完成一次转写后会显示采用的文本插入方式。"
+            self.title = strings.injection.waitingToInsertTitle
+            self.detail = strings.injection.waitingToInsertDetail
             self.systemImage = "text.cursor"
             self.succeeded = nil
             return
@@ -38,10 +38,10 @@ public struct FocusedAppSettingsSnapshot: Equatable, Sendable {
     public let systemImage: String
     public let hasRecentTarget: Bool
 
-    public init(lastInjection: TextInjectionSnapshot?) {
+    public init(lastInjection: TextInjectionSnapshot?, strings: VocoStrings = VocoStrings()) {
         guard let lastInjection else {
-            self.title = "无近期目标"
-            self.detail = "尚未完成文本插入，无法显示最近聚焦 App。"
+            self.title = strings.injection.noRecentTargetTitle
+            self.detail = strings.injection.noRecentTargetDetail
             self.systemImage = "app.dashed"
             self.hasRecentTarget = false
             return
@@ -49,11 +49,11 @@ public struct FocusedAppSettingsSnapshot: Equatable, Sendable {
 
         if let targetAppName = lastInjection.targetAppName, !targetAppName.isEmpty {
             self.title = targetAppName
-            self.detail = lastInjection.succeeded ? "最近插入目标 App。" : lastInjection.detail
+            self.detail = lastInjection.succeeded ? strings.injection.recentTargetDetail : lastInjection.detail
             self.systemImage = lastInjection.succeeded ? "app.connected.to.app.below.fill" : "app.badge"
             self.hasRecentTarget = true
         } else {
-            self.title = "无目标 App"
+            self.title = strings.injection.noTargetAppTitle
             self.detail = lastInjection.detail
             self.systemImage = "app.dashed"
             self.hasRecentTarget = false

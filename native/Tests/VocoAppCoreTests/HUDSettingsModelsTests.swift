@@ -2,6 +2,14 @@ import XCTest
 @testable import VocoAppCore
 
 final class HUDSettingsModelsTests: XCTestCase {
+    func testHUDSettingsSnapshotUsesEnglishCopy() {
+        let snapshot = HUDSettingsSnapshot(strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.position.title, "Top Center")
+        XCTAssertEqual(snapshot.notchMode.title, "Notch Aware")
+        XCTAssertEqual(snapshot.transcriptPreview.title, "Show Transcript Preview")
+    }
+
     func testDefaultHUDSettingsAreTopCenterNotchAwareWithPreviewEnabled() {
         let snapshot = HUDSettingsSnapshot()
 

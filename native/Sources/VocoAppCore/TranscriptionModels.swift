@@ -364,33 +364,19 @@ public enum TranscriptionProviderStatus: Equatable, Sendable {
     case failed(providerName: String, message: String)
 
     public var title: String {
-        switch self {
-        case .notConfigured:
-            "未配置"
-        case .ready(let providerName):
-            providerName
-        case .authenticationRequired(let providerName):
-            "\(providerName)需要认证"
-        case .offline(let providerName):
-            "\(providerName)离线"
-        case .failed(let providerName, _):
-            "\(providerName)错误"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.transcription.title(for: self)
     }
 
     public var detail: String {
-        switch self {
-        case .notConfigured:
-            "请先配置火山引擎凭证。"
-        case .ready:
-            "模型已配置"
-        case .authenticationRequired:
-            "请检查火山引擎凭证。"
-        case .offline:
-            "模型暂不可用，稍后可重试。"
-        case .failed(_, let message):
-            message
-        }
+        detail(strings: VocoStrings())
+    }
+
+    public func detail(strings: VocoStrings) -> String {
+        strings.transcription.detail(for: self)
     }
 
     public var systemImage: String {

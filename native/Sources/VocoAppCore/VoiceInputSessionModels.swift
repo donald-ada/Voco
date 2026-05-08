@@ -96,13 +96,17 @@ public struct VoiceInputSessionPage: Equatable, Sendable {
     }
 
     public var visibleRangeTitle: String {
+        visibleRangeTitle(strings: VocoStrings())
+    }
+
+    public func visibleRangeTitle(strings: VocoStrings) -> String {
         guard totalCount > 0 else {
-            return "0 / 0 条"
+            return strings.sessions.visibleRangeTitle(start: 0, end: 0, total: 0)
         }
 
         let start = (page - 1) * pageSize + 1
         let end = min(start + entries.count - 1, totalCount)
-        return "\(start)-\(end) / \(totalCount) 条"
+        return strings.sessions.visibleRangeTitle(start: start, end: end, total: totalCount)
     }
 }
 

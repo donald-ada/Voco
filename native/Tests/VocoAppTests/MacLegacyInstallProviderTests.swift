@@ -24,6 +24,39 @@ final class MacLegacyInstallProviderTests: XCTestCase {
     }
 
     @MainActor
+    func testProviderCanDetectKnownUserLaunchAgentWithEnglishCopy() throws {
+        let home = try makeTemporaryHome()
+        let launchAgent = LegacyInstallSnapshot.knownLaunchAgentURL(homeDirectory: home)
+        try FileManager.default.createDirectory(
+            at: launchAgent.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("legacy".utf8).write(to: launchAgent)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let provider = MacLegacyInstallProvider(homeDirectory: home)
+
+        let snapshot = provider.currentSnapshot(strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.status, .detected)
+        XCTAssertEqual(snapshot.title, "Legacy background launch item detected")
+        XCTAssertFalse(snapshot.detail.contains("检测到旧版"))
+    }
+
+    @MainActor
+    func testProviderCanReturnMissingLegacyLaunchAgentWithEnglishCopy() throws {
+        let home = try makeTemporaryHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let provider = MacLegacyInstallProvider(homeDirectory: home)
+
+        let snapshot = provider.currentSnapshot(strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.status, .notFound)
+        XCTAssertEqual(snapshot.title, "No legacy launch item detected")
+    }
+
+    @MainActor
     func testProviderRemovesOnlyKnownUserLaunchAgent() async throws {
         let home = try makeTemporaryHome()
         let launchAgent = LegacyInstallSnapshot.knownLaunchAgentURL(homeDirectory: home)

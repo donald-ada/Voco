@@ -52,4 +52,21 @@ final class AppPreferenceModelsTests: XCTestCase {
         XCTAssertEqual(VoiceInputSessionRetentionPolicy.last1000.loadLimit, 1000)
         XCTAssertNil(VoiceInputSessionRetentionPolicy.forever.limit)
     }
+
+    func testVoiceInputSessionRetentionPolicyUsesEnglishCopy() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            VoiceInputSessionRetentionPolicy.allCases.map { $0.title(strings: strings) },
+            ["Last 100", "Last 1000", "Keep Forever"]
+        )
+        XCTAssertEqual(
+            VoiceInputSessionRetentionPolicy.last100.detail(strings: strings),
+            "Keep only the most recent 100 sessions."
+        )
+        XCTAssertEqual(
+            VoiceInputSessionRetentionPolicy.forever.detail(strings: strings),
+            "Do not automatically clean up old sessions."
+        )
+    }
 }

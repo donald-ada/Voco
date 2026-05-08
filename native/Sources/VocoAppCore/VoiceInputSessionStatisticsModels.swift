@@ -8,14 +8,11 @@ public enum VoiceInputSessionStatisticsPeriod: String, CaseIterable, Identifiabl
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .last7Days:
-            "近 7 天"
-        case .last30Days:
-            "近 30 天"
-        case .all:
-            "全部"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.statistics.title(for: self)
     }
 
     var dayLimit: Int? {
@@ -47,14 +44,11 @@ public enum VoiceInputSessionStatisticsMetric: String, CaseIterable, Identifiabl
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .sessions:
-            "会话"
-        case .words:
-            "字数"
-        case .duration:
-            "时长"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.statistics.title(for: self)
     }
 }
 
@@ -133,6 +127,7 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
     public static func make(
         sessions: [VoiceInputSessionSnapshot],
         period: VoiceInputSessionStatisticsPeriod,
+        strings: VocoStrings = VocoStrings(),
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) -> VoiceInputSessionStatisticsSnapshot {
@@ -149,7 +144,7 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
         let wordsPerMinute = totalDurationSeconds > 0
             ? Int((Double(totalWords) / (totalDurationSeconds / 60)).rounded())
             : 0
-        let activeAppCount = Set(filteredSessions.map { normalizedAppName($0.targetAppName) }).count
+        let activeAppCount = Set(filteredSessions.map { appContributionID($0.targetAppName) }).count
         let dailyPoints = makeDailyPoints(
             sessions: filteredSessions,
             dayCount: period.chartDayCount,
@@ -159,13 +154,15 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
         let hourRanges = makeHourRanges(sessions: filteredSessions, calendar: calendar)
         let appContributions = makeContributions(
             sessions: filteredSessions,
-            name: { normalizedAppName($0.targetAppName) },
+            id: { appContributionID($0.targetAppName) },
+            name: { appContributionTitle($0.targetAppName, strings: strings) },
             sort: { $0.words != $1.words ? $0.words > $1.words : $0.name < $1.name }
         )
         let providerContributions = makeContributions(
             sessions: filteredSessions,
-            name: \.providerName,
-            sort: { $0.sessions != $1.sessions ? $0.sessions > $1.sessions : $0.name < $1.name }
+            id: \.providerName,
+            name: { strings.workbench.providerDisplayName($0.providerName) },
+            sort: { $0.sessions != $1.sessions ? $0.sessions > $1.sessions : $0.id < $1.id }
         )
 
         return VoiceInputSessionStatisticsSnapshot(
@@ -181,8 +178,8 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
             appContributions: appContributions,
             providerContributions: providerContributions,
             hourRanges: hourRanges,
-            heatmapRows: makeHeatmapRows(sessions: filteredSessions, calendar: calendar),
-            lengthBuckets: makeLengthBuckets(sessions: filteredSessions),
+            heatmapRows: makeHeatmapRows(sessions: filteredSessions, strings: strings, calendar: calendar),
+            lengthBuckets: makeLengthBuckets(sessions: filteredSessions, strings: strings),
             rhythm: makeRhythm(
                 sessions: filteredSessions,
                 dailyPoints: dailyPoints,
@@ -263,14 +260,15 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
 
     private static func makeContributions(
         sessions: [VoiceInputSessionSnapshot],
+        id: (VoiceInputSessionSnapshot) -> String,
         name: (VoiceInputSessionSnapshot) -> String,
         sort: (VoiceInputSessionStatisticsContribution, VoiceInputSessionStatisticsContribution) -> Bool
     ) -> [VoiceInputSessionStatisticsContribution] {
-        Dictionary(grouping: sessions, by: name)
-            .map { name, sessions in
+        Dictionary(grouping: sessions, by: id)
+            .map { id, sessions in
                 VoiceInputSessionStatisticsContribution(
-                    id: name,
-                    name: name,
+                    id: id,
+                    name: sessions.first.map(name) ?? id,
                     sessions: sessions.count,
                     words: sessions.reduce(0) { $0 + $1.wordCount },
                     durationSeconds: sessions.reduce(0) { $0 + $1.durationSeconds }
@@ -302,9 +300,11 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
 
     private static func makeHeatmapRows(
         sessions: [VoiceInputSessionSnapshot],
+        strings: VocoStrings,
         calendar: Calendar
     ) -> [VoiceInputSessionStatisticsHeatmapRow] {
         weekdayDefinitions.map { weekday in
+            let weekdayTitle = strings.statistics.weekdayTitle(calendarWeekday: weekday.calendarWeekday)
             let cells = hourRangeDefinitions.map { range in
                 let cellSessions = sessions.filter { session in
                     let hour = calendar.component(.hour, from: session.createdAt)
@@ -313,7 +313,7 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
                         && hour < range.end
                 }
                 return VoiceInputSessionStatisticsHeatmapCell(
-                    id: "\(weekday.title)-\(range.label)",
+                    id: "\(weekdayTitle)-\(range.label)",
                     hourRangeLabel: range.label,
                     sessions: cellSessions.count,
                     words: cellSessions.reduce(0) { $0 + $1.wordCount },
@@ -321,31 +321,34 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
                 )
             }
             return VoiceInputSessionStatisticsHeatmapRow(
-                id: weekday.title,
-                weekdayTitle: weekday.title,
+                id: weekdayTitle,
+                weekdayTitle: weekdayTitle,
                 cells: cells
             )
         }
     }
 
-    private static func makeLengthBuckets(sessions: [VoiceInputSessionSnapshot]) -> [VoiceInputSessionStatisticsLengthBucket] {
+    private static func makeLengthBuckets(
+        sessions: [VoiceInputSessionSnapshot],
+        strings: VocoStrings
+    ) -> [VoiceInputSessionStatisticsLengthBucket] {
         [
             VoiceInputSessionStatisticsLengthBucket(
                 id: "short",
-                title: "短句",
-                detail: "0-18 字",
+                title: strings.statistics.shortTitle,
+                detail: strings.statistics.shortDetail,
                 sessions: sessions.filter { $0.wordCount <= 18 }.count
             ),
             VoiceInputSessionStatisticsLengthBucket(
                 id: "medium",
-                title: "中段",
-                detail: "19-24 字",
+                title: strings.statistics.mediumTitle,
+                detail: strings.statistics.mediumDetail,
                 sessions: sessions.filter { $0.wordCount > 18 && $0.wordCount <= 24 }.count
             ),
             VoiceInputSessionStatisticsLengthBucket(
                 id: "long",
-                title: "长段",
-                detail: "25 字以上",
+                title: strings.statistics.longTitle,
+                detail: strings.statistics.longDetail,
                 sessions: sessions.filter { $0.wordCount > 24 }.count
             )
         ]
@@ -385,9 +388,16 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
         )
     }
 
-    private static func normalizedAppName(_ value: String?) -> String {
+    fileprivate static func appContributionID(_ value: String?) -> String {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
-            return "未知 App"
+            return VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID
+        }
+        return VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID(value)
+    }
+
+    fileprivate static func appContributionTitle(_ value: String?, strings: VocoStrings) -> String {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return strings.statistics.unknownAppTitle
         }
         return value
     }
@@ -431,22 +441,44 @@ public struct VoiceInputSessionStatisticsSnapshot: Equatable, Sendable {
 
 public struct VoiceInputSessionStatisticsDashboardSnapshot: Equatable, Sendable {
     public static let allAppsTitle = "全部"
+    public static let allAppsSelectionID = "__all_apps__"
+    public static let unknownAppSelectionID = "__unknown_app__"
+
+    public static func allAppsTitle(strings: VocoStrings) -> String {
+        strings.statistics.allTitle
+    }
+
+    public struct AppOption: Equatable, Identifiable, Sendable {
+        public let id: String
+        public let title: String
+        public let appName: String?
+
+        public init(id: String, title: String, appName: String?) {
+            self.id = id
+            self.title = title
+            self.appName = appName
+        }
+    }
 
     public let period: VoiceInputSessionStatisticsPeriod
     public let appOptions: [String]
+    public let appFilterOptions: [AppOption]
+    public let selectedAppID: String
     public let selectedAppName: String
     public let baseSnapshot: VoiceInputSessionStatisticsSnapshot
     public let scopedSnapshot: VoiceInputSessionStatisticsSnapshot
 
     public static func empty(
         period: VoiceInputSessionStatisticsPeriod,
+        strings: VocoStrings = VocoStrings(),
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) -> VoiceInputSessionStatisticsDashboardSnapshot {
         make(
             sessions: [],
             period: period,
-            selectedAppName: allAppsTitle,
+            selectedAppID: allAppsSelectionID,
+            strings: strings,
             referenceDate: referenceDate,
             calendar: calendar
         )
@@ -455,41 +487,93 @@ public struct VoiceInputSessionStatisticsDashboardSnapshot: Equatable, Sendable 
     public static func make(
         sessions: [VoiceInputSessionSnapshot],
         period: VoiceInputSessionStatisticsPeriod,
-        selectedAppName: String,
+        selectedAppID: String,
+        strings: VocoStrings = VocoStrings(),
         referenceDate: Date = Date(),
         calendar: Calendar = .current,
         appOptionLimit: Int = 5
     ) -> VoiceInputSessionStatisticsDashboardSnapshot {
+        make(
+            sessions: sessions,
+            period: period,
+            selectedAppName: selectedAppID,
+            strings: strings,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            appOptionLimit: appOptionLimit,
+            selectedAppID: selectedAppID
+        )
+    }
+
+    public static func make(
+        sessions: [VoiceInputSessionSnapshot],
+        period: VoiceInputSessionStatisticsPeriod,
+        selectedAppName: String,
+        strings: VocoStrings = VocoStrings(),
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current,
+        appOptionLimit: Int = 5,
+        selectedAppID: String? = nil
+    ) -> VoiceInputSessionStatisticsDashboardSnapshot {
         let baseSnapshot = VoiceInputSessionStatisticsSnapshot.make(
             sessions: sessions,
             period: period,
+            strings: strings,
             referenceDate: referenceDate,
             calendar: calendar
         )
-        let visibleAppOptions = Array(baseSnapshot.appContributions.prefix(max(0, appOptionLimit)).map(\.name))
-        var appOptions = [allAppsTitle]
-        appOptions.append(contentsOf: visibleAppOptions)
+        let visibleAppOptions = Array(baseSnapshot.appContributions.prefix(max(0, appOptionLimit)))
+        let allAppsTitle = allAppsTitle(strings: strings)
+        var filterOptions = [
+            AppOption(id: allAppsSelectionID, title: allAppsTitle, appName: nil)
+        ]
+        filterOptions.append(contentsOf: visibleAppOptions.map { contribution in
+            AppOption(
+                id: contribution.id,
+                title: contribution.name,
+                appName: appName(forSelectionID: contribution.id)
+            )
+        })
 
-        let normalizedSelection = normalizedAppName(selectedAppName)
-        if normalizedSelection != allAppsTitle,
-           !appOptions.contains(normalizedSelection),
-           baseSnapshot.appContributions.contains(where: { $0.name == normalizedSelection }) {
-            appOptions.append(normalizedSelection)
+        let selectedAppIDFromLegacyName = appSelectionID(forLegacyName: selectedAppName, strings: strings)
+        let effectiveSelectedAppID = selectedAppID ?? selectedAppIDFromLegacyName
+        let selectedAppNameFromID = effectiveSelectedAppID.flatMap { appName(forSelectionID: $0) }
+        let isAllAppsSelection = selectedAppID == allAppsSelectionID ||
+            (selectedAppNameFromID == nil && isLocalizedAllAppsSelection(selectedAppName, strings: strings))
+        let requestedAppID = effectiveSelectedAppID ?? appSelectionID(selectedAppName)
+        if !isAllAppsSelection,
+           !filterOptions.contains(where: { $0.id == requestedAppID }),
+           let contribution = baseSnapshot.appContributions.first(where: { $0.id == requestedAppID }) {
+            filterOptions.append(AppOption(
+                id: contribution.id,
+                title: contribution.name,
+                appName: appName(forSelectionID: contribution.id)
+            ))
         }
 
-        let resolvedSelection = appOptions.contains(normalizedSelection)
-            ? normalizedSelection
-            : allAppsTitle
+        let resolvedOption: AppOption
+        if isAllAppsSelection {
+            resolvedOption = filterOptions[0]
+        } else if let option = filterOptions.first(where: { $0.id == requestedAppID }) {
+            resolvedOption = option
+        } else if let selectedAppNameFromID,
+                  let option = filterOptions.first(where: { $0.appName == selectedAppNameFromID }) {
+            resolvedOption = option
+        } else {
+            resolvedOption = filterOptions[0]
+        }
+
         let scopedSnapshot: VoiceInputSessionStatisticsSnapshot
-        if resolvedSelection == allAppsTitle {
+        if resolvedOption.id == allAppsSelectionID {
             scopedSnapshot = baseSnapshot
         } else {
             let scopedSessions = baseSnapshot.sessions.filter {
-                normalizedAppName($0.targetAppName) == resolvedSelection
+                VoiceInputSessionStatisticsSnapshot.appContributionID($0.targetAppName) == resolvedOption.id
             }
             scopedSnapshot = VoiceInputSessionStatisticsSnapshot.make(
                 sessions: scopedSessions,
                 period: period,
+                strings: strings,
                 referenceDate: referenceDate,
                 calendar: calendar
             )
@@ -497,18 +581,56 @@ public struct VoiceInputSessionStatisticsDashboardSnapshot: Equatable, Sendable 
 
         return VoiceInputSessionStatisticsDashboardSnapshot(
             period: period,
-            appOptions: appOptions,
-            selectedAppName: resolvedSelection,
+            appOptions: filterOptions.map(\.title),
+            appFilterOptions: filterOptions,
+            selectedAppID: resolvedOption.id,
+            selectedAppName: resolvedOption.title,
             baseSnapshot: baseSnapshot,
             scopedSnapshot: scopedSnapshot
         )
     }
 
-    private static func normalizedAppName(_ value: String?) -> String {
+    private static func isLocalizedAllAppsSelection(_ value: String, strings: VocoStrings) -> Bool {
+        value == allAppsSelectionID ||
+            value == allAppsTitle(strings: strings) ||
+            value == allAppsTitle
+    }
+
+    private static func normalizedAppName(_ value: String?, strings: VocoStrings) -> String {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
-            return "未知 App"
+            return strings.statistics.unknownAppTitle
         }
 
         return value
+    }
+
+    public static func appSelectionID(_ appName: String) -> String {
+        "app:\(appName)"
+    }
+
+    private static func appName(forSelectionID selectionID: String) -> String? {
+        if selectionID == unknownAppSelectionID {
+            return nil
+        }
+
+        let prefix = "app:"
+        guard selectionID.hasPrefix(prefix) else {
+            return nil
+        }
+
+        return String(selectionID.dropFirst(prefix.count))
+    }
+
+    private static func appSelectionID(forLegacyName appName: String, strings: VocoStrings) -> String? {
+        if isLocalizedAllAppsSelection(appName, strings: strings) {
+            return allAppsSelectionID
+        }
+
+        let trimmed = appName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return unknownAppSelectionID
+        }
+
+        return appSelectionID(trimmed)
     }
 }

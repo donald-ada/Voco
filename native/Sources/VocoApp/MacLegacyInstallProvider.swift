@@ -14,24 +14,24 @@ struct MacLegacyInstallProvider: LegacyInstallProviding {
         self.homeDirectory = homeDirectory
     }
 
-    func currentSnapshot() -> LegacyInstallSnapshot {
+    func currentSnapshot(strings: VocoStrings = VocoStrings()) -> LegacyInstallSnapshot {
         if knownLaunchAgentExists {
-            return .detected(launchAgentURL: launchAgentURL)
+            return .detected(launchAgentURL: launchAgentURL, strings: strings)
         }
 
-        return .notFound(launchAgentURL: launchAgentURL)
+        return .notFound(launchAgentURL: launchAgentURL, strings: strings)
     }
 
-    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+    func removeKnownLaunchAgent(strings: VocoStrings = VocoStrings()) async throws -> LegacyInstallSnapshot {
         guard knownLaunchAgentExists else {
-            return .notFound(launchAgentURL: launchAgentURL)
+            return .notFound(launchAgentURL: launchAgentURL, strings: strings)
         }
 
         try validateLaunchAgentsDirectoryForRemoval()
 
         do {
             try fileManager.removeItem(at: launchAgentURL)
-            return .notFound(launchAgentURL: launchAgentURL)
+            return .notFound(launchAgentURL: launchAgentURL, strings: strings)
         } catch {
             throw LegacyInstallCleanupError.removeFailed(path: launchAgentURL.path, underlying: error)
         }

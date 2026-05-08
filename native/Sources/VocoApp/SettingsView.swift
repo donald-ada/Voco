@@ -14,7 +14,7 @@ struct SettingsView: View {
     @State private var selectedVoiceInputSession: VoiceInputSessionSnapshot?
     @State private var selectedStatisticsPeriod: VoiceInputSessionStatisticsPeriod = .last7Days
     @State private var selectedStatisticsMetric: VoiceInputSessionStatisticsMetric = .words
-    @State private var selectedStatisticsAppName = VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle
+    @State private var selectedStatisticsAppID = VoiceInputSessionStatisticsDashboardSnapshot.allAppsSelectionID
     @State private var statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.empty(period: .last7Days)
 
     private var strings: VocoStrings {
@@ -25,7 +25,8 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             SettingsWorkbenchSidebar(
                 selectedSection: $selectedSection,
-                snapshot: coordinator.settingsWorkbenchSnapshot
+                snapshot: coordinator.settingsWorkbenchSnapshot,
+                strings: strings
             )
 
             Divider()
@@ -46,6 +47,7 @@ struct SettingsView: View {
         .onAppear {
             coordinator.prepareForSettingsPresentation()
             syncSelectedVolcengineCredentialMode()
+            refreshStatisticsDashboardSnapshot()
         }
         .onChange(of: selectedSection) { _, section in
             if section == .statistics {
@@ -55,7 +57,10 @@ struct SettingsView: View {
         .onChange(of: selectedStatisticsPeriod) { _, _ in
             refreshStatisticsDashboardSnapshot()
         }
-        .onChange(of: selectedStatisticsAppName) { _, _ in
+        .onChange(of: selectedStatisticsAppID) { _, _ in
+            refreshStatisticsDashboardSnapshot()
+        }
+        .onChange(of: coordinator.appLanguage) { _, _ in
             refreshStatisticsDashboardSnapshot()
         }
         .onChange(of: coordinator.recentVoiceInputSessions) { _, _ in
@@ -73,7 +78,7 @@ struct SettingsView: View {
             }
         }
         .sheet(item: $selectedVoiceInputSession) { session in
-            VoiceInputSessionDetailSheet(session: session)
+            VoiceInputSessionDetailSheet(session: session, strings: strings)
         }
     }
 
@@ -97,8 +102,8 @@ struct SettingsView: View {
         return VStack(alignment: .leading, spacing: 16) {
             settingsPageHeader(
                 eyebrow: "HOME",
-                title: "主页",
-                detail: "查看语音输入是否可用，并浏览最近会话。"
+                title: strings.settings.homeTitle,
+                detail: strings.settings.homeDetail
             )
 
             legacyInstallSection
@@ -108,8 +113,9 @@ struct SettingsView: View {
                 primaryAction: performOverviewPrimaryAction,
                 secondaryAction: {
                     coordinator.prepareForSettingsPresentation()
-                    settingsFeedbackMessage = "已重新检查状态。"
-                }
+                    settingsFeedbackMessage = strings.settings.recheckedStatusFeedback
+                },
+                strings: strings
             )
 
             homeMetricsRow
@@ -117,7 +123,8 @@ struct SettingsView: View {
             VoiceInputSessionsPanel(
                 sessions: coordinator.recentVoiceInputSessions,
                 currentPage: $voiceInputSessionPage,
-                selectedSession: $selectedVoiceInputSession
+                selectedSession: $selectedVoiceInputSession,
+                strings: strings
             )
         }
     }
@@ -129,8 +136,8 @@ struct SettingsView: View {
         let latestSession = sessions.first
 
         return HStack(spacing: 12) {
-            HomeMetricCard(label: "TODAY", value: "\(todaySessions.count) 次会话")
-            HomeMetricCard(label: "WORDS", value: "\(totalWords) 字")
+            HomeMetricCard(label: strings.settings.todaySessionsLabel, value: strings.settings.sessionCountValue(todaySessions.count))
+            HomeMetricCard(label: strings.settings.wordsLabel, value: strings.settings.wordCountValue(totalWords))
             HomeMetricCard(label: "LAST", value: latestSession?.timeTitle ?? "--")
         }
     }
@@ -141,16 +148,16 @@ struct SettingsView: View {
         return VStack(alignment: .leading, spacing: 16) {
             settingsPageHeader(
                 eyebrow: "SETTINGS",
-                title: "语音输入体验",
-                detail: "配置开始录音的按键、触发方式、麦克风输入和 macOS 权限。"
+                title: strings.settings.voiceInputExperienceTitle,
+                detail: strings.settings.voiceInputExperienceDetail
             )
 
             workbenchPanel(
-                title: "录音控制",
-                detail: "选择快捷键、录音方式和输入设备。"
+                title: strings.settings.recordingControlTitle,
+                detail: strings.settings.recordingControlDetail
             ) {
                 WorkbenchStatusPill(
-                    coordinator.hotkeyRuntimeState.title,
+                    coordinator.hotkeyRuntimeState.title(strings: strings),
                     systemImage: coordinator.hotkeyRuntimeState.systemImage,
                     color: hotkeyTint(coordinator.hotkeyRuntimeState)
                 )
@@ -168,8 +175,8 @@ struct SettingsView: View {
         return VStack(alignment: .leading, spacing: 16) {
             settingsPageHeader(
                 eyebrow: "MODEL",
-                title: "火山引擎模型",
-                detail: "选择凭证模式，并将火山引擎凭证保存到 macOS Keychain。"
+                title: strings.settings.modelTitle,
+                detail: strings.settings.modelDetail
             )
 
             credentialPanel
@@ -180,21 +187,22 @@ struct SettingsView: View {
         let dashboard = statisticsDashboardSnapshot
         let baseSnapshot = dashboard.baseSnapshot
         let snapshot = dashboard.scopedSnapshot
-        let appOptions = dashboard.appOptions
+        let appOptions = dashboard.appFilterOptions
+        let isAllAppsSelected = dashboard.selectedAppID == VoiceInputSessionStatisticsDashboardSnapshot.allAppsSelectionID
         let selectedApp = dashboard.selectedAppName
         let layoutPolicy = StatisticsDashboardLayoutPolicy.resizeOptimized
 
         return LazyVStack(alignment: .leading, spacing: layoutPolicy.verticalSpacing) {
             settingsPageHeader(
                 eyebrow: "STATISTICS",
-                title: "统计",
-                detail: "查看语音输入使用趋势、应用分布和活跃时段。"
+                title: strings.settings.statisticsTitle,
+                detail: strings.settings.statisticsDetail
             ) {
                 WorkbenchSegmentedControl(
                     options: VoiceInputSessionStatisticsPeriod.allCases,
                     selected: selectedStatisticsPeriod,
                     width: 248,
-                    title: \.title
+                    title: { $0.title(strings: strings) }
                 ) { period in
                     selectedStatisticsPeriod = period
                 }
@@ -202,14 +210,17 @@ struct SettingsView: View {
 
             StatisticsAppFilter(
                 options: appOptions,
-                selectedApp: selectedApp
-            ) { app in
-                selectedStatisticsAppName = app
+                selectedAppID: dashboard.selectedAppID,
+                strings: strings
+            ) { appID in
+                selectedStatisticsAppID = appID
             }
 
             StatisticsMetricSummaryRow(
                 snapshot: snapshot,
-                selectedApp: selectedApp
+                selectedApp: selectedApp,
+                isAllAppsSelected: isAllAppsSelected,
+                strings: strings
             )
 
             StatisticsDashboardColumnsView(
@@ -218,11 +229,14 @@ struct SettingsView: View {
                 baseSnapshot: baseSnapshot,
                 period: selectedStatisticsPeriod,
                 metric: selectedStatisticsMetric,
-                selectedApp: selectedApp
+                selectedApp: selectedApp,
+                selectedAppID: dashboard.selectedAppID,
+                isAllAppsSelected: isAllAppsSelected,
+                strings: strings
             ) { metric in
                 selectedStatisticsMetric = metric
-            } onSelectApp: { app in
-                selectedStatisticsAppName = app
+            } onSelectApp: { appID in
+                selectedStatisticsAppID = appID
             }
         }
     }
@@ -231,7 +245,8 @@ struct SettingsView: View {
         statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.make(
             sessions: coordinator.recentVoiceInputSessions,
             period: selectedStatisticsPeriod,
-            selectedAppName: selectedStatisticsAppName
+            selectedAppID: selectedStatisticsAppID,
+            strings: strings
         )
     }
 
@@ -278,7 +293,7 @@ struct SettingsView: View {
                 .fill(status.workbenchColor)
                 .frame(width: 7, height: 7)
 
-            Text(status.workbenchTitle)
+            Text(status.workbenchTitle(strings: strings))
                 .font(SettingsWorkbenchVisual.caption2BoldFont)
                 .foregroundStyle(status.workbenchColor)
                 .lineLimit(1)
@@ -323,9 +338,9 @@ struct SettingsView: View {
     private func voiceInputControls(audio: AudioSettingsSnapshot) -> some View {
         VStack(spacing: 10) {
             VoiceInputSettingRow(
-                label: "快捷键",
+                label: strings.settings.hotkeyLabel,
                 title: coordinator.hotkeyBinding.displayName,
-                detail: coordinator.hotkeyRuntimeState.detail,
+                detail: coordinator.hotkeyRuntimeState.detail(strings: strings),
                 systemImage: "keyboard",
                 color: hotkeyTint(coordinator.hotkeyRuntimeState)
             ) {
@@ -341,9 +356,9 @@ struct SettingsView: View {
             }
 
             VoiceInputSettingRow(
-                label: "录音模式",
-                title: coordinator.hotkeyMode.title,
-                detail: coordinator.hotkeyMode == .toggle ? "按一次开始，再按一次提交。" : "按住开始录音，松开后提交。",
+                label: strings.settings.recordingModeLabel,
+                title: coordinator.hotkeyMode.title(strings: strings),
+                detail: coordinator.hotkeyMode == .toggle ? strings.settings.toggleModeDetail : strings.settings.pressAndHoldModeDetail,
                 systemImage: "record.circle",
                 color: SettingsWorkbenchVisual.accent
             ) {
@@ -351,14 +366,14 @@ struct SettingsView: View {
                     options: HotkeyMode.allCases,
                     selected: selectedHotkeyModeBinding.wrappedValue,
                     width: 190,
-                    title: \.title
+                    title: { $0.title(strings: strings) }
                 ) { mode in
                     selectedHotkeyModeBinding.wrappedValue = mode
                 }
             }
 
             VoiceInputSettingRow(
-                label: "输入设备",
+                label: strings.settings.inputDeviceLabel,
                 title: audio.inputDevice.title,
                 detail: audio.inputDevice.detail,
                 systemImage: audio.inputDevice.systemImage,
@@ -366,11 +381,11 @@ struct SettingsView: View {
             ) {
                 HStack(spacing: 8) {
                     WorkbenchMenuControl(
-                        title: selectedAudioInputDeviceBinding.wrappedValue.title,
+                        title: selectedAudioInputDeviceBinding.wrappedValue.title(strings: strings),
                         width: 168,
                         options: audioInputDevicesForPicker,
                         selected: selectedAudioInputDeviceBinding.wrappedValue,
-                        titleForOption: \.title
+                        titleForOption: { $0.title(strings: strings) }
                     ) { device in
                         selectedAudioInputDeviceBinding.wrappedValue = device
                     }
@@ -381,7 +396,7 @@ struct SettingsView: View {
                         Image(systemName: "gearshape")
                     }
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
-                    .help("打开 macOS 声音输入设置")
+                    .help(strings.settings.openSoundInputSettingsHelp)
                 }
             }
         }
@@ -389,11 +404,11 @@ struct SettingsView: View {
 
     private var credentialPanel: some View {
         workbenchPanel(
-            title: "火山引擎凭证",
-            detail: "凭证会保存到 macOS Keychain，不会在界面中显示完整密钥。"
+            title: strings.settings.credentialsPanelTitle,
+            detail: strings.settings.credentialsPanelDetail
         ) {
             WorkbenchStatusPill(
-                coordinator.transcriptionCredentials.statusTitle,
+                coordinator.transcriptionCredentials.statusTitle(strings: strings),
                 systemImage: coordinator.transcriptionCredentials.hasCredential ? "key.fill" : "key",
                 color: credentialTint(coordinator.transcriptionCredentials)
             )
@@ -403,16 +418,16 @@ struct SettingsView: View {
                     options: VolcengineCredentialMode.allCases,
                     selected: selectedVolcengineCredentialMode,
                     width: 360,
-                    title: \.title
+                    title: { $0.title(strings: strings) }
                 ) { mode in
                     selectedVolcengineCredentialMode = mode
                 }
 
-                WorkbenchFieldBlock(label: selectedVolcengineCredentialMode.fieldLabel) {
+                WorkbenchFieldBlock(label: selectedVolcengineCredentialMode.fieldLabel(strings: strings)) {
                     credentialFields
                 }
 
-                Text(selectedVolcengineCredentialMode.detail)
+                Text(selectedVolcengineCredentialMode.detail(strings: strings))
                     .font(SettingsWorkbenchVisual.captionFont)
                     .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -435,18 +450,18 @@ struct SettingsView: View {
                                 )
                             }
                             if coordinator.lastErrorMessage == nil {
-                                settingsFeedbackMessage = "已保存火山引擎凭证。"
+                                settingsFeedbackMessage = strings.settings.savedCredentialsFeedback
                             }
                         }
                     } label: {
-                        Label("保存到 Keychain", systemImage: "key")
+                        Label(strings.settings.saveToKeychainButton, systemImage: "key")
                     }
                     .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
                     .disabled(!canSaveSelectedCredential)
 
-                    Button("刷新状态") {
+                    Button(strings.settings.refreshStatusButton) {
                         coordinator.prepareForSettingsPresentation()
-                        settingsFeedbackMessage = "已刷新火山引擎状态。"
+                        settingsFeedbackMessage = strings.settings.refreshedVolcengineStatusFeedback
                     }
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
 
@@ -454,11 +469,11 @@ struct SettingsView: View {
                         Task {
                             await coordinator.clearTranscriptionCredentials()
                             if coordinator.lastErrorMessage == nil {
-                                settingsFeedbackMessage = "已清除火山引擎凭证。"
+                                settingsFeedbackMessage = strings.settings.clearedCredentialsFeedback
                             }
                         }
                     } label: {
-                        Label("清除凭证", systemImage: "trash")
+                        Label(strings.settings.clearCredentialsButton, systemImage: "trash")
                     }
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
                     .disabled(!coordinator.transcriptionCredentials.hasCredential)
@@ -469,14 +484,14 @@ struct SettingsView: View {
 
     private var permissionsPanel: some View {
         workbenchPanel(
-            title: "权限",
-            detail: "允许麦克风和辅助功能。"
+            title: strings.settings.permissionsTitle,
+            detail: strings.settings.permissionsDetail
         ) {
             Button {
                 coordinator.refreshPermissions()
-                settingsFeedbackMessage = "已重新检查权限。"
+                settingsFeedbackMessage = strings.settings.recheckedPermissionsFeedback
             } label: {
-                Label("重新检查", systemImage: "arrow.clockwise")
+                Label(strings.settings.recheckButton, systemImage: "arrow.clockwise")
             }
             .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
         } content: {
@@ -484,12 +499,12 @@ struct SettingsView: View {
                 ForEach(coordinator.permissions) { permission in
                     WorkbenchInfoRow(
                         systemImage: permission.kind.systemImage,
-                        title: permission.kind.title,
-                        detail: permission.kind.description,
+                        title: permission.kind.title(strings: strings),
+                        detail: permission.kind.description(strings: strings),
                         color: permissionTint(permission.state)
                     ) {
                         HStack(spacing: 8) {
-                            WorkbenchStatusPill(permission.state.title, color: permissionTint(permission.state))
+                            WorkbenchStatusPill(permission.state.title(strings: strings), color: permissionTint(permission.state))
                             permissionActions(permission)
                         }
                     }
@@ -504,7 +519,7 @@ struct SettingsView: View {
             EmptyView()
         } else {
             if permission.kind == .microphone {
-                Button("请求") {
+                Button(strings.settings.requestButton) {
                     Task {
                         await coordinator.requestMicrophonePermission()
                     }
@@ -512,7 +527,7 @@ struct SettingsView: View {
                 .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
             }
 
-            Button(permission.kind.recoveryActionTitle) {
+            Button(permission.kind.recoveryActionTitle(strings: strings)) {
                 openSettings(for: permission.kind)
             }
             .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
@@ -522,11 +537,11 @@ struct SettingsView: View {
 
     private var systemPanel: some View {
         workbenchPanel(
-            title: "系统",
-            detail: "配置 Voco 的启动方式。"
+            title: strings.settings.systemTitle,
+            detail: strings.settings.systemDetail
         ) {
             WorkbenchStatusPill(
-                coordinator.silentLaunchEnabled ? "静默启动" : "启动显示窗口",
+                coordinator.silentLaunchEnabled ? strings.settings.silentLaunchPill : strings.settings.showWindowOnLaunchPill,
                 systemImage: coordinator.silentLaunchEnabled ? "menubar.rectangle" : "macwindow",
                 color: SettingsWorkbenchVisual.neutral
             )
@@ -552,9 +567,9 @@ struct SettingsView: View {
                 }
 
                 VoiceInputSettingRow(
-                    label: "开机自启动",
-                    title: coordinator.launchAtLoginEnabled ? "已开启" : coordinator.launchAtLoginState.title,
-                    detail: "启用后，Voco将在系统启动时自动运行。可在系统设置 > 通用 > 登录项中管理。",
+                    label: strings.settings.launchAtLoginLabel,
+                    title: coordinator.launchAtLoginState.title(strings: strings),
+                    detail: coordinator.launchAtLoginState.detail(strings: strings),
                     systemImage: coordinator.launchAtLoginState.systemImage,
                     color: launchAtLoginTint(coordinator.launchAtLoginState)
                 ) {
@@ -575,16 +590,16 @@ struct SettingsView: View {
                 }
 
                 if coordinator.launchAtLoginState == .requiresApproval {
-                    Text("请在系统设置 > 通用 > 登录项中批准 Voco。")
+                    Text(strings.settings.launchAtLoginApprovalDetail)
                         .font(SettingsWorkbenchVisual.captionFont)
                         .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 VoiceInputSettingRow(
-                    label: "静默启动",
-                    title: coordinator.silentLaunchEnabled ? "仅在系统托盘运行" : "启动时显示主窗口",
-                    detail: "启用后，应用启动时不显示主窗口，仅在系统托盘运行。可随时通过托盘图标打开主窗口。",
+                    label: strings.settings.silentLaunchLabel,
+                    title: coordinator.silentLaunchEnabled ? strings.settings.trayOnlyTitle : strings.settings.showMainWindowTitle,
+                    detail: strings.settings.silentLaunchDetail,
                     systemImage: coordinator.silentLaunchEnabled ? "menubar.rectangle" : "macwindow",
                     color: SettingsWorkbenchVisual.neutral
                 ) {
@@ -603,9 +618,9 @@ struct SettingsView: View {
                 }
 
                 VoiceInputSettingRow(
-                    label: "在 Dock 中显示",
-                    title: coordinator.displayInDockEnabled ? "已显示" : "已隐藏",
-                    detail: "启用后，Voco 会出现在 Dock 和应用切换器中。",
+                    label: strings.settings.dockLabel,
+                    title: coordinator.displayInDockEnabled ? strings.settings.dockShownTitle : strings.settings.dockHiddenTitle,
+                    detail: strings.settings.dockDetail,
                     systemImage: coordinator.displayInDockEnabled ? "dock.rectangle" : "dock.rectangle",
                     color: SettingsWorkbenchVisual.neutral
                 ) {
@@ -625,11 +640,11 @@ struct SettingsView: View {
                 }
 
                 VoiceInputSettingRow(
-                    label: "保存会话记录",
-                    title: coordinator.voiceInputSessionHistoryEnabled ? "已保存" : "不保存",
+                    label: strings.settings.sessionHistoryLabel,
+                    title: coordinator.voiceInputSessionHistoryEnabled ? strings.settings.sessionHistorySavedTitle : strings.settings.sessionHistoryDisabledTitle,
                     detail: coordinator.voiceInputSessionHistoryEnabled
-                        ? "成功录音后写入本机 SQLite，会话列表下次启动仍可查看。"
-                        : "关闭后不再写入 SQLite，只保留当前运行中的临时列表。",
+                        ? strings.settings.sessionHistoryEnabledDetail
+                        : strings.settings.sessionHistoryDisabledDetail,
                     systemImage: coordinator.voiceInputSessionHistoryEnabled ? "tray.full" : "tray",
                     color: coordinator.voiceInputSessionHistoryEnabled
                         ? SettingsWorkbenchVisual.accent
@@ -651,18 +666,18 @@ struct SettingsView: View {
 
                 if coordinator.voiceInputSessionHistoryEnabled {
                     VoiceInputSettingRow(
-                        label: "保留策略",
-                        title: coordinator.voiceInputSessionRetentionPolicy.title,
-                        detail: coordinator.voiceInputSessionRetentionPolicy.detail,
+                        label: strings.settings.retentionPolicyLabel,
+                        title: coordinator.voiceInputSessionRetentionPolicy.title(strings: strings),
+                        detail: coordinator.voiceInputSessionRetentionPolicy.detail(strings: strings),
                         systemImage: "clock.arrow.circlepath",
                         color: SettingsWorkbenchVisual.neutral
                     ) {
                         WorkbenchMenuControl(
-                            title: coordinator.voiceInputSessionRetentionPolicy.title,
+                            title: coordinator.voiceInputSessionRetentionPolicy.title(strings: strings),
                             width: 132,
                             options: Array(VoiceInputSessionRetentionPolicy.allCases),
                             selected: coordinator.voiceInputSessionRetentionPolicy,
-                            titleForOption: \.title
+                            titleForOption: { $0.title(strings: strings) }
                         ) { policy in
                             coordinator.setVoiceInputSessionRetentionPolicy(policy)
                         }
@@ -689,7 +704,7 @@ struct SettingsView: View {
                     Button {
                         coordinator.refreshLegacyInstall()
                     } label: {
-                        Label("重新检查", systemImage: "arrow.clockwise")
+                        Label(strings.settings.recheckButton, systemImage: "arrow.clockwise")
                     }
                     .controlSize(.small)
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
@@ -706,7 +721,7 @@ struct SettingsView: View {
                     }
                 } label: {
                     Label(
-                        coordinator.isRemovingLegacyLaunchAgent ? "正在移除..." : "移除旧版启动项",
+                        coordinator.isRemovingLegacyLaunchAgent ? strings.settings.removingLegacyLaunchItemTitle : strings.settings.removeLegacyLaunchItemTitle,
                         systemImage: coordinator.isRemovingLegacyLaunchAgent ? "hourglass" : "trash"
                     )
                 }
@@ -723,13 +738,13 @@ struct SettingsView: View {
     private var credentialFields: some View {
         switch selectedVolcengineCredentialMode {
         case .apiKey:
-            SecureField("输入火山引擎 API Key", text: $transcriptionAPIKey)
+            SecureField(strings.settings.apiKeyPlaceholder, text: $transcriptionAPIKey)
                 .workbenchCredentialField()
         case .appIDAccessToken:
-            TextField("输入火山引擎 App ID", text: $volcengineAppID)
+            TextField(strings.settings.appIDPlaceholder, text: $volcengineAppID)
                 .workbenchCredentialField()
 
-            SecureField("输入火山引擎 Access Token", text: $volcengineAccessToken)
+            SecureField(strings.settings.accessTokenPlaceholder, text: $volcengineAccessToken)
                 .workbenchCredentialField()
         }
     }
@@ -835,7 +850,7 @@ struct SettingsView: View {
             selectedSection = .model
         case .refresh:
             coordinator.prepareForSettingsPresentation()
-            settingsFeedbackMessage = "已重新检查状态。"
+            settingsFeedbackMessage = strings.settings.recheckedStatusFeedback
         case .startTestRecording:
             startTestRecordingFromSettings()
         case .unknown:
@@ -852,11 +867,11 @@ struct SettingsView: View {
 
         if !coordinator.permissionSummary.allRequiredGranted {
             selectedSection = .settings
-            settingsFeedbackMessage = "请先处理权限后再测试录音。"
+            settingsFeedbackMessage = strings.settings.handlePermissionsBeforeTestFeedback
             return
         }
 
-        settingsFeedbackMessage = "当前状态不能开始录音：\(coordinator.snapshot.title)"
+        settingsFeedbackMessage = strings.settings.cannotStartRecordingFeedback(statusTitle: coordinator.snapshot.title)
     }
 
     private var selectedHotkeyPresetBinding: Binding<HotkeyPreset> {
@@ -866,7 +881,7 @@ struct SettingsView: View {
             },
             set: { preset in
                 coordinator.setHotkeyPreset(preset)
-                settingsFeedbackMessage = "快捷键已切换为 \(preset.title)。"
+                settingsFeedbackMessage = strings.settings.hotkeyChangedFeedback(preset.title)
             }
         )
     }
@@ -878,7 +893,7 @@ struct SettingsView: View {
             },
             set: { mode in
                 coordinator.setHotkeyMode(mode)
-                settingsFeedbackMessage = "录音模式已切换为 \(mode.title)。"
+                settingsFeedbackMessage = strings.settings.recordingModeChangedFeedback(mode.title(strings: strings))
             }
         )
     }
@@ -890,7 +905,7 @@ struct SettingsView: View {
             },
             set: { device in
                 coordinator.setAudioInputDevice(device)
-                settingsFeedbackMessage = "输入设备已切换为 \(device.title)。"
+                settingsFeedbackMessage = strings.settings.inputDeviceChangedFeedback(device.title(strings: strings))
             }
         )
     }
@@ -914,17 +929,17 @@ struct SettingsView: View {
             return
         }
 
-        coordinator.fail("无法打开 macOS 声音输入设置")
+        coordinator.fail(strings.settings.openSoundInputFailedMessage)
     }
 
     private func openSettings(for kind: PermissionKind) {
         guard let url = URL(string: kind.settingsURLString) else {
-            coordinator.fail("无法打开系统设置：\(kind.title) 的链接无效")
+            coordinator.fail(strings.settings.invalidSettingsURLMessage(kindTitle: kind.title(strings: strings)))
             return
         }
 
         if !NSWorkspace.shared.open(url) {
-            coordinator.fail("无法打开系统设置：\(kind.title)")
+            coordinator.fail(strings.settings.openSettingsFailedMessage(kindTitle: kind.title(strings: strings)))
         }
     }
 }
@@ -1027,27 +1042,27 @@ private extension SettingsWorkbenchSectionStatus {
         }
     }
 
-    var workbenchTitle: String {
+    func workbenchTitle(strings: VocoStrings) -> String {
         switch self {
         case .ok:
-            "正常"
+            strings.settings.statusOKTitle
         case .needsAttention:
-            "阻塞"
+            strings.settings.statusNeedsAttentionTitle
         case .warning:
-            "注意"
+            strings.settings.statusWarningTitle
         case .neutral:
-            "等待"
+            strings.settings.statusNeutralTitle
         }
     }
 }
 
 private extension VolcengineCredentialMode {
-    var fieldLabel: String {
+    func fieldLabel(strings: VocoStrings) -> String {
         switch self {
         case .apiKey:
-            "新控制台 API Key"
+            strings.settings.apiKeyFieldLabel
         case .appIDAccessToken:
-            "火山引擎 App ID + Access Token"
+            strings.settings.appIDAccessTokenFieldLabel
         }
     }
 
@@ -1064,7 +1079,7 @@ private extension VolcengineCredentialMode {
     }
 
     var routingParameterBadgeTitle: String {
-        "自动重试"
+        VocoStrings().settings.retryBadgeTitle
     }
 
     var authHeaderDetail: String {
@@ -1532,6 +1547,7 @@ private struct SettingsHomeHeroCard: View {
     let snapshot: SettingsWorkbenchSnapshot
     let primaryAction: () -> Void
     let secondaryAction: () -> Void
+    let strings: VocoStrings
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -1539,13 +1555,13 @@ private struct SettingsHomeHeroCard: View {
                 statusContent
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                VoiceInputFlowPreview()
+                VoiceInputFlowPreview(strings: strings)
                     .frame(width: 510)
             }
 
             VStack(alignment: .leading, spacing: 18) {
                 statusContent
-                VoiceInputFlowPreview()
+                VoiceInputFlowPreview(strings: strings)
             }
         }
         .padding(25)
@@ -1559,7 +1575,7 @@ private struct SettingsHomeHeroCard: View {
 
     private var statusContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(snapshot.homeIssueItems.isEmpty ? "Welcome" : "需要解决")
+            Text(snapshot.homeIssueItems.isEmpty ? strings.settings.welcomeTitle : strings.settings.needsResolutionTitle)
                 .font(SettingsWorkbenchVisual.homeTitleFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .lineLimit(1)
@@ -1644,26 +1660,27 @@ private struct HomeMetricCard: View {
 }
 
 private struct StatisticsAppFilter: View {
-    let options: [String]
-    let selectedApp: String
+    let options: [VoiceInputSessionStatisticsDashboardSnapshot.AppOption]
+    let selectedAppID: String
+    let strings: VocoStrings
     let onSelect: (String) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("目标 App")
+            Text(strings.settings.targetAppLabel)
                 .font(SettingsWorkbenchVisual.monoTinyFont)
                 .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
                 .lineLimit(1)
 
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
-                    ForEach(options, id: \.self) { option in
-                        let isSelected = option == selectedApp
+                    ForEach(options) { option in
+                        let isSelected = option.id == selectedAppID
 
                         Button {
-                            onSelect(option)
+                            onSelect(option.id)
                         } label: {
-                            Text(option)
+                            Text(option.title)
                                 .font(SettingsWorkbenchVisual.captionSemiboldFont)
                                 .foregroundStyle(isSelected ? Color.white : SettingsWorkbenchVisual.primaryText)
                                 .lineLimit(1)
@@ -1701,28 +1718,30 @@ private struct StatisticsAppFilter: View {
 private struct StatisticsMetricSummaryRow: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let selectedApp: String
+    let isAllAppsSelected: Bool
+    let strings: VocoStrings
 
     var body: some View {
         HStack(spacing: 12) {
             StatisticsMetricCard(
                 label: "TOTAL",
-                value: "\(snapshot.totalSessions) 次",
-                note: "\(StatisticsFormat.integer(snapshot.totalWords)) 字"
+                value: strings.settings.countBadge(snapshot.totalSessions),
+                note: strings.settings.wordCountValue(snapshot.totalWords)
             )
             StatisticsMetricCard(
                 label: "EFFICIENCY",
-                value: "\(snapshot.wordsPerMinute) 字/分",
-                note: "字数 / 时长"
+                value: "\(snapshot.wordsPerMinute) \(strings.settings.wordsPerMinuteUnit)",
+                note: strings.settings.wordsDurationNote
             )
             StatisticsMetricCard(
                 label: "APPS",
-                value: "\(snapshot.activeAppCount) 个",
-                note: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? "应用去重" : "当前筛选"
+                value: strings.settings.appCountValue(snapshot.activeAppCount),
+                note: isAllAppsSelected ? strings.settings.deduplicatedAppsNote : strings.settings.currentFilterNote
             )
             StatisticsMetricCard(
                 label: "AVG TIME",
-                value: StatisticsFormat.duration(snapshot.averageDurationSeconds),
-                note: "平均时长"
+                value: StatisticsFormat.duration(snapshot.averageDurationSeconds, strings: strings),
+                note: strings.settings.averageDurationNote
             )
         }
     }
@@ -1766,6 +1785,9 @@ private struct StatisticsDashboardColumnsView: View {
     let period: VoiceInputSessionStatisticsPeriod
     let metric: VoiceInputSessionStatisticsMetric
     let selectedApp: String
+    let selectedAppID: String
+    let isAllAppsSelected: Bool
+    let strings: VocoStrings
     let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
     let onSelectApp: (String) -> Void
 
@@ -1781,6 +1803,9 @@ private struct StatisticsDashboardColumnsView: View {
                         period: period,
                         metric: metric,
                         selectedApp: selectedApp,
+                        selectedAppID: selectedAppID,
+                        isAllAppsSelected: isAllAppsSelected,
+                        strings: strings,
                         onSelectMetric: onSelectMetric,
                         onSelectApp: onSelectApp
                     )
@@ -1794,7 +1819,9 @@ private struct StatisticsDashboardColumnsView: View {
                         panel: panel,
                         snapshot: snapshot,
                         period: period,
-                        selectedApp: selectedApp
+                        selectedApp: selectedApp,
+                        isAllAppsSelected: isAllAppsSelected,
+                        strings: strings
                     )
                 }
             }
@@ -1812,6 +1839,9 @@ private struct StatisticsDashboardLeadingPanelView: View {
     let period: VoiceInputSessionStatisticsPeriod
     let metric: VoiceInputSessionStatisticsMetric
     let selectedApp: String
+    let selectedAppID: String
+    let isAllAppsSelected: Bool
+    let strings: VocoStrings
     let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
     let onSelectApp: (String) -> Void
 
@@ -1821,19 +1851,24 @@ private struct StatisticsDashboardLeadingPanelView: View {
             StatisticsTrendPanel(
                 snapshot: snapshot,
                 metric: metric,
+                strings: strings,
                 onSelectMetric: onSelectMetric
             )
         case .heatmapAndLengthDistribution:
             StatisticsHeatmapAndLengthDistributionRow(
                 snapshot: snapshot,
                 period: period,
-                layoutPolicy: layoutPolicy
+                layoutPolicy: layoutPolicy,
+                strings: strings
             )
         case .appContribution:
             StatisticsAppContributionPanel(
                 contributions: baseSnapshot.appContributions,
                 metric: metric,
                 selectedApp: selectedApp,
+                selectedAppID: selectedAppID,
+                isAllAppsSelected: isAllAppsSelected,
+                strings: strings,
                 onSelectApp: onSelectApp
             )
         case .insight, .hourRange, .provider, .rhythm:
@@ -1847,6 +1882,8 @@ private struct StatisticsDashboardTrailingPanelView: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let period: VoiceInputSessionStatisticsPeriod
     let selectedApp: String
+    let isAllAppsSelected: Bool
+    let strings: VocoStrings
 
     var body: some View {
         switch panel {
@@ -1854,14 +1891,16 @@ private struct StatisticsDashboardTrailingPanelView: View {
             StatisticsInsightPanel(
                 snapshot: snapshot,
                 selectedApp: selectedApp,
-                period: period
+                isAllAppsSelected: isAllAppsSelected,
+                period: period,
+                strings: strings
             )
         case .hourRange:
-            StatisticsHourRangePanel(snapshot: snapshot)
+            StatisticsHourRangePanel(snapshot: snapshot, strings: strings)
         case .provider:
-            StatisticsProviderPanel(snapshot: snapshot)
+            StatisticsProviderPanel(snapshot: snapshot, strings: strings)
         case .rhythm:
-            StatisticsRhythmPanel(snapshot: snapshot)
+            StatisticsRhythmPanel(snapshot: snapshot, strings: strings)
         case .trend, .heatmapAndLengthDistribution, .appContribution:
             EmptyView()
         }
@@ -1952,15 +1991,16 @@ private struct StatisticsCompactPanel<Content: View>: View {
 private struct StatisticsTrendPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let metric: VoiceInputSessionStatisticsMetric
+    let strings: VocoStrings
     let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
 
     var body: some View {
-        StatisticsPanel(title: "\(metric.title)趋势") {
+        StatisticsPanel(title: strings.settings.trendTitle(metricTitle: metric.title(strings: strings))) {
             WorkbenchSegmentedControl(
                 options: VoiceInputSessionStatisticsMetric.allCases,
                 selected: metric,
                 width: 178,
-                title: \.title,
+                title: { $0.title(strings: strings) },
                 action: onSelectMetric
             )
         } content: {
@@ -2039,6 +2079,7 @@ private struct StatisticsHeatmapAndLengthDistributionRow: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let period: VoiceInputSessionStatisticsPeriod
     let layoutPolicy: StatisticsDashboardLayoutPolicy
+    let strings: VocoStrings
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -2060,7 +2101,7 @@ private struct StatisticsHeatmapAndLengthDistributionRow: View {
 
     private func heatmapPanel(minHeight: CGFloat? = nil) -> some View {
         StatisticsCompactPanel(
-            title: period == .last7Days ? "周内热力" : "使用节律",
+            title: period == .last7Days ? strings.settings.weekHeatmapTitle : strings.settings.usageRhythmTitle,
             minHeight: minHeight
         ) {
             StatisticsHeatmapView(
@@ -2077,12 +2118,13 @@ private struct StatisticsHeatmapAndLengthDistributionRow: View {
 
     private func lengthDistributionPanel(minHeight: CGFloat? = nil) -> some View {
         StatisticsCompactPanel(
-            title: "输入长度分布",
+            title: strings.settings.lengthDistributionTitle,
             minHeight: minHeight
         ) {
             StatisticsCompactLengthDistributionView(
                 snapshot: snapshot,
-                donutSize: layoutPolicy.compactLengthDonutSize
+                donutSize: layoutPolicy.compactLengthDonutSize,
+                strings: strings
             )
         }
         .frame(maxWidth: .infinity)
@@ -2092,9 +2134,10 @@ private struct StatisticsHeatmapAndLengthDistributionRow: View {
 private struct StatisticsHeatmapPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let period: VoiceInputSessionStatisticsPeriod
+    let strings: VocoStrings
 
     var body: some View {
-        StatisticsPanel(title: period == .last7Days ? "周内热力" : "使用节律") {
+        StatisticsPanel(title: period == .last7Days ? strings.settings.weekHeatmapTitle : strings.settings.usageRhythmTitle) {
             StatisticsHeatmapView(rows: snapshot.heatmapRows)
         }
     }
@@ -2181,6 +2224,7 @@ private struct StatisticsHeatmapView: View {
 private struct StatisticsCompactLengthDistributionView: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let donutSize: CGFloat
+    let strings: VocoStrings
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -2188,7 +2232,8 @@ private struct StatisticsCompactLengthDistributionView: View {
                 buckets: snapshot.lengthBuckets,
                 size: donutSize,
                 lineWidth: 18,
-                centerSize: 50
+                centerSize: 50,
+                strings: strings
             )
 
             StatisticsLengthLegend(
@@ -2202,11 +2247,12 @@ private struct StatisticsCompactLengthDistributionView: View {
 
 private struct StatisticsLengthDistributionPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
+    let strings: VocoStrings
 
     var body: some View {
-        StatisticsPanel(title: "输入长度分布") {
+        StatisticsPanel(title: strings.settings.lengthDistributionTitle) {
             HStack(alignment: .center, spacing: 18) {
-                StatisticsLengthDonutChart(buckets: snapshot.lengthBuckets)
+                StatisticsLengthDonutChart(buckets: snapshot.lengthBuckets, strings: strings)
                 StatisticsLengthLegend(buckets: snapshot.lengthBuckets)
             }
             .frame(maxWidth: .infinity)
@@ -2219,17 +2265,20 @@ private struct StatisticsLengthDonutChart: View {
     let size: CGFloat
     let lineWidth: CGFloat
     let centerSize: CGFloat
+    let strings: VocoStrings
 
     init(
         buckets: [VoiceInputSessionStatisticsLengthBucket],
         size: CGFloat = 132,
         lineWidth: CGFloat = 26,
-        centerSize: CGFloat = 68
+        centerSize: CGFloat = 68,
+        strings: VocoStrings = VocoStrings()
     ) {
         self.buckets = buckets
         self.size = size
         self.lineWidth = lineWidth
         self.centerSize = centerSize
+        self.strings = strings
     }
 
     private var total: Int {
@@ -2300,7 +2349,7 @@ private struct StatisticsLengthDonutChart: View {
                         .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
                 )
 
-            Text("\(total) 次")
+            Text(strings.settings.countBadge(total))
                 .font(SettingsWorkbenchVisual.monoBadgeFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .lineLimit(1)
@@ -2380,16 +2429,22 @@ private struct StatisticsAppContributionPanel: View {
     let contributions: [VoiceInputSessionStatisticsContribution]
     let metric: VoiceInputSessionStatisticsMetric
     let selectedApp: String
+    let selectedAppID: String
+    let isAllAppsSelected: Bool
+    let strings: VocoStrings
     let onSelectApp: (String) -> Void
 
     var body: some View {
-        StatisticsPanel(title: "应用贡献") {
+        StatisticsPanel(title: strings.settings.appContributionTitle) {
             StatisticsContributionBarList(
                 contributions: contributions,
                 metric: metric,
-                selectedName: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? nil : selectedApp,
+                selectedID: isAllAppsSelected ? nil : selectedAppID,
                 color: SettingsWorkbenchVisual.accent,
-                onSelect: onSelectApp
+                strings: strings,
+                onSelect: { contribution in
+                    onSelectApp(contribution.id)
+                }
             )
         }
     }
@@ -2397,9 +2452,10 @@ private struct StatisticsAppContributionPanel: View {
 
 private struct StatisticsHourRangePanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
+    let strings: VocoStrings
 
     var body: some View {
-        StatisticsPanel(title: "活跃时段") {
+        StatisticsPanel(title: strings.settings.activeHoursTitle) {
             let hourRanges = Array(snapshot.hourRanges.sorted { lhs, rhs in
                 if lhs.sessions != rhs.sessions {
                     return lhs.sessions > rhs.sessions
@@ -2407,21 +2463,23 @@ private struct StatisticsHourRangePanel: View {
                 return lhs.startHour < rhs.startHour
             }.prefix(4))
 
-            StatisticsHourRangeBarList(hourRanges: hourRanges)
+            StatisticsHourRangeBarList(hourRanges: hourRanges, strings: strings)
         }
     }
 }
 
 private struct StatisticsProviderPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
+    let strings: VocoStrings
 
     var body: some View {
-        StatisticsPanel(title: "模型来源") {
+        StatisticsPanel(title: strings.settings.providerSourceTitle) {
             StatisticsContributionBarList(
                 contributions: Array(snapshot.providerContributions.prefix(4)),
                 metric: .sessions,
-                selectedName: nil,
+                selectedID: nil,
                 color: SettingsWorkbenchVisual.blue,
+                strings: strings,
                 onSelect: nil
             )
         }
@@ -2430,28 +2488,29 @@ private struct StatisticsProviderPanel: View {
 
 private struct StatisticsRhythmPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
+    let strings: VocoStrings
 
     var body: some View {
-        StatisticsPanel(title: "使用节奏") {
+        StatisticsPanel(title: strings.settings.usagePaceTitle) {
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: 8),
                 GridItem(.flexible(), spacing: 8)
             ], spacing: 8) {
                 StatisticsDetailCard(
                     value: "\(snapshot.rhythm.activeDayCount)",
-                    label: "活跃天数"
+                    label: strings.settings.activeDaysLabel
                 )
                 StatisticsDetailCard(
                     value: snapshot.rhythm.busiestDayTitle,
-                    label: "最高单日"
+                    label: strings.settings.busiestDayLabel
                 )
                 StatisticsDetailCard(
                     value: "\(snapshot.rhythm.peakHourSharePercent)%",
-                    label: "高峰占比"
+                    label: strings.settings.peakShareLabel
                 )
                 StatisticsDetailCard(
                     value: "\(snapshot.rhythm.appConcentrationPercent)%",
-                    label: "应用集中度"
+                    label: strings.settings.appConcentrationLabel
                 )
             }
         }
@@ -2461,7 +2520,9 @@ private struct StatisticsRhythmPanel: View {
 private struct StatisticsInsightPanel: View {
     let snapshot: VoiceInputSessionStatisticsSnapshot
     let selectedApp: String
+    let isAllAppsSelected: Bool
     let period: VoiceInputSessionStatisticsPeriod
+    let strings: VocoStrings
 
     private var topHour: VoiceInputSessionStatisticsHourRange? {
         snapshot.hourRanges.sorted { lhs, rhs in
@@ -2474,27 +2535,27 @@ private struct StatisticsInsightPanel: View {
     }
 
     var body: some View {
-        StatisticsPanel(title: "本期观察") {
+        StatisticsPanel(title: strings.settings.periodInsightTitle) {
             WorkbenchStatusPill(
-                selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? period.title : selectedApp,
+                isAllAppsSelected ? period.title(strings: strings) : selectedApp,
                 color: SettingsWorkbenchVisual.neutral
             )
         } content: {
             VStack(spacing: 0) {
                 StatisticsInsightRow(
                     value: snapshot.appContributions.first?.name ?? "--",
-                    label: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? "最常用目标应用" : "当前目标应用",
-                    badge: "\(snapshot.appContributions.first?.words ?? 0) 字"
+                    label: isAllAppsSelected ? strings.settings.topTargetAppLabel : strings.settings.currentTargetAppLabel,
+                    badge: strings.settings.wordBadge(snapshot.appContributions.first?.words ?? 0)
                 )
                 StatisticsInsightRow(
                     value: topHour?.label ?? "--",
-                    label: "最高频时段",
-                    badge: "\(topHour?.sessions ?? 0) 次"
+                    label: strings.settings.topHourLabel,
+                    badge: strings.settings.countBadge(topHour?.sessions ?? 0)
                 )
                 StatisticsInsightRow(
                     value: snapshot.providerContributions.first?.name ?? "--",
-                    label: "主要模型来源",
-                    badge: "\(snapshot.providerContributions.first?.sessions ?? 0) 次"
+                    label: strings.settings.mainProviderLabel,
+                    badge: strings.settings.countBadge(snapshot.providerContributions.first?.sessions ?? 0)
                 )
             }
         }
@@ -2535,9 +2596,10 @@ private struct StatisticsInsightRow: View {
 private struct StatisticsContributionBarList: View {
     let contributions: [VoiceInputSessionStatisticsContribution]
     let metric: VoiceInputSessionStatisticsMetric
-    let selectedName: String?
+    let selectedID: String?
     let color: Color
-    let onSelect: ((String) -> Void)?
+    let strings: VocoStrings
+    let onSelect: ((VoiceInputSessionStatisticsContribution) -> Void)?
     private let barTrackWidth = StatisticsDashboardLayoutPolicy.resizeOptimized.barTrackWidth
 
     private var maxValue: Double {
@@ -2546,14 +2608,14 @@ private struct StatisticsContributionBarList: View {
 
     var body: some View {
         if contributions.isEmpty {
-            StatisticsEmptyText()
+            StatisticsEmptyText(strings: strings)
         } else {
             VStack(spacing: 12) {
                 ForEach(Array(contributions.prefix(6))) { contribution in
-                    let isSelected = contribution.name == selectedName
+                    let isSelected = contribution.id == selectedID
                     if let onSelect {
                         Button {
-                            onSelect(contribution.name)
+                            onSelect(contribution)
                         } label: {
                             row(contribution, isSelected: isSelected)
                         }
@@ -2591,7 +2653,7 @@ private struct StatisticsContributionBarList: View {
             }
             .frame(width: barTrackWidth, height: 8)
 
-            Text(metric.valueTitle(for: contribution))
+            Text(metric.valueTitle(for: contribution, strings: strings))
                 .font(SettingsWorkbenchVisual.monoTinyFont)
                 .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                 .lineLimit(1)
@@ -2603,6 +2665,7 @@ private struct StatisticsContributionBarList: View {
 
 private struct StatisticsHourRangeBarList: View {
     let hourRanges: [VoiceInputSessionStatisticsHourRange]
+    let strings: VocoStrings
     private let barTrackWidth = StatisticsDashboardLayoutPolicy.resizeOptimized.barTrackWidth
 
     private var maxSessions: Double {
@@ -2611,7 +2674,7 @@ private struct StatisticsHourRangeBarList: View {
 
     var body: some View {
         if hourRanges.isEmpty {
-            StatisticsEmptyText()
+            StatisticsEmptyText(strings: strings)
         } else {
             VStack(spacing: 12) {
                 ForEach(hourRanges) { hourRange in
@@ -2638,7 +2701,7 @@ private struct StatisticsHourRangeBarList: View {
                         }
                         .frame(width: barTrackWidth, height: 8)
 
-                        Text("\(hourRange.sessions) 次")
+                        Text(strings.settings.countBadge(hourRange.sessions))
                             .font(SettingsWorkbenchVisual.monoTinyFont)
                             .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                             .lineLimit(1)
@@ -2681,8 +2744,10 @@ private struct StatisticsDetailCard: View {
 }
 
 private struct StatisticsEmptyText: View {
+    let strings: VocoStrings
+
     var body: some View {
-        Text("暂无记录")
+        Text(strings.settings.noRecordsTitle)
             .font(SettingsWorkbenchVisual.captionFont)
             .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
             .frame(maxWidth: .infinity, minHeight: 46)
@@ -2693,6 +2758,7 @@ private struct VoiceInputSessionsPanel: View {
     let sessions: [VoiceInputSessionSnapshot]
     @Binding var currentPage: Int
     @Binding var selectedSession: VoiceInputSessionSnapshot?
+    let strings: VocoStrings
 
     private var sessionPage: VoiceInputSessionPage {
         VoiceInputSessionPage(sessions: sessions, page: currentPage)
@@ -2701,13 +2767,13 @@ private struct VoiceInputSessionsPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("会话记录")
+                Text(strings.settings.sessionRecordsTitle)
                     .font(SettingsWorkbenchVisual.panelTitleFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
 
                 Spacer()
 
-                Text("内容预览 / 字数 / 时间 / 时长")
+                Text(strings.settings.sessionTableHeader)
                     .font(SettingsWorkbenchVisual.captionFont)
                     .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
                     .lineLimit(1)
@@ -2722,7 +2788,7 @@ private struct VoiceInputSessionsPanel: View {
                 emptyState
             } else {
                 ForEach(sessionPage.entries) { session in
-                    VoiceInputSessionRow(session: session) {
+                    VoiceInputSessionRow(session: session, strings: strings) {
                         selectedSession = session
                     }
                     .overlay(alignment: .bottom) {
@@ -2741,7 +2807,7 @@ private struct VoiceInputSessionsPanel: View {
     }
 
     private var emptyState: some View {
-        Text("暂无会话记录")
+        Text(strings.settings.noSessionRecordsTitle)
             .font(SettingsWorkbenchVisual.bodyFont)
             .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
             .frame(maxWidth: .infinity, minHeight: 82)
@@ -2749,13 +2815,13 @@ private struct VoiceInputSessionsPanel: View {
 
     private var paginationFooter: some View {
         HStack(spacing: 10) {
-            Text(sessionPage.visibleRangeTitle)
+            Text(sessionPage.visibleRangeTitle(strings: strings))
                 .font(SettingsWorkbenchVisual.monoTinyFont)
                 .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
 
             Spacer()
 
-            Button("上一页") {
+            Button(strings.settings.previousPageTitle) {
                 currentPage = max(1, sessionPage.page - 1)
             }
             .buttonStyle(SettingsWorkbenchPaginationButtonStyle())
@@ -2769,7 +2835,7 @@ private struct VoiceInputSessionsPanel: View {
                 .disabled(page == sessionPage.page)
             }
 
-            Button("下一页") {
+            Button(strings.settings.nextPageTitle) {
                 currentPage = min(sessionPage.totalPages, sessionPage.page + 1)
             }
             .buttonStyle(SettingsWorkbenchPaginationButtonStyle())
@@ -2783,6 +2849,7 @@ private struct VoiceInputSessionsPanel: View {
 
 private struct VoiceInputSessionRow: View {
     let session: VoiceInputSessionSnapshot
+    let strings: VocoStrings
     let action: () -> Void
 
     var body: some View {
@@ -2794,7 +2861,7 @@ private struct VoiceInputSessionRow: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("\(session.wordCount) 字")
+                Text(strings.settings.wordBadge(session.wordCount))
                     .frame(width: 58, alignment: .leading)
 
                 Text(session.timeTitle)
@@ -2803,7 +2870,7 @@ private struct VoiceInputSessionRow: View {
                 Text(session.durationTitle)
                     .frame(width: 44, alignment: .leading)
 
-                Text("详情")
+                Text(strings.settings.detailsButtonTitle)
                     .font(SettingsWorkbenchVisual.caption2BoldFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                     .padding(.horizontal, 10)
@@ -2831,13 +2898,14 @@ private struct VoiceInputSessionRow: View {
 
 private struct VoiceInputSessionDetailSheet: View {
     let session: VoiceInputSessionSnapshot
+    let strings: VocoStrings
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("会话详情")
+                    Text(strings.settings.sessionDetailsTitle)
                         .font(SettingsWorkbenchVisual.panelTitleFont)
                         .foregroundStyle(SettingsWorkbenchVisual.primaryText)
 
@@ -2861,12 +2929,12 @@ private struct VoiceInputSessionDetailSheet: View {
             Divider()
 
             HStack(spacing: 8) {
-                WorkbenchStatusPill("\(session.wordCount) 字", color: SettingsWorkbenchVisual.neutral)
+                WorkbenchStatusPill(strings.settings.wordBadge(session.wordCount), color: SettingsWorkbenchVisual.neutral)
                 WorkbenchStatusPill(session.durationTitle, color: SettingsWorkbenchVisual.neutral)
                 if let targetAppName = session.targetAppName {
                     WorkbenchStatusPill(targetAppName, color: SettingsWorkbenchVisual.neutral)
                 }
-                WorkbenchStatusPill(session.providerName, color: SettingsWorkbenchVisual.neutral)
+                WorkbenchStatusPill(strings.workbench.providerDisplayName(session.providerName), color: SettingsWorkbenchVisual.neutral)
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -2925,10 +2993,12 @@ private struct SettingsWorkbenchPaginationButtonStyle: ButtonStyle {
 }
 
 private struct VoiceInputFlowPreview: View {
+    let strings: VocoStrings
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("语音输入流程")
+                Text(strings.settings.voiceInputFlowTitle)
                     .font(SettingsWorkbenchVisual.panelTitleFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
 
@@ -2984,7 +3054,7 @@ private struct VoiceInputFlowPreview: View {
 
     private var notchPreview: some View {
         HStack(spacing: 12) {
-            Text("语音输入")
+            Text(strings.settings.voiceInputPreviewTitle)
                 .font(SettingsWorkbenchVisual.caption2BoldFont)
                 .foregroundStyle(SettingsWorkbenchVisual.warning)
                 .lineLimit(1)
@@ -3028,6 +3098,7 @@ private struct MiniWaveform: View {
 private struct SettingsWorkbenchSidebar: View {
     @Binding var selectedSection: SettingsWorkbenchSection
     let snapshot: SettingsWorkbenchSnapshot
+    let strings: VocoStrings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -3048,7 +3119,8 @@ private struct SettingsWorkbenchSidebar: View {
                     SettingsWorkbenchSidebarRow(
                         section: section,
                         status: snapshot.status(for: section),
-                        isSelected: selectedSection == section
+                        isSelected: selectedSection == section,
+                        strings: strings
                     ) {
                         selectedSection = section
                     }
@@ -3067,6 +3139,7 @@ private struct SettingsWorkbenchSidebarRow: View {
     let section: SettingsWorkbenchSection
     let status: SettingsWorkbenchSectionStatus
     let isSelected: Bool
+    let strings: VocoStrings
     let action: () -> Void
 
     var body: some View {
@@ -3077,7 +3150,7 @@ private struct SettingsWorkbenchSidebarRow: View {
                     .foregroundStyle(isSelected ? SettingsWorkbenchVisual.primaryText : SettingsWorkbenchVisual.tertiaryText)
                     .frame(width: 18, height: 18)
 
-                Text(section.title)
+                Text(section.title(strings: strings))
                     .font(SettingsWorkbenchVisual.controlFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                     .lineLimit(1)
@@ -3156,14 +3229,14 @@ private extension VoiceInputSessionStatisticsMetric {
         }
     }
 
-    func valueTitle(for contribution: VoiceInputSessionStatisticsContribution) -> String {
+    func valueTitle(for contribution: VoiceInputSessionStatisticsContribution, strings: VocoStrings) -> String {
         switch self {
         case .sessions:
-            "\(contribution.sessions) 次"
+            strings.settings.countBadge(contribution.sessions)
         case .words:
-            "\(StatisticsFormat.integer(contribution.words)) 字"
+            strings.settings.wordCountValue(contribution.words)
         case .duration:
-            StatisticsFormat.duration(contribution.durationSeconds)
+            StatisticsFormat.duration(contribution.durationSeconds, strings: strings)
         }
     }
 }
@@ -3180,18 +3253,18 @@ private enum StatisticsFormat {
         )
     }
 
-    static func duration(_ seconds: Double) -> String {
+    static func duration(_ seconds: Double, strings: VocoStrings = VocoStrings()) -> String {
         let roundedSeconds = max(0, Int(seconds.rounded()))
         guard roundedSeconds >= 60 else {
-            return "\(roundedSeconds) 秒"
+            return strings.settings.secondsDuration(roundedSeconds)
         }
 
         let minutes = roundedSeconds / 60
         let remainingSeconds = roundedSeconds % 60
         if remainingSeconds == 0 {
-            return "\(minutes) 分"
+            return strings.settings.minutesDuration(minutes)
         }
 
-        return "\(minutes)分\(remainingSeconds)秒"
+        return strings.settings.minutesSecondsDuration(minutes: minutes, seconds: remainingSeconds)
     }
 }

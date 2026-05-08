@@ -3,6 +3,15 @@ import XCTest
 @testable import VocoAppCore
 
 final class LegacyInstallModelsTests: XCTestCase {
+    func testLegacyInstallSnapshotUsesEnglishCopy() {
+        let snapshot = LegacyInstallSnapshot.notFound(
+            launchAgentURL: URL(fileURLWithPath: "/tmp/com.voco.daemon.plist"),
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(snapshot.title, "No legacy launch item detected")
+    }
+
     func testKnownLaunchAgentPathExpandsInsideUserLibraryOnly() {
         let home = URL(fileURLWithPath: "/Users/alice")
 
@@ -51,7 +60,7 @@ final class LegacyInstallModelsTests: XCTestCase {
         coordinator.finishLaunching()
 
         XCTAssertEqual(coordinator.legacyInstall.status, .detected)
-        XCTAssertEqual(provider.refreshCount, 1)
+        XCTAssertEqual(provider.refreshCount, 2)
     }
 
     @MainActor
@@ -141,12 +150,12 @@ private final class FakeLegacyInstallProvider: LegacyInstallProviding {
         self.removalError = removalError
     }
 
-    func currentSnapshot() -> LegacyInstallSnapshot {
+    func currentSnapshot(strings: VocoStrings) -> LegacyInstallSnapshot {
         refreshCount += 1
         return current
     }
 
-    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+    func removeKnownLaunchAgent(strings: VocoStrings) async throws -> LegacyInstallSnapshot {
         removeCount += 1
         if let removalError {
             throw removalError
@@ -170,11 +179,11 @@ private final class SlowLegacyInstallProvider: LegacyInstallProviding {
         self.result = result
     }
 
-    func currentSnapshot() -> LegacyInstallSnapshot {
+    func currentSnapshot(strings: VocoStrings) -> LegacyInstallSnapshot {
         current
     }
 
-    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+    func removeKnownLaunchAgent(strings: VocoStrings) async throws -> LegacyInstallSnapshot {
         removeCount += 1
         for waiter in waiters {
             waiter.resume()

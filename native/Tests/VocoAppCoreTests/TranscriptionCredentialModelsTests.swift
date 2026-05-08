@@ -2,6 +2,22 @@ import XCTest
 @testable import VocoAppCore
 
 final class TranscriptionCredentialModelsTests: XCTestCase {
+    func testTranscriptionCredentialSnapshotUsesEnglishCopy() {
+        let snapshot = TranscriptionCredentialSnapshot.missing(
+            provider: .volcengine,
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(snapshot.provider.title(strings: VocoStrings(language: .en)), "Volcengine")
+        XCTAssertEqual(VolcengineCredentialMode.apiKey.title(strings: VocoStrings(language: .en)), "New Console API Key")
+        XCTAssertEqual(
+            VolcengineCredentialMode.appIDAccessToken.detail(strings: VocoStrings(language: .en)),
+            "Use X-Api-App-Key and X-Api-Access-Key to connect to OpenSpeech streaming ASR."
+        )
+        XCTAssertEqual(snapshot.statusTitle(strings: VocoStrings(language: .en)), "Volcengine credentials not saved")
+        XCTAssertEqual(snapshot.storageDetail, "No Volcengine credentials are saved in Keychain.")
+    }
+
     func testStoredSnapshotMasksAPIKey() {
         let snapshot = TranscriptionCredentialSnapshot.stored(
             provider: .volcengine,

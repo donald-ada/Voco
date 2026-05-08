@@ -6,9 +6,13 @@ public enum TranscriptionCredentialProvider: String, CaseIterable, Identifiable,
     public var id: String { rawValue }
 
     public var title: String {
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
         switch self {
         case .volcengine:
-            "火山引擎"
+            strings.credentials.volcengineTitle
         }
     }
 }
@@ -20,20 +24,28 @@ public enum VolcengineCredentialMode: String, CaseIterable, Identifiable, Codabl
     public var id: String { rawValue }
 
     public var title: String {
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
         switch self {
         case .apiKey:
-            "新控制台 API Key"
+            strings.credentials.apiKeyModeTitle
         case .appIDAccessToken:
-            "旧控制台 App ID + Token"
+            strings.credentials.appIDAccessTokenModeTitle
         }
     }
 
     public var detail: String {
+        detail(strings: VocoStrings())
+    }
+
+    public func detail(strings: VocoStrings) -> String {
         switch self {
         case .apiKey:
-            "使用 X-Api-Key 连接 OpenSpeech 流式 ASR。"
+            strings.credentials.apiKeyModeDetail
         case .appIDAccessToken:
-            "使用 X-Api-App-Key 和 X-Api-Access-Key 连接 OpenSpeech 流式 ASR。"
+            strings.credentials.appIDAccessTokenModeDetail
         }
     }
 }
@@ -106,16 +118,21 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
     public let lastErrorMessage: String?
 
     public var statusTitle: String {
-        if let lastErrorMessage, !lastErrorMessage.isEmpty {
-            "\(provider.title)凭证读取失败"
-        } else if hasCredential {
-            "\(provider.title)凭证已保存"
-        } else {
-            "\(provider.title)凭证未保存"
-        }
+        statusTitle(strings: VocoStrings())
     }
 
-    public static func missing(provider: TranscriptionCredentialProvider) -> TranscriptionCredentialSnapshot {
+    public func statusTitle(strings: VocoStrings) -> String {
+        strings.credentials.statusTitle(
+            provider: provider,
+            hasCredential: hasCredential,
+            lastErrorMessage: lastErrorMessage
+        )
+    }
+
+    public static func missing(
+        provider: TranscriptionCredentialProvider,
+        strings: VocoStrings = VocoStrings()
+    ) -> TranscriptionCredentialSnapshot {
         return TranscriptionCredentialSnapshot(
             provider: provider,
             hasCredential: false,
@@ -123,21 +140,23 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
             maskedCredential: nil,
             hasAPIKey: false,
             maskedAPIKey: nil,
-            storageDetail: "Keychain 中没有保存火山引擎凭证。",
+            storageDetail: strings.credentials.missingStorageDetail,
             lastErrorMessage: nil
         )
     }
 
     public static func stored(
         provider: TranscriptionCredentialProvider,
-        apiKey: String
+        apiKey: String,
+        strings: VocoStrings = VocoStrings()
     ) -> TranscriptionCredentialSnapshot {
-        stored(provider: provider, credential: .volcengineAPIKey(apiKey))
+        stored(provider: provider, credential: .volcengineAPIKey(apiKey), strings: strings)
     }
 
     public static func stored(
         provider: TranscriptionCredentialProvider,
-        credential: TranscriptionCredential
+        credential: TranscriptionCredential,
+        strings: VocoStrings = VocoStrings()
     ) -> TranscriptionCredentialSnapshot {
         let normalizedCredential = (try? credential.normalized()) ?? credential
         let mode = normalizedCredential.mode
@@ -150,14 +169,15 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
             maskedCredential: maskedCredential,
             hasAPIKey: mode == .apiKey,
             maskedAPIKey: mode == .apiKey ? maskedCredential : nil,
-            storageDetail: "\(mode.title) 已安全保存在 Keychain。",
+            storageDetail: strings.credentials.storedStorageDetail(mode: mode),
             lastErrorMessage: nil
         )
     }
 
     public static func failed(
         provider: TranscriptionCredentialProvider,
-        message: String
+        message: String,
+        strings: VocoStrings = VocoStrings()
     ) -> TranscriptionCredentialSnapshot {
         TranscriptionCredentialSnapshot(
             provider: provider,
@@ -166,7 +186,7 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
             maskedCredential: nil,
             hasAPIKey: false,
             maskedAPIKey: nil,
-            storageDetail: "Keychain 访问失败：\(message)",
+            storageDetail: strings.credentials.failedStorageDetail(message: message),
             lastErrorMessage: message
         )
     }

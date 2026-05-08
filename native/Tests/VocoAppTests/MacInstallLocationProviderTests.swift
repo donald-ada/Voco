@@ -14,4 +14,16 @@ final class MacInstallLocationProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.warningTitle, "从磁盘映像运行")
         XCTAssertFalse(snapshot.allowsLaunchAtLogin)
     }
+
+    func testProviderCanMapBundleURLWithEnglishCopy() {
+        let provider = MacInstallLocationProvider(
+            bundleURL: URL(fileURLWithPath: "/Applications/Voco.app")
+        )
+
+        let snapshot = provider.currentInstallLocation(strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.status, .final)
+        XCTAssertEqual(snapshot.title, "Installed")
+        XCTAssertFalse(snapshot.detail.contains("已安装"))
+    }
 }

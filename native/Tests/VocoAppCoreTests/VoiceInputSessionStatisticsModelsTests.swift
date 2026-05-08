@@ -2,6 +2,185 @@ import XCTest
 @testable import VocoAppCore
 
 final class VoiceInputSessionStatisticsModelsTests: XCTestCase {
+    func testStatisticsSnapshotUsesEnglishLabels() {
+        let snapshot = VoiceInputSessionStatisticsSnapshot.make(
+            sessions: [],
+            period: .last7Days,
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(VoiceInputSessionStatisticsPeriod.last7Days.title(strings: VocoStrings(language: .en)), "Last 7 Days")
+        XCTAssertEqual(VoiceInputSessionStatisticsMetric.sessions.title(strings: VocoStrings(language: .en)), "Sessions")
+        XCTAssertEqual(snapshot.lengthBuckets.map(\.title), ["Short", "Medium", "Long"])
+        XCTAssertEqual(snapshot.lengthBuckets.map(\.detail), ["0-18 chars", "19-24 chars", "25+ chars"])
+    }
+
+    func testDashboardTreatsPreviousLocalizedAllAppsSelectionAsAllAfterLanguageSwitch() {
+        let sessions = [
+            makeSession(text: "old all label app", words: 8, duration: 4, day: 8, hour: 9, app: "全部", provider: "火山引擎"),
+            makeSession(text: "notes", words: 12, duration: 6, day: 8, hour: 10, app: "Notes", provider: "火山引擎")
+        ]
+
+        let dashboard = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppName: "全部",
+            strings: VocoStrings(language: .en),
+            referenceDate: Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!,
+            calendar: .gregorianUTC
+        )
+
+        XCTAssertEqual(dashboard.selectedAppName, "All")
+        XCTAssertEqual(dashboard.scopedSnapshot.totalSessions, 2)
+        XCTAssertEqual(dashboard.appOptions.first, "All")
+    }
+
+    func testDashboardStableAppIDCanSelectAppNamedLikeLegacyAllTitle() {
+        let sessions = [
+            makeSession(text: "old all label app", words: 8, duration: 4, day: 8, hour: 9, app: "全部", provider: "火山引擎"),
+            makeSession(text: "notes", words: 12, duration: 6, day: 8, hour: 10, app: "Notes", provider: "火山引擎")
+        ]
+
+        let dashboard = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppName: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("全部"),
+            strings: VocoStrings(language: .en),
+            referenceDate: Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!,
+            calendar: .gregorianUTC,
+            selectedAppID: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("全部")
+        )
+
+        XCTAssertEqual(dashboard.selectedAppName, "全部")
+        XCTAssertEqual(dashboard.selectedAppID, VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("全部"))
+        XCTAssertEqual(dashboard.scopedSnapshot.totalSessions, 1)
+        XCTAssertEqual(dashboard.scopedSnapshot.totalWords, 8)
+    }
+
+    func testDashboardUnknownAppSelectionIDStaysStableAcrossLanguageSwitch() {
+        let referenceDate = Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!
+        let sessions = [
+            makeSession(text: "unknown target", words: 8, duration: 4, day: 8, hour: 9, app: "", provider: "火山引擎"),
+            makeSession(text: "notes", words: 12, duration: 6, day: 8, hour: 10, app: "Notes", provider: "火山引擎")
+        ]
+        let zhDashboard = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppID: VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID,
+            referenceDate: referenceDate,
+            calendar: .gregorianUTC
+        )
+
+        XCTAssertEqual(zhDashboard.selectedAppName, "未知 App")
+        XCTAssertEqual(zhDashboard.selectedAppID, VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID)
+
+        let enDashboard = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppName: zhDashboard.selectedAppID,
+            strings: VocoStrings(language: .en),
+            referenceDate: referenceDate,
+            calendar: .gregorianUTC,
+            selectedAppID: zhDashboard.selectedAppID
+        )
+
+        XCTAssertEqual(enDashboard.selectedAppName, "Unknown App")
+        XCTAssertEqual(enDashboard.selectedAppID, VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID)
+        XCTAssertEqual(enDashboard.scopedSnapshot.totalSessions, 1)
+        XCTAssertEqual(enDashboard.scopedSnapshot.totalWords, 8)
+    }
+
+    func testDashboardAppSelectionUsesStableRawKeysForUnknownAndLocalizedNames() {
+        let referenceDate = Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!
+        let sessions = [
+            makeSession(text: "empty target", words: 3, duration: 2, day: 8, hour: 8, app: "", provider: "火山引擎"),
+            makeSession(text: "real zh unknown", words: 5, duration: 3, day: 8, hour: 9, app: "未知 App", provider: "火山引擎"),
+            makeSession(text: "real en unknown", words: 7, duration: 4, day: 8, hour: 10, app: "Unknown App", provider: "火山引擎"),
+            makeSession(text: "real zh all", words: 11, duration: 5, day: 8, hour: 11, app: "全部", provider: "火山引擎"),
+            makeSession(text: "real en all", words: 13, duration: 6, day: 8, hour: 12, app: "All", provider: "火山引擎")
+        ]
+
+        let base = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppID: VoiceInputSessionStatisticsDashboardSnapshot.allAppsSelectionID,
+            strings: VocoStrings(language: .en),
+            referenceDate: referenceDate,
+            calendar: .gregorianUTC,
+            appOptionLimit: 10
+        )
+
+        XCTAssertEqual(base.baseSnapshot.activeAppCount, 5)
+        XCTAssertTrue(base.appFilterOptions.contains(.init(id: VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID, title: "Unknown App", appName: nil)))
+        XCTAssertTrue(base.appFilterOptions.contains(.init(id: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("未知 App"), title: "未知 App", appName: "未知 App")))
+        XCTAssertTrue(base.appFilterOptions.contains(.init(id: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("Unknown App"), title: "Unknown App", appName: "Unknown App")))
+        XCTAssertTrue(base.appFilterOptions.contains(.init(id: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("全部"), title: "全部", appName: "全部")))
+        XCTAssertTrue(base.appFilterOptions.contains(.init(id: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("All"), title: "All", appName: "All")))
+
+        let unknown = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppID: VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID,
+            strings: VocoStrings(language: .en),
+            referenceDate: referenceDate,
+            calendar: .gregorianUTC,
+            appOptionLimit: 10
+        )
+        XCTAssertEqual(unknown.selectedAppID, VoiceInputSessionStatisticsDashboardSnapshot.unknownAppSelectionID)
+        XCTAssertEqual(unknown.scopedSnapshot.totalSessions, 1)
+        XCTAssertEqual(unknown.scopedSnapshot.totalWords, 3)
+
+        let realZHUnknown = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            selectedAppID: VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("未知 App"),
+            strings: VocoStrings(language: .en),
+            referenceDate: referenceDate,
+            calendar: .gregorianUTC,
+            appOptionLimit: 10
+        )
+        XCTAssertEqual(realZHUnknown.selectedAppID, VoiceInputSessionStatisticsDashboardSnapshot.appSelectionID("未知 App"))
+        XCTAssertEqual(realZHUnknown.scopedSnapshot.totalSessions, 1)
+        XCTAssertEqual(realZHUnknown.scopedSnapshot.totalWords, 5)
+    }
+
+    func testEnglishStatisticsSnapshotLocalizesVolcengineProviderName() {
+        let sessions = [
+            makeSession(text: "today", words: 8, duration: 4, day: 8, hour: 9, app: "Notes", provider: "火山引擎"),
+            makeSession(text: "again", words: 4, duration: 2, day: 8, hour: 10, app: "Notes", provider: "火山引擎"),
+            makeSession(text: "backup", words: 12, duration: 6, day: 8, hour: 11, app: "Notes", provider: "备用模型")
+        ]
+
+        let snapshot = VoiceInputSessionStatisticsSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            strings: VocoStrings(language: .en),
+            referenceDate: Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!,
+            calendar: .gregorianUTC
+        )
+
+        XCTAssertEqual(snapshot.providerContributions.map(\.name), ["Volcengine", "备用模型"])
+    }
+
+    func testProviderContributionsUseRawProviderKeyWhenDisplayNamesMatch() {
+        let sessions = [
+            makeSession(text: "raw zh provider", words: 8, duration: 4, day: 8, hour: 9, app: "Notes", provider: "火山引擎"),
+            makeSession(text: "raw en provider", words: 12, duration: 6, day: 8, hour: 10, app: "Notes", provider: "Volcengine")
+        ]
+
+        let snapshot = VoiceInputSessionStatisticsSnapshot.make(
+            sessions: sessions,
+            period: .last7Days,
+            strings: VocoStrings(language: .en),
+            referenceDate: Calendar.gregorianUTC.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!,
+            calendar: .gregorianUTC
+        )
+
+        XCTAssertEqual(snapshot.providerContributions.map(\.id), ["Volcengine", "火山引擎"])
+        XCTAssertEqual(snapshot.providerContributions.map(\.name), ["Volcengine", "Volcengine"])
+        XCTAssertEqual(snapshot.providerContributions.map(\.sessions), [1, 1])
+    }
+
     func testStatisticsSnapshotAggregatesRecentSessionsForDashboard() {
         let calendar = Calendar.gregorianUTC
         let referenceDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 12))!

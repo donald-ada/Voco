@@ -2,6 +2,13 @@ import XCTest
 @testable import VocoAppCore
 
 final class InjectionSettingsModelsTests: XCTestCase {
+    func testInjectionSettingsSnapshotUsesEnglishCopy() {
+        let snapshot = InjectionSettingsSnapshot(lastInjection: nil, strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.strategy.title, "Waiting to Insert")
+        XCTAssertEqual(snapshot.focusedApp.title, "No Recent Target")
+    }
+
     func testDefaultInjectionSettingsShowNoRecentTarget() {
         let snapshot = InjectionSettingsSnapshot(lastInjection: nil)
 

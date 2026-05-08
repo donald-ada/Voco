@@ -9,28 +9,36 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
     public var id: String { rawValue }
 
     public var title: String {
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
         switch self {
         case .overview:
-            "主页"
+            strings.language == .zhHans ? "主页" : "Home"
         case .model:
-            "模型"
+            strings.language == .zhHans ? "模型" : "Model"
         case .statistics:
-            "统计"
+            strings.language == .zhHans ? "统计" : "Statistics"
         case .settings:
-            "设置"
+            strings.language == .zhHans ? "设置" : "Settings"
         }
     }
 
     public var summary: String {
+        summary(strings: VocoStrings())
+    }
+
+    public func summary(strings: VocoStrings) -> String {
         switch self {
         case .overview:
-            "当前状态"
+            strings.language == .zhHans ? "当前状态" : "Current status"
         case .model:
-            "火山引擎和 Keychain"
+            strings.language == .zhHans ? "火山引擎和 Keychain" : "Volcengine and Keychain"
         case .statistics:
-            "使用趋势和分布"
+            strings.language == .zhHans ? "使用趋势和分布" : "Usage trends and distribution"
         case .settings:
-            "快捷键、麦克风、系统"
+            strings.language == .zhHans ? "快捷键、麦克风、系统" : "Hotkey, microphone, and system"
         }
     }
 }

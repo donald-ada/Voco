@@ -103,6 +103,22 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testLaunchAtLoginFailureUsesSelectedLanguageForErrorMessage() async {
+        let launchProvider = FakeLaunchAtLoginProvider(initialState: .disabled)
+        launchProvider.error = LaunchAtLoginTestError.failed
+        let preferences = FakeAppPreferenceStore(appLanguage: .en)
+        let coordinator = AppCoordinator(
+            launchAtLoginProvider: launchProvider,
+            appPreferenceStore: preferences
+        )
+
+        await coordinator.setLaunchAtLoginEnabled(true)
+
+        XCTAssertEqual(coordinator.lastErrorMessage, "Launch at login setup failed: failed")
+        XCTAssertFalse(coordinator.lastErrorMessage?.contains("登录时启动") ?? true)
+    }
+
+    @MainActor
     func testFinishingLaunchWithMissingPermissionUsesPermissionRecovery() {
         let provider = FakePermissionProvider(
             current: [
@@ -866,6 +882,45 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorUsesSelectedLanguageForInstallAndLegacySnapshots() {
+        let store = FakeAppPreferenceStore(appLanguage: .en)
+        let launchAgent = URL(fileURLWithPath: "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist")
+        let coordinator = AppCoordinator(
+            installLocationProvider: LocalizedInstallLocationProvider(path: "/Applications/Voco.app"),
+            legacyInstallProvider: LocalizedLegacyInstallProvider(launchAgentURL: launchAgent),
+            appPreferenceStore: store
+        )
+
+        coordinator.finishLaunching()
+
+        XCTAssertEqual(coordinator.installLocation.title, "Installed")
+        XCTAssertEqual(coordinator.legacyInstall.title, "No legacy launch item detected")
+    }
+
+    @MainActor
+    func testChangingAppLanguageRefreshesLocalizedInstallAndLegacySnapshots() {
+        let store = FakeAppPreferenceStore(appLanguage: .zhHans)
+        let launchAgent = URL(fileURLWithPath: "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist")
+        let coordinator = AppCoordinator(
+            installLocationProvider: LocalizedInstallLocationProvider(path: "/Volumes/Voco/Voco.app"),
+            legacyInstallProvider: LocalizedLegacyInstallProvider(launchAgentURL: launchAgent, status: .detected),
+            appPreferenceStore: store
+        )
+
+        XCTAssertEqual(coordinator.installLocation.title, "磁盘映像")
+        XCTAssertEqual(coordinator.legacyInstall.title, "检测到旧版后台启动项")
+
+        coordinator.setAppLanguage(.en)
+
+        XCTAssertEqual(coordinator.installLocation.title, "Disk Image")
+        XCTAssertTrue(coordinator.installLocation.detail.contains("not the final install location"))
+        XCTAssertFalse(coordinator.installLocation.detail.contains("不是最终安装位置"))
+        XCTAssertEqual(coordinator.legacyInstall.title, "Legacy background launch item detected")
+        XCTAssertTrue(coordinator.legacyInstall.detail.contains("Detected legacy LaunchAgent"))
+        XCTAssertFalse(coordinator.legacyInstall.detail.contains("检测到旧版"))
+    }
+
+    @MainActor
     func testCoordinatorSettingsSnapshotsReflectRecentRuntimeState() async {
         let result = RecordingWorkflowResult(
             audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),
@@ -1191,6 +1246,51 @@ private enum LaunchAtLoginTestError: LocalizedError {
 
     var errorDescription: String? {
         "failed"
+    }
+}
+
+private struct LocalizedInstallLocationProvider: InstallLocationProviding {
+    let path: String
+
+    func currentInstallLocation() -> InstallLocationSnapshot {
+        InstallLocationCheck.snapshot(forAppBundlePath: path)
+    }
+
+    func currentInstallLocation(strings: VocoStrings) -> InstallLocationSnapshot {
+        InstallLocationCheck.snapshot(forAppBundlePath: path, strings: strings)
+    }
+}
+
+@MainActor
+private struct LocalizedLegacyInstallProvider: LegacyInstallProviding {
+    let launchAgentURL: URL
+    var status: LegacyInstallStatus = .notFound
+
+    func currentSnapshot() -> LegacyInstallSnapshot {
+        snapshot(strings: VocoStrings())
+    }
+
+    func currentSnapshot(strings: VocoStrings) -> LegacyInstallSnapshot {
+        snapshot(strings: strings)
+    }
+
+    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+        snapshot(strings: VocoStrings())
+    }
+
+    func removeKnownLaunchAgent(strings: VocoStrings) async throws -> LegacyInstallSnapshot {
+        snapshot(strings: strings)
+    }
+
+    private func snapshot(strings: VocoStrings) -> LegacyInstallSnapshot {
+        switch status {
+        case .notFound:
+            .notFound(launchAgentURL: launchAgentURL, strings: strings)
+        case .detected:
+            .detected(launchAgentURL: launchAgentURL, strings: strings)
+        case .removalFailed(let message):
+            .failed(launchAgentURL: launchAgentURL, message: message, strings: strings)
+        }
     }
 }
 

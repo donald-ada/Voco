@@ -8,7 +8,7 @@ struct MacInstallLocationProvider: InstallLocationProviding {
         self.bundleURL = bundleURL
     }
 
-    func currentInstallLocation() -> InstallLocationSnapshot {
-        InstallLocationCheck.snapshot(forAppBundlePath: bundleURL.path)
+    func currentInstallLocation(strings: VocoStrings = VocoStrings()) -> InstallLocationSnapshot {
+        InstallLocationCheck.snapshot(forAppBundlePath: bundleURL.path, strings: strings)
     }
 }

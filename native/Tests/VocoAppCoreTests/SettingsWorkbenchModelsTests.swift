@@ -20,6 +20,19 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
         )
     }
 
+    func testWorkbenchSectionsExposeEnglishCopy() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            SettingsWorkbenchSection.allCases.map { $0.title(strings: strings) },
+            ["Home", "Model", "Statistics", "Settings"]
+        )
+        XCTAssertEqual(
+            SettingsWorkbenchSection.allCases.map { $0.summary(strings: strings) },
+            ["Current status", "Volcengine and Keychain", "Usage trends and distribution", "Hotkey, microphone, and system"]
+        )
+    }
+
     func testStatusToneMapsToSystemImages() {
         XCTAssertEqual(SettingsWorkbenchSectionStatus.ok.systemImage, "circle.fill")
         XCTAssertEqual(SettingsWorkbenchSectionStatus.needsAttention.systemImage, "circle.fill")

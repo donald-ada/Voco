@@ -2,6 +2,22 @@ import XCTest
 @testable import VocoAppCore
 
 final class TranscriptionModelsTests: XCTestCase {
+    func testProviderStatusUsesEnglishMetadata() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(TranscriptionProviderStatus.notConfigured.title(strings: strings), "Not Configured")
+        XCTAssertEqual(TranscriptionProviderStatus.notConfigured.detail(strings: strings), "Configure Volcengine credentials first.")
+        XCTAssertEqual(TranscriptionProviderStatus.ready(providerName: "火山引擎").detail(strings: strings), "Model configured")
+        XCTAssertEqual(
+            TranscriptionProviderStatus.authenticationRequired(providerName: "火山引擎").detail(strings: strings),
+            "Check Volcengine credentials."
+        )
+        XCTAssertEqual(
+            TranscriptionProviderStatus.offline(providerName: "火山引擎").detail(strings: strings),
+            "The model is temporarily unavailable. Try again later."
+        )
+    }
+
     func testProviderStatusHasUserVisibleMetadata() {
         XCTAssertEqual(TranscriptionProviderStatus.notConfigured.title, "未配置")
         XCTAssertEqual(TranscriptionProviderStatus.notConfigured.systemImage, "exclamationmark.triangle")

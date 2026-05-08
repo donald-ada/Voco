@@ -44,24 +44,32 @@ public enum VoiceInputSessionRetentionPolicy: String, CaseIterable, Identifiable
     }
 
     public var title: String {
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
         switch self {
         case .last100:
-            "最近 100 条"
+            strings.language == .zhHans ? "最近 100 条" : "Last 100"
         case .last1000:
-            "最近 1000 条"
+            strings.language == .zhHans ? "最近 1000 条" : "Last 1000"
         case .forever:
-            "永久保留"
+            strings.language == .zhHans ? "永久保留" : "Keep Forever"
         }
     }
 
     public var detail: String {
+        detail(strings: VocoStrings())
+    }
+
+    public func detail(strings: VocoStrings) -> String {
         switch self {
         case .last100:
-            "只保留最近 100 次会话。"
+            strings.language == .zhHans ? "只保留最近 100 次会话。" : "Keep only the most recent 100 sessions."
         case .last1000:
-            "只保留最近 1000 次会话。"
+            strings.language == .zhHans ? "只保留最近 1000 次会话。" : "Keep only the most recent 1000 sessions."
         case .forever:
-            "不自动清理旧会话。"
+            strings.language == .zhHans ? "不自动清理旧会话。" : "Do not automatically clean up old sessions."
         }
     }
 

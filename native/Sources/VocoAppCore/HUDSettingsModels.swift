@@ -6,13 +6,14 @@ public struct HUDSettingsSnapshot: Equatable, Sendable {
     public let transcriptPreview: HUDTranscriptPreviewSetting
 
     public init(
-        position: HUDPositionSetting = .topCenter,
-        notchMode: HUDNotchModeSetting = .notchAware,
-        transcriptPreview: HUDTranscriptPreviewSetting = .enabled
+        position: HUDPositionSetting? = nil,
+        notchMode: HUDNotchModeSetting? = nil,
+        transcriptPreview: HUDTranscriptPreviewSetting? = nil,
+        strings: VocoStrings = VocoStrings()
     ) {
-        self.position = position
-        self.notchMode = notchMode
-        self.transcriptPreview = transcriptPreview
+        self.position = position ?? .topCenter(strings: strings)
+        self.notchMode = notchMode ?? .notchAware(strings: strings)
+        self.transcriptPreview = transcriptPreview ?? .enabled(strings: strings)
     }
 }
 
@@ -22,9 +23,13 @@ public struct HUDPositionSetting: Equatable, Sendable {
     public let systemImage: String
 
     public static var topCenter: HUDPositionSetting {
+        topCenter(strings: VocoStrings())
+    }
+
+    public static func topCenter(strings: VocoStrings = VocoStrings()) -> HUDPositionSetting {
         HUDPositionSetting(
-            title: "顶部居中",
-            detail: "HUD 固定显示在屏幕顶部中央。",
+            title: strings.hud.topCenterTitle,
+            detail: strings.hud.topCenterDetail,
             systemImage: "arrow.up.to.line.compact"
         )
     }
@@ -36,9 +41,13 @@ public struct HUDNotchModeSetting: Equatable, Sendable {
     public let systemImage: String
 
     public static var notchAware: HUDNotchModeSetting {
+        notchAware(strings: VocoStrings())
+    }
+
+    public static func notchAware(strings: VocoStrings = VocoStrings()) -> HUDNotchModeSetting {
         HUDNotchModeSetting(
-            title: "刘海避让",
-            detail: "在带刘海屏幕上自动贴近 Dynamic Island 区域。",
+            title: strings.hud.notchAwareTitle,
+            detail: strings.hud.notchAwareDetail,
             systemImage: "rectangle.topthird.inset.filled"
         )
     }
@@ -51,9 +60,13 @@ public struct HUDTranscriptPreviewSetting: Equatable, Sendable {
     public let isVisible: Bool
 
     public static var enabled: HUDTranscriptPreviewSetting {
+        enabled(strings: VocoStrings())
+    }
+
+    public static func enabled(strings: VocoStrings = VocoStrings()) -> HUDTranscriptPreviewSetting {
         HUDTranscriptPreviewSetting(
-            title: "显示转写预览",
-            detail: "录音和插入过程中显示最多 80 个字符的实时文本。",
+            title: strings.hud.transcriptPreviewTitle,
+            detail: strings.hud.transcriptPreviewDetail,
             systemImage: "text.bubble",
             isVisible: true
         )

@@ -58,33 +58,46 @@ public struct LegacyInstallSnapshot: Equatable, Sendable {
             .standardizedFileURL
     }
 
-    public static func detected(homeDirectory: URL) -> LegacyInstallSnapshot {
-        detected(launchAgentURL: knownLaunchAgentURL(homeDirectory: homeDirectory))
+    public static func detected(
+        homeDirectory: URL,
+        strings: VocoStrings = VocoStrings()
+    ) -> LegacyInstallSnapshot {
+        detected(launchAgentURL: knownLaunchAgentURL(homeDirectory: homeDirectory), strings: strings)
     }
 
-    public static func detected(launchAgentURL: URL) -> LegacyInstallSnapshot {
+    public static func detected(
+        launchAgentURL: URL,
+        strings: VocoStrings = VocoStrings()
+    ) -> LegacyInstallSnapshot {
         LegacyInstallSnapshot(
             status: .detected,
             launchAgentURL: launchAgentURL,
-            title: "检测到旧版后台启动项",
-            detail: "检测到旧版 LaunchAgent：\(launchAgentURL.path)。如已改用 native Voco，可在这里移除该用户级启动项；不会触碰系统级 LaunchAgents，也不需要 sudo。"
+            title: strings.legacyInstall.detectedTitle,
+            detail: strings.legacyInstall.detectedDetail(path: launchAgentURL.path)
         )
     }
 
-    public static func notFound(launchAgentURL: URL) -> LegacyInstallSnapshot {
+    public static func notFound(
+        launchAgentURL: URL,
+        strings: VocoStrings = VocoStrings()
+    ) -> LegacyInstallSnapshot {
         LegacyInstallSnapshot(
             status: .notFound,
             launchAgentURL: launchAgentURL,
-            title: "未检测到旧版启动项",
-            detail: "未发现 \(launchAgentURL.path)。native Voco 使用登录项，不会安装旧版 LaunchAgent plist。"
+            title: strings.legacyInstall.notFoundTitle,
+            detail: strings.legacyInstall.notFoundDetail(path: launchAgentURL.path)
         )
     }
 
-    public static func failed(launchAgentURL: URL, message: String) -> LegacyInstallSnapshot {
+    public static func failed(
+        launchAgentURL: URL,
+        message: String,
+        strings: VocoStrings = VocoStrings()
+    ) -> LegacyInstallSnapshot {
         LegacyInstallSnapshot(
             status: .removalFailed(message),
             launchAgentURL: launchAgentURL,
-            title: "旧版启动项移除失败",
+            title: strings.legacyInstall.removalFailedTitle,
             detail: message
         )
     }
@@ -106,8 +119,18 @@ public enum LegacyInstallCleanupError: LocalizedError {
 
 @MainActor
 public protocol LegacyInstallProviding {
-    func currentSnapshot() -> LegacyInstallSnapshot
-    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot
+    func currentSnapshot(strings: VocoStrings) -> LegacyInstallSnapshot
+    func removeKnownLaunchAgent(strings: VocoStrings) async throws -> LegacyInstallSnapshot
+}
+
+public extension LegacyInstallProviding {
+    func currentSnapshot() -> LegacyInstallSnapshot {
+        currentSnapshot(strings: VocoStrings())
+    }
+
+    func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
+        try await removeKnownLaunchAgent(strings: VocoStrings())
+    }
 }
 
 public struct StaticLegacyInstallProvider: LegacyInstallProviding {
@@ -123,11 +146,24 @@ public struct StaticLegacyInstallProvider: LegacyInstallProviding {
         self.snapshot = snapshot
     }
 
-    public func currentSnapshot() -> LegacyInstallSnapshot {
-        snapshot
+    public func currentSnapshot(strings: VocoStrings) -> LegacyInstallSnapshot {
+        snapshot.localized(strings: strings)
     }
 
-    public func removeKnownLaunchAgent() async throws -> LegacyInstallSnapshot {
-        snapshot
+    public func removeKnownLaunchAgent(strings: VocoStrings) async throws -> LegacyInstallSnapshot {
+        snapshot.localized(strings: strings)
+    }
+}
+
+private extension LegacyInstallSnapshot {
+    func localized(strings: VocoStrings) -> LegacyInstallSnapshot {
+        switch status {
+        case .notFound:
+            .notFound(launchAgentURL: launchAgentURL, strings: strings)
+        case .detected:
+            .detected(launchAgentURL: launchAgentURL, strings: strings)
+        case .removalFailed(let message):
+            .failed(launchAgentURL: launchAgentURL, message: message, strings: strings)
+        }
     }
 }

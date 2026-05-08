@@ -12,30 +12,38 @@ public enum LaunchAtLoginState: Equatable, Sendable {
     }
 
     public var title: String {
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
         switch self {
         case .disabled:
-            "已关闭"
+            strings.settings.launchAtLoginDisabledTitle
         case .enabled:
-            "已开启"
+            strings.settings.enabledTitle
         case .requiresApproval:
-            "需要批准"
+            strings.settings.launchAtLoginRequiresApprovalTitle
         case .unavailable:
-            "不可用"
+            strings.settings.launchAtLoginUnavailableTitle
         case .failed:
-            "出错"
+            strings.settings.launchAtLoginErrorTitle
         }
     }
 
     public var detail: String {
+        detail(strings: VocoStrings())
+    }
+
+    public func detail(strings: VocoStrings) -> String {
         switch self {
         case .disabled:
-            "Voco 不会在登录后自动启动。"
+            strings.settings.launchAtLoginDisabledStateDetail
         case .enabled:
-            "Voco 会在你登录 macOS 后自动启动。"
+            strings.settings.launchAtLoginEnabledStateDetail
         case .requiresApproval:
-            "需要在 System Settings 的 Login Items 中批准 Voco。"
+            strings.settings.launchAtLoginApprovalDetail
         case .unavailable:
-            "当前运行位置或系统状态不支持登录时启动。"
+            strings.settings.launchAtLoginUnavailableStateDetail
         case .failed(let message):
             message
         }

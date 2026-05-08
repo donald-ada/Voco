@@ -38,26 +38,35 @@ public struct InstallLocationSnapshot: Equatable, Sendable {
         status != .mountedImage
     }
 
-    public static let unknown = InstallLocationSnapshot(
-        status: .unknown,
-        appBundlePath: "",
-        title: "运行位置未知",
-        detail: "尚未读取 Voco.app 的运行位置。"
-    )
+    public static var unknown: InstallLocationSnapshot {
+        unknown(strings: VocoStrings())
+    }
+
+    public static func unknown(strings: VocoStrings = VocoStrings()) -> InstallLocationSnapshot {
+        InstallLocationSnapshot(
+            status: .unknown,
+            appBundlePath: "",
+            title: strings.installLocation.unknownTitle,
+            detail: strings.installLocation.unknownDetail
+        )
+    }
 }
 
 public enum InstallLocationCheck {
-    public static func snapshot(forAppBundlePath rawPath: String) -> InstallLocationSnapshot {
+    public static func snapshot(
+        forAppBundlePath rawPath: String,
+        strings: VocoStrings = VocoStrings()
+    ) -> InstallLocationSnapshot {
         let path = normalized(rawPath)
 
         if isMountedImagePath(path) {
             return InstallLocationSnapshot(
                 status: .mountedImage,
                 appBundlePath: path,
-                title: "磁盘映像",
-                detail: "Voco 当前从 \(path) 运行，这不是最终安装位置。",
-                warningTitle: "从磁盘映像运行",
-                warningDetail: "请先把 Voco.app 移动到 /Applications，再开启登录时启动。你仍可临时试用当前会话。"
+                title: strings.installLocation.mountedImageTitle,
+                detail: strings.installLocation.mountedImageDetail(path: path),
+                warningTitle: strings.installLocation.mountedImageWarningTitle,
+                warningDetail: strings.installLocation.mountedImageWarningDetail
             )
         }
 
@@ -65,16 +74,16 @@ public enum InstallLocationCheck {
             return InstallLocationSnapshot(
                 status: .final,
                 appBundlePath: path,
-                title: "已安装",
-                detail: "Voco 当前从 \(path) 运行，可用于登录时启动。"
+                title: strings.installLocation.installedTitle,
+                detail: strings.installLocation.installedDetail(path: path)
             )
         }
 
         return InstallLocationSnapshot(
             status: .unknown,
             appBundlePath: path,
-            title: "运行位置未确认",
-            detail: "Voco 当前从 \(path) 运行。建议移动到 /Applications 后再开启登录时启动。"
+            title: strings.installLocation.unconfirmedTitle,
+            detail: strings.installLocation.unconfirmedDetail(path: path)
         )
     }
 
@@ -100,7 +109,13 @@ public enum InstallLocationCheck {
 }
 
 public protocol InstallLocationProviding: Sendable {
-    func currentInstallLocation() -> InstallLocationSnapshot
+    func currentInstallLocation(strings: VocoStrings) -> InstallLocationSnapshot
+}
+
+public extension InstallLocationProviding {
+    func currentInstallLocation() -> InstallLocationSnapshot {
+        currentInstallLocation(strings: VocoStrings())
+    }
 }
 
 public struct StaticInstallLocationProvider: InstallLocationProviding {
@@ -110,7 +125,17 @@ public struct StaticInstallLocationProvider: InstallLocationProviding {
         self.snapshot = snapshot
     }
 
-    public func currentInstallLocation() -> InstallLocationSnapshot {
-        snapshot
+    public func currentInstallLocation(strings: VocoStrings) -> InstallLocationSnapshot {
+        snapshot.localized(strings: strings)
+    }
+}
+
+private extension InstallLocationSnapshot {
+    func localized(strings: VocoStrings) -> InstallLocationSnapshot {
+        guard !appBundlePath.isEmpty else {
+            return .unknown(strings: strings)
+        }
+
+        return InstallLocationCheck.snapshot(forAppBundlePath: appBundlePath, strings: strings)
     }
 }

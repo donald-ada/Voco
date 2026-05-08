@@ -2,6 +2,36 @@ import XCTest
 @testable import VocoAppCore
 
 final class AudioSettingsModelsTests: XCTestCase {
+    func testAudioSettingsSnapshotUsesEnglishCopy() {
+        let snapshot = AudioSettingsSnapshot(lastAudio: nil, strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.inputDevice.title, "System Default Input")
+        XCTAssertEqual(snapshot.inputDevice.detail, "Follow the current default macOS microphone.")
+        XCTAssertEqual(snapshot.levelMeter.title, "No Recent Sample")
+        XCTAssertEqual(snapshot.levelMeter.detail, "The recent peak level appears after a recording.")
+        XCTAssertEqual(snapshot.sampleRate.title, "Waiting for Sample Rate")
+        XCTAssertEqual(snapshot.sampleRate.detail, "No recent recording. Target transcription sample rate is 16,000 Hz.")
+    }
+
+    func testRecentAudioSettingsSnapshotUsesEnglishDetail() {
+        let audio = CapturedAudioSnapshot(durationSeconds: 1.25, sampleRate: 16_000, peakAmplitude: 0.5)
+
+        let snapshot = AudioSettingsSnapshot(lastAudio: audio, strings: VocoStrings(language: .en))
+
+        XCTAssertEqual(snapshot.levelMeter.title, "Level Normal")
+        XCTAssertEqual(snapshot.levelMeter.detail, "Recent peak 50% · 1.25s")
+    }
+
+    func testAudioInputDeviceSelectionUsesEnglishCopy() {
+        let strings = VocoStrings(language: .en)
+        let device = AudioInputDeviceSelection.device(id: "studio-mic", title: "Studio Mic")
+
+        XCTAssertEqual(AudioInputDeviceSelection.systemDefault.title(strings: strings), "System Default Input")
+        XCTAssertEqual(AudioInputDeviceSelection.systemDefault.detail(strings: strings), "Follow the current default macOS microphone.")
+        XCTAssertEqual(device.title(strings: strings), "Studio Mic")
+        XCTAssertEqual(device.detail(strings: strings), "This microphone is selected for recording.")
+    }
+
     func testDefaultAudioSettingsUseSystemInputAndIdleRuntime() {
         let snapshot = AudioSettingsSnapshot(lastAudio: nil)
 

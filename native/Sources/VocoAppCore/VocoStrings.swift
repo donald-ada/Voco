@@ -14,6 +14,14 @@ public struct VocoStrings: Sendable {
     public var hud: HUDStrings { HUDStrings(language: language) }
     public var workbench: SettingsWorkbenchStrings { SettingsWorkbenchStrings(language: language) }
     public var settings: SettingsStrings { SettingsStrings(language: language) }
+    public var audio: AudioSettingsStrings { AudioSettingsStrings(language: language) }
+    public var credentials: CredentialStrings { CredentialStrings(language: language) }
+    public var transcription: TranscriptionStatusStrings { TranscriptionStatusStrings(language: language) }
+    public var injection: InjectionSettingsStrings { InjectionSettingsStrings(language: language) }
+    public var statistics: StatisticsStrings { StatisticsStrings(language: language) }
+    public var sessions: SessionStrings { SessionStrings(language: language) }
+    public var installLocation: InstallLocationStrings { InstallLocationStrings(language: language) }
+    public var legacyInstall: LegacyInstallStrings { LegacyInstallStrings(language: language) }
 }
 
 public struct AppStrings: Sendable {
@@ -226,6 +234,12 @@ public struct HUDStrings: Sendable {
     public var injectingDetail: String { language == .zhHans ? "正在把转写文本插入当前 App" : "Inserting transcribed text into the active app" }
     public var errorTitle: String { language == .zhHans ? "需要处理" : "Needs Attention" }
     public var genericErrorDetail: String { language == .zhHans ? "Voco 遇到错误。" : "Voco encountered an error." }
+    public var topCenterTitle: String { language == .zhHans ? "顶部居中" : "Top Center" }
+    public var topCenterDetail: String { language == .zhHans ? "HUD 固定显示在屏幕顶部中央。" : "HUD stays fixed at the top center of the screen." }
+    public var notchAwareTitle: String { language == .zhHans ? "刘海避让" : "Notch Aware" }
+    public var notchAwareDetail: String { language == .zhHans ? "在带刘海屏幕上自动贴近 Dynamic Island 区域。" : "On notched displays, automatically stays near the Dynamic Island area." }
+    public var transcriptPreviewTitle: String { language == .zhHans ? "显示转写预览" : "Show Transcript Preview" }
+    public var transcriptPreviewDetail: String { language == .zhHans ? "录音和插入过程中显示最多 80 个字符的实时文本。" : "Shows up to 80 characters of live text while recording and inserting." }
 }
 
 public struct SettingsWorkbenchStrings: Sendable {
@@ -397,6 +411,135 @@ public struct SettingsStrings: Sendable {
 
     public var languageLabel: String { language == .zhHans ? "语言" : "Language" }
     public var languageDetail: String { language == .zhHans ? "切换 Voco 界面语言。" : "Switch the Voco interface language." }
+    public var homeTitle: String { language == .zhHans ? "主页" : "Home" }
+    public var homeDetail: String { language == .zhHans ? "查看语音输入是否可用，并浏览最近会话。" : "Check whether voice input is available and browse recent sessions." }
+    public var recheckedStatusFeedback: String { language == .zhHans ? "已重新检查状态。" : "Status rechecked." }
+    public var todaySessionsLabel: String { language == .zhHans ? "TODAY" : "TODAY" }
+    public var wordsLabel: String { language == .zhHans ? "WORDS" : "WORDS" }
+    public func sessionCountValue(_ count: Int) -> String { language == .zhHans ? "\(count) 次会话" : "\(count) sessions" }
+    public func wordCountValue(_ count: Int) -> String { language == .zhHans ? "\(count) 字" : "\(count) words" }
+    public func wordBadge(_ count: Int) -> String { language == .zhHans ? "\(count) 字" : "\(count) words" }
+    public var voiceInputExperienceTitle: String { language == .zhHans ? "语音输入体验" : "Voice Input Experience" }
+    public var voiceInputExperienceDetail: String { language == .zhHans ? "配置开始录音的按键、触发方式、麦克风输入和 macOS 权限。" : "Configure the recording key, trigger mode, microphone input, and macOS permissions." }
+    public var recordingControlTitle: String { language == .zhHans ? "录音控制" : "Recording Control" }
+    public var recordingControlDetail: String { language == .zhHans ? "选择快捷键、录音方式和输入设备。" : "Choose the hotkey, recording mode, and input device." }
+    public var modelTitle: String { language == .zhHans ? "火山引擎模型" : "Volcengine Model" }
+    public var modelDetail: String { language == .zhHans ? "选择凭证模式，并将火山引擎凭证保存到 macOS Keychain。" : "Choose a credential mode and save Volcengine credentials to macOS Keychain." }
+    public var statisticsTitle: String { language == .zhHans ? "统计" : "Statistics" }
+    public var statisticsDetail: String { language == .zhHans ? "查看语音输入使用趋势、应用分布和活跃时段。" : "View voice input usage trends, app distribution, and active hours." }
+    public var hotkeyLabel: String { language == .zhHans ? "快捷键" : "Hotkey" }
+    public var recordingModeLabel: String { language == .zhHans ? "录音模式" : "Recording Mode" }
+    public var toggleModeDetail: String { language == .zhHans ? "按一次开始，再按一次提交。" : "Press once to start, then press again to submit." }
+    public var pressAndHoldModeDetail: String { language == .zhHans ? "按住开始录音，松开后提交。" : "Hold to record, then release to submit." }
+    public var inputDeviceLabel: String { language == .zhHans ? "输入设备" : "Input Device" }
+    public var openSoundInputSettingsHelp: String { language == .zhHans ? "打开 macOS 声音输入设置" : "Open macOS sound input settings" }
+    public var credentialsPanelTitle: String { language == .zhHans ? "火山引擎凭证" : "Volcengine Credentials" }
+    public var credentialsPanelDetail: String { language == .zhHans ? "凭证会保存到 macOS Keychain，不会在界面中显示完整密钥。" : "Credentials are saved to macOS Keychain and full secrets are never shown in the interface." }
+    public var savedCredentialsFeedback: String { language == .zhHans ? "已保存火山引擎凭证。" : "Volcengine credentials saved." }
+    public var saveToKeychainButton: String { language == .zhHans ? "保存到 Keychain" : "Save to Keychain" }
+    public var refreshStatusButton: String { language == .zhHans ? "刷新状态" : "Refresh Status" }
+    public var refreshedVolcengineStatusFeedback: String { language == .zhHans ? "已刷新火山引擎状态。" : "Volcengine status refreshed." }
+    public var clearedCredentialsFeedback: String { language == .zhHans ? "已清除火山引擎凭证。" : "Volcengine credentials cleared." }
+    public var clearCredentialsButton: String { language == .zhHans ? "清除凭证" : "Clear Credentials" }
+    public var permissionsTitle: String { language == .zhHans ? "权限" : "Permissions" }
+    public var permissionsDetail: String { language == .zhHans ? "允许麦克风和辅助功能。" : "Allow microphone and accessibility access." }
+    public var recheckedPermissionsFeedback: String { language == .zhHans ? "已重新检查权限。" : "Permissions rechecked." }
+    public var recheckButton: String { language == .zhHans ? "重新检查" : "Recheck" }
+    public var requestButton: String { language == .zhHans ? "请求" : "Request" }
+    public var systemTitle: String { language == .zhHans ? "系统" : "System" }
+    public var systemDetail: String { language == .zhHans ? "配置 Voco 的启动方式。" : "Configure how Voco starts." }
+    public var silentLaunchPill: String { language == .zhHans ? "静默启动" : "Silent Launch" }
+    public var showWindowOnLaunchPill: String { language == .zhHans ? "启动显示窗口" : "Show Window on Launch" }
+    public var launchAtLoginLabel: String { language == .zhHans ? "开机自启动" : "Launch at Login" }
+    public var enabledTitle: String { language == .zhHans ? "已开启" : "Enabled" }
+    public var launchAtLoginDisabledTitle: String { language == .zhHans ? "已关闭" : "Disabled" }
+    public var launchAtLoginRequiresApprovalTitle: String { language == .zhHans ? "需要批准" : "Requires Approval" }
+    public var launchAtLoginUnavailableTitle: String { language == .zhHans ? "不可用" : "Unavailable" }
+    public var launchAtLoginErrorTitle: String { language == .zhHans ? "出错" : "Error" }
+    public var launchAtLoginDetail: String { language == .zhHans ? "启用后，Voco将在系统启动时自动运行。可在系统设置 > 通用 > 登录项中管理。" : "When enabled, Voco runs automatically at system startup. Manage it in System Settings > General > Login Items." }
+    public var launchAtLoginDisabledStateDetail: String { language == .zhHans ? "Voco 不会在登录后自动启动。" : "Voco will not start automatically after login." }
+    public var launchAtLoginEnabledStateDetail: String { language == .zhHans ? "Voco 会在你登录 macOS 后自动启动。" : "Voco will start automatically after you log in to macOS." }
+    public var launchAtLoginApprovalDetail: String { language == .zhHans ? "请在系统设置 > 通用 > 登录项中批准 Voco。" : "Approve Voco in System Settings > General > Login Items." }
+    public var launchAtLoginUnavailableStateDetail: String { language == .zhHans ? "当前运行位置或系统状态不支持登录时启动。" : "The current runtime location or system state does not support launch at login." }
+    public var launchAtLoginUnsupportedDetail: String { language == .zhHans ? "当前运行位置不支持登录时启动。" : "The current runtime location does not support launch at login." }
+    public func launchAtLoginSetupFailedMessage(_ message: String) -> String {
+        language == .zhHans ? "登录时启动设置失败：\(message)" : "Launch at login setup failed: \(message)"
+    }
+    public var silentLaunchLabel: String { language == .zhHans ? "静默启动" : "Silent Launch" }
+    public var trayOnlyTitle: String { language == .zhHans ? "仅在系统托盘运行" : "Run in Menu Bar Only" }
+    public var showMainWindowTitle: String { language == .zhHans ? "启动时显示主窗口" : "Show Main Window on Launch" }
+    public var silentLaunchDetail: String { language == .zhHans ? "启用后，应用启动时不显示主窗口，仅在系统托盘运行。可随时通过托盘图标打开主窗口。" : "When enabled, the app starts without showing the main window and runs only in the menu bar. Open the main window from the menu bar icon at any time." }
+    public var dockLabel: String { language == .zhHans ? "在 Dock 中显示" : "Show in Dock" }
+    public var dockShownTitle: String { language == .zhHans ? "已显示" : "Shown" }
+    public var dockHiddenTitle: String { language == .zhHans ? "已隐藏" : "Hidden" }
+    public var dockDetail: String { language == .zhHans ? "启用后，Voco 会出现在 Dock 和应用切换器中。" : "When enabled, Voco appears in the Dock and app switcher." }
+    public var sessionHistoryLabel: String { language == .zhHans ? "保存会话记录" : "Save Session History" }
+    public var sessionHistorySavedTitle: String { language == .zhHans ? "已保存" : "Saved" }
+    public var sessionHistoryDisabledTitle: String { language == .zhHans ? "不保存" : "Not Saved" }
+    public var sessionHistoryEnabledDetail: String { language == .zhHans ? "成功录音后写入本机 SQLite，会话列表下次启动仍可查看。" : "Successful recordings are written to local SQLite so the session list is available after relaunch." }
+    public var sessionHistoryDisabledDetail: String { language == .zhHans ? "关闭后不再写入 SQLite，只保留当前运行中的临时列表。" : "When disabled, SQLite is not written and only the current in-memory list is kept." }
+    public var retentionPolicyLabel: String { language == .zhHans ? "保留策略" : "Retention Policy" }
+    public var removingLegacyLaunchItemTitle: String { language == .zhHans ? "正在移除..." : "Removing..." }
+    public var removeLegacyLaunchItemTitle: String { language == .zhHans ? "移除旧版启动项" : "Remove Legacy Launch Item" }
+    public var apiKeyPlaceholder: String { language == .zhHans ? "输入火山引擎 API Key" : "Enter Volcengine API Key" }
+    public var appIDPlaceholder: String { language == .zhHans ? "输入火山引擎 App ID" : "Enter Volcengine App ID" }
+    public var accessTokenPlaceholder: String { language == .zhHans ? "输入火山引擎 Access Token" : "Enter Volcengine Access Token" }
+    public var handlePermissionsBeforeTestFeedback: String { language == .zhHans ? "请先处理权限后再测试录音。" : "Resolve permissions before testing recording." }
+    public func cannotStartRecordingFeedback(statusTitle: String) -> String { language == .zhHans ? "当前状态不能开始录音：\(statusTitle)" : "Recording cannot start in the current state: \(statusTitle)" }
+    public func hotkeyChangedFeedback(_ title: String) -> String { language == .zhHans ? "快捷键已切换为 \(title)。" : "Hotkey changed to \(title)." }
+    public func recordingModeChangedFeedback(_ title: String) -> String { language == .zhHans ? "录音模式已切换为 \(title)。" : "Recording mode changed to \(title)." }
+    public func inputDeviceChangedFeedback(_ title: String) -> String { language == .zhHans ? "输入设备已切换为 \(title)。" : "Input device changed to \(title)." }
+    public var openSoundInputFailedMessage: String { language == .zhHans ? "无法打开 macOS 声音输入设置" : "Could not open macOS sound input settings" }
+    public func invalidSettingsURLMessage(kindTitle: String) -> String { language == .zhHans ? "无法打开系统设置：\(kindTitle) 的链接无效" : "Could not open System Settings: the \(kindTitle) link is invalid" }
+    public func openSettingsFailedMessage(kindTitle: String) -> String { language == .zhHans ? "无法打开系统设置：\(kindTitle)" : "Could not open System Settings: \(kindTitle)" }
+    public var statusOKTitle: String { language == .zhHans ? "正常" : "OK" }
+    public var statusNeedsAttentionTitle: String { language == .zhHans ? "阻塞" : "Blocked" }
+    public var statusWarningTitle: String { language == .zhHans ? "注意" : "Attention" }
+    public var statusNeutralTitle: String { language == .zhHans ? "等待" : "Waiting" }
+    public var apiKeyFieldLabel: String { language == .zhHans ? "新控制台 API Key" : "New Console API Key" }
+    public var appIDAccessTokenFieldLabel: String { language == .zhHans ? "火山引擎 App ID + Access Token" : "Volcengine App ID + Access Token" }
+    public var retryBadgeTitle: String { language == .zhHans ? "自动重试" : "Auto Retry" }
+    public var welcomeTitle: String { language == .zhHans ? "Welcome" : "Welcome" }
+    public var needsResolutionTitle: String { language == .zhHans ? "需要解决" : "Needs Resolution" }
+    public var targetAppLabel: String { language == .zhHans ? "目标 App" : "Target App" }
+    public var totalSessionsUnit: String { language == .zhHans ? "次" : "sessions" }
+    public var wordsPerMinuteUnit: String { language == .zhHans ? "字/分" : "wpm" }
+    public var wordsDurationNote: String { language == .zhHans ? "字数 / 时长" : "Words / Duration" }
+    public func appCountValue(_ count: Int) -> String { language == .zhHans ? "\(count) 个" : "\(count) apps" }
+    public var deduplicatedAppsNote: String { language == .zhHans ? "应用去重" : "Deduplicated apps" }
+    public var currentFilterNote: String { language == .zhHans ? "当前筛选" : "Current filter" }
+    public var averageDurationNote: String { language == .zhHans ? "平均时长" : "Average duration" }
+    public func trendTitle(metricTitle: String) -> String { language == .zhHans ? "\(metricTitle)趋势" : "\(metricTitle) Trend" }
+    public var weekHeatmapTitle: String { language == .zhHans ? "周内热力" : "Weekly Heatmap" }
+    public var usageRhythmTitle: String { language == .zhHans ? "使用节律" : "Usage Rhythm" }
+    public var lengthDistributionTitle: String { language == .zhHans ? "输入长度分布" : "Input Length Distribution" }
+    public func countBadge(_ count: Int) -> String { language == .zhHans ? "\(count) 次" : "\(count) times" }
+    public var appContributionTitle: String { language == .zhHans ? "应用贡献" : "App Contribution" }
+    public var activeHoursTitle: String { language == .zhHans ? "活跃时段" : "Active Hours" }
+    public var providerSourceTitle: String { language == .zhHans ? "模型来源" : "Model Source" }
+    public var usagePaceTitle: String { language == .zhHans ? "使用节奏" : "Usage Pace" }
+    public var activeDaysLabel: String { language == .zhHans ? "活跃天数" : "Active Days" }
+    public var busiestDayLabel: String { language == .zhHans ? "最高单日" : "Busiest Day" }
+    public var peakShareLabel: String { language == .zhHans ? "高峰占比" : "Peak Share" }
+    public var appConcentrationLabel: String { language == .zhHans ? "应用集中度" : "App Concentration" }
+    public var periodInsightTitle: String { language == .zhHans ? "本期观察" : "Period Insights" }
+    public var topTargetAppLabel: String { language == .zhHans ? "最常用目标应用" : "Most Used Target App" }
+    public var currentTargetAppLabel: String { language == .zhHans ? "当前目标应用" : "Current Target App" }
+    public var topHourLabel: String { language == .zhHans ? "最高频时段" : "Most Frequent Time" }
+    public var mainProviderLabel: String { language == .zhHans ? "主要模型来源" : "Primary Model Source" }
+    public var noRecordsTitle: String { language == .zhHans ? "暂无记录" : "No records" }
+    public var sessionRecordsTitle: String { language == .zhHans ? "会话记录" : "Session Records" }
+    public var sessionTableHeader: String { language == .zhHans ? "内容预览 / 字数 / 时间 / 时长" : "Preview / Words / Time / Duration" }
+    public var noSessionRecordsTitle: String { language == .zhHans ? "暂无会话记录" : "No session records" }
+    public var previousPageTitle: String { language == .zhHans ? "上一页" : "Previous" }
+    public var nextPageTitle: String { language == .zhHans ? "下一页" : "Next" }
+    public var detailsButtonTitle: String { language == .zhHans ? "详情" : "Details" }
+    public var sessionDetailsTitle: String { language == .zhHans ? "会话详情" : "Session Details" }
+    public var voiceInputFlowTitle: String { language == .zhHans ? "语音输入流程" : "Voice Input Flow" }
+    public var voiceInputPreviewTitle: String { language == .zhHans ? "语音输入" : "Voice Input" }
+    public func secondsDuration(_ seconds: Int) -> String { language == .zhHans ? "\(seconds) 秒" : "\(seconds)s" }
+    public func minutesDuration(_ minutes: Int) -> String { language == .zhHans ? "\(minutes) 分" : "\(minutes)m" }
+    public func minutesSecondsDuration(minutes: Int, seconds: Int) -> String { language == .zhHans ? "\(minutes)分\(seconds)秒" : "\(minutes)m \(seconds)s" }
 
     public func languageFeedback(_ displayName: String) -> String {
         switch language {
@@ -405,5 +548,244 @@ public struct SettingsStrings: Sendable {
         case .en:
             "Interface language changed to \(displayName)."
         }
+    }
+}
+
+public struct AudioSettingsStrings: Sendable {
+    let language: AppLanguage
+
+    public var systemDefaultInputTitle: String { language == .zhHans ? "系统默认输入" : "System Default Input" }
+    public var systemDefaultInputDetail: String { language == .zhHans ? "跟随 macOS 当前默认麦克风。" : "Follow the current default macOS microphone." }
+    public var selectedInputDetail: String { language == .zhHans ? "已选择此麦克风用于录音。" : "This microphone is selected for recording." }
+    public var noRecentSampleTitle: String { language == .zhHans ? "无近期采样" : "No Recent Sample" }
+    public var noRecentSampleDetail: String { language == .zhHans ? "开始一次录音后会显示最近峰值电平。" : "The recent peak level appears after a recording." }
+    public var levelNearClippingTitle: String { language == .zhHans ? "电平接近削波" : "Level Near Clipping" }
+    public var levelTooLowTitle: String { language == .zhHans ? "电平偏低" : "Level Too Low" }
+    public var levelNormalTitle: String { language == .zhHans ? "电平正常" : "Level Normal" }
+    public var waitingSampleRateTitle: String { language == .zhHans ? "等待采样率" : "Waiting for Sample Rate" }
+    public var sampleRateMatchedDetail: String { language == .zhHans ? "最近录音采样率符合目标转写输入。" : "The recent recording sample rate matches the target transcription input." }
+
+    public func recentPeakDetail(peakPercentage: Int, durationSeconds: Double) -> String {
+        let format = language == .zhHans ? "最近峰值 %d%% · %.2fs" : "Recent peak %d%% · %.2fs"
+        return String(format: format, peakPercentage, durationSeconds)
+    }
+
+    public func waitingSampleRateDetail(rate: String) -> String {
+        language == .zhHans
+            ? "暂无最近录音；目标转写采样率为 \(rate) Hz。"
+            : "No recent recording. Target transcription sample rate is \(rate) Hz."
+    }
+
+    public func sampleRateMismatchedDetail(rate: String) -> String {
+        language == .zhHans
+            ? "最近录音采样率与目标 \(rate) Hz 不一致。"
+            : "The recent recording sample rate does not match target \(rate) Hz."
+    }
+}
+
+public struct CredentialStrings: Sendable {
+    let language: AppLanguage
+
+    public var volcengineTitle: String { language == .zhHans ? "火山引擎" : "Volcengine" }
+    public var apiKeyModeTitle: String { language == .zhHans ? "新控制台 API Key" : "New Console API Key" }
+    public var appIDAccessTokenModeTitle: String { language == .zhHans ? "旧控制台 App ID + Token" : "Legacy Console App ID + Token" }
+    public var apiKeyModeDetail: String { language == .zhHans ? "使用 X-Api-Key 连接 OpenSpeech 流式 ASR。" : "Use X-Api-Key to connect to OpenSpeech streaming ASR." }
+    public var appIDAccessTokenModeDetail: String { language == .zhHans ? "使用 X-Api-App-Key 和 X-Api-Access-Key 连接 OpenSpeech 流式 ASR。" : "Use X-Api-App-Key and X-Api-Access-Key to connect to OpenSpeech streaming ASR." }
+    public var missingStorageDetail: String { language == .zhHans ? "Keychain 中没有保存火山引擎凭证。" : "No Volcengine credentials are saved in Keychain." }
+
+    public func statusTitle(provider: TranscriptionCredentialProvider, hasCredential: Bool, lastErrorMessage: String?) -> String {
+        let providerTitle = provider.title(strings: VocoStrings(language: language))
+        if let lastErrorMessage, !lastErrorMessage.isEmpty {
+            return language == .zhHans ? "\(providerTitle)凭证读取失败" : "\(providerTitle) credentials read failed"
+        }
+        if hasCredential {
+            return language == .zhHans ? "\(providerTitle)凭证已保存" : "\(providerTitle) credentials saved"
+        }
+        return language == .zhHans ? "\(providerTitle)凭证未保存" : "\(providerTitle) credentials not saved"
+    }
+
+    public func storedStorageDetail(mode: VolcengineCredentialMode) -> String {
+        let title = mode.title(strings: VocoStrings(language: language))
+        return language == .zhHans ? "\(title) 已安全保存在 Keychain。" : "\(title) is saved securely in Keychain."
+    }
+
+    public func failedStorageDetail(message: String) -> String {
+        language == .zhHans ? "Keychain 访问失败：\(message)" : "Keychain access failed: \(message)"
+    }
+}
+
+public struct TranscriptionStatusStrings: Sendable {
+    let language: AppLanguage
+
+    public var notConfiguredTitle: String { language == .zhHans ? "未配置" : "Not Configured" }
+    public var notConfiguredDetail: String { language == .zhHans ? "请先配置火山引擎凭证。" : "Configure Volcengine credentials first." }
+    public var readyDetail: String { language == .zhHans ? "模型已配置" : "Model configured" }
+    public var authenticationRequiredDetail: String { language == .zhHans ? "请检查火山引擎凭证。" : "Check Volcengine credentials." }
+    public var offlineDetail: String { language == .zhHans ? "模型暂不可用，稍后可重试。" : "The model is temporarily unavailable. Try again later." }
+
+    public func title(for status: TranscriptionProviderStatus) -> String {
+        switch (language, status) {
+        case (.zhHans, .notConfigured):
+            notConfiguredTitle
+        case (.zhHans, .ready(let providerName)):
+            providerName
+        case (.zhHans, .authenticationRequired(let providerName)):
+            "\(providerName)需要认证"
+        case (.zhHans, .offline(let providerName)):
+            "\(providerName)离线"
+        case (.zhHans, .failed(let providerName, _)):
+            "\(providerName)错误"
+        case (.en, .notConfigured):
+            notConfiguredTitle
+        case (.en, .ready(let providerName)):
+            VocoStrings(language: language).workbench.providerDisplayName(providerName)
+        case (.en, .authenticationRequired(let providerName)):
+            "\(VocoStrings(language: language).workbench.providerDisplayName(providerName)) requires authentication"
+        case (.en, .offline(let providerName)):
+            "\(VocoStrings(language: language).workbench.providerDisplayName(providerName)) offline"
+        case (.en, .failed(let providerName, _)):
+            "\(VocoStrings(language: language).workbench.providerDisplayName(providerName)) error"
+        }
+    }
+
+    public func detail(for status: TranscriptionProviderStatus) -> String {
+        switch status {
+        case .notConfigured:
+            notConfiguredDetail
+        case .ready:
+            readyDetail
+        case .authenticationRequired:
+            authenticationRequiredDetail
+        case .offline:
+            offlineDetail
+        case .failed(_, let message):
+            message
+        }
+    }
+}
+
+public struct InjectionSettingsStrings: Sendable {
+    let language: AppLanguage
+
+    public var waitingToInsertTitle: String { language == .zhHans ? "等待插入" : "Waiting to Insert" }
+    public var waitingToInsertDetail: String { language == .zhHans ? "完成一次转写后会显示采用的文本插入方式。" : "The text insertion method appears after a transcription completes." }
+    public var noRecentTargetTitle: String { language == .zhHans ? "无近期目标" : "No Recent Target" }
+    public var noRecentTargetDetail: String { language == .zhHans ? "尚未完成文本插入，无法显示最近聚焦 App。" : "No text insertion has completed, so the recent focused app is unavailable." }
+    public var recentTargetDetail: String { language == .zhHans ? "最近插入目标 App。" : "Recent insertion target app." }
+    public var noTargetAppTitle: String { language == .zhHans ? "无目标 App" : "No Target App" }
+}
+
+public struct StatisticsStrings: Sendable {
+    let language: AppLanguage
+
+    public var allTitle: String { language == .zhHans ? "全部" : "All" }
+    public var unknownAppTitle: String { language == .zhHans ? "未知 App" : "Unknown App" }
+    public var shortTitle: String { language == .zhHans ? "短句" : "Short" }
+    public var mediumTitle: String { language == .zhHans ? "中段" : "Medium" }
+    public var longTitle: String { language == .zhHans ? "长段" : "Long" }
+    public var shortDetail: String { language == .zhHans ? "0-18 字" : "0-18 chars" }
+    public var mediumDetail: String { language == .zhHans ? "19-24 字" : "19-24 chars" }
+    public var longDetail: String { language == .zhHans ? "25 字以上" : "25+ chars" }
+
+    public func title(for period: VoiceInputSessionStatisticsPeriod) -> String {
+        switch (language, period) {
+        case (.zhHans, .last7Days): "近 7 天"
+        case (.zhHans, .last30Days): "近 30 天"
+        case (.zhHans, .all): "全部"
+        case (.en, .last7Days): "Last 7 Days"
+        case (.en, .last30Days): "Last 30 Days"
+        case (.en, .all): "All"
+        }
+    }
+
+    public func title(for metric: VoiceInputSessionStatisticsMetric) -> String {
+        switch (language, metric) {
+        case (.zhHans, .sessions): "会话"
+        case (.zhHans, .words): "字数"
+        case (.zhHans, .duration): "时长"
+        case (.en, .sessions): "Sessions"
+        case (.en, .words): "Words"
+        case (.en, .duration): "Duration"
+        }
+    }
+
+    public func weekdayTitle(calendarWeekday: Int) -> String {
+        switch (language, calendarWeekday) {
+        case (.zhHans, 2): "周一"
+        case (.zhHans, 3): "周二"
+        case (.zhHans, 4): "周三"
+        case (.zhHans, 5): "周四"
+        case (.zhHans, 6): "周五"
+        case (.zhHans, 7): "周六"
+        case (.zhHans, 1): "周日"
+        case (.en, 2): "Mon"
+        case (.en, 3): "Tue"
+        case (.en, 4): "Wed"
+        case (.en, 5): "Thu"
+        case (.en, 6): "Fri"
+        case (.en, 7): "Sat"
+        case (.en, 1): "Sun"
+        default: "--"
+        }
+    }
+}
+
+public struct SessionStrings: Sendable {
+    let language: AppLanguage
+
+    public func visibleRangeTitle(start: Int, end: Int, total: Int) -> String {
+        if total == 0 {
+            return language == .zhHans ? "0 / 0 条" : "0 / 0 items"
+        }
+        return language == .zhHans ? "\(start)-\(end) / \(total) 条" : "\(start)-\(end) / \(total) items"
+    }
+}
+
+public struct InstallLocationStrings: Sendable {
+    let language: AppLanguage
+
+    public var unknownTitle: String { language == .zhHans ? "运行位置未知" : "Runtime Location Unknown" }
+    public var unknownDetail: String { language == .zhHans ? "尚未读取 Voco.app 的运行位置。" : "The runtime location of Voco.app has not been read." }
+    public var mountedImageTitle: String { language == .zhHans ? "磁盘映像" : "Disk Image" }
+    public var installedTitle: String { language == .zhHans ? "已安装" : "Installed" }
+    public var unconfirmedTitle: String { language == .zhHans ? "运行位置未确认" : "Runtime Location Unconfirmed" }
+
+    public func mountedImageDetail(path: String) -> String {
+        language == .zhHans ? "Voco 当前从 \(path) 运行，这不是最终安装位置。" : "Voco is running from \(path), which is not the final install location."
+    }
+
+    public var mountedImageWarningTitle: String { language == .zhHans ? "从磁盘映像运行" : "Running from Disk Image" }
+    public var mountedImageWarningDetail: String {
+        language == .zhHans
+            ? "请先把 Voco.app 移动到 /Applications，再开启登录时启动。你仍可临时试用当前会话。"
+            : "Move Voco.app to /Applications before enabling launch at login. You can still try the current session temporarily."
+    }
+
+    public func installedDetail(path: String) -> String {
+        language == .zhHans ? "Voco 当前从 \(path) 运行，可用于登录时启动。" : "Voco is running from \(path) and can be used for launch at login."
+    }
+
+    public func unconfirmedDetail(path: String) -> String {
+        language == .zhHans ? "Voco 当前从 \(path) 运行。建议移动到 /Applications 后再开启登录时启动。" : "Voco is running from \(path). Move it to /Applications before enabling launch at login."
+    }
+}
+
+public struct LegacyInstallStrings: Sendable {
+    let language: AppLanguage
+
+    public var detectedTitle: String { language == .zhHans ? "检测到旧版后台启动项" : "Legacy background launch item detected" }
+    public var notFoundTitle: String { language == .zhHans ? "未检测到旧版启动项" : "No legacy launch item detected" }
+    public var removalFailedTitle: String { language == .zhHans ? "旧版启动项移除失败" : "Failed to remove legacy launch item" }
+
+    public func detectedDetail(path: String) -> String {
+        language == .zhHans
+            ? "检测到旧版 LaunchAgent：\(path)。如已改用 native Voco，可在这里移除该用户级启动项；不会触碰系统级 LaunchAgents，也不需要 sudo。"
+            : "Detected legacy LaunchAgent: \(path). If you now use native Voco, remove this user-level launch item here. System LaunchAgents are not touched and sudo is not required."
+    }
+
+    public func notFoundDetail(path: String) -> String {
+        language == .zhHans
+            ? "未发现 \(path)。native Voco 使用登录项，不会安装旧版 LaunchAgent plist。"
+            : "\(path) was not found. Native Voco uses Login Items and does not install the legacy LaunchAgent plist."
     }
 }
