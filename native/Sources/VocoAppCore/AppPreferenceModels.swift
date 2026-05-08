@@ -87,11 +87,13 @@ public protocol AppPreferenceStoring: AnyObject {
     var displayInDockEnabled: Bool { get }
     var voiceInputSessionHistoryEnabled: Bool { get }
     var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy { get }
+    var appLanguage: AppLanguage { get }
 
     func saveSilentLaunchEnabled(_ enabled: Bool)
     func saveDisplayInDockEnabled(_ enabled: Bool)
     func saveVoiceInputSessionHistoryEnabled(_ enabled: Bool)
     func saveVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy)
+    func saveAppLanguage(_ language: AppLanguage)
 }
 
 public final class NoOpAppPreferenceStore: AppPreferenceStoring {
@@ -113,6 +115,10 @@ public final class NoOpAppPreferenceStore: AppPreferenceStoring {
         .last1000
     }
 
+    public var appLanguage: AppLanguage {
+        .default
+    }
+
     public func saveSilentLaunchEnabled(_ enabled: Bool) {}
 
     public func saveDisplayInDockEnabled(_ enabled: Bool) {}
@@ -120,4 +126,6 @@ public final class NoOpAppPreferenceStore: AppPreferenceStoring {
     public func saveVoiceInputSessionHistoryEnabled(_ enabled: Bool) {}
 
     public func saveVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy) {}
+
+    public func saveAppLanguage(_ language: AppLanguage) {}
 }

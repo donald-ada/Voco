@@ -1354,21 +1354,25 @@ private final class FakeAppPreferenceStore: AppPreferenceStoring {
     private(set) var displayInDockEnabled: Bool
     private(set) var voiceInputSessionHistoryEnabled: Bool
     private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
+    private(set) var appLanguage: AppLanguage
     private(set) var savedSilentLaunchValues: [Bool] = []
     private(set) var savedDisplayInDockValues: [Bool] = []
     private(set) var savedVoiceInputSessionHistoryValues: [Bool] = []
     private(set) var savedVoiceInputSessionRetentionPolicies: [VoiceInputSessionRetentionPolicy] = []
+    private(set) var savedAppLanguages: [AppLanguage] = []
 
     init(
         silentLaunchEnabled: Bool = false,
         displayInDockEnabled: Bool = false,
         voiceInputSessionHistoryEnabled: Bool = true,
-        voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy = .last1000
+        voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy = .last1000,
+        appLanguage: AppLanguage = .default
     ) {
         self.silentLaunchEnabled = silentLaunchEnabled
         self.displayInDockEnabled = displayInDockEnabled
         self.voiceInputSessionHistoryEnabled = voiceInputSessionHistoryEnabled
         self.voiceInputSessionRetentionPolicy = voiceInputSessionRetentionPolicy
+        self.appLanguage = appLanguage
     }
 
     func saveSilentLaunchEnabled(_ enabled: Bool) {
@@ -1389,6 +1393,11 @@ private final class FakeAppPreferenceStore: AppPreferenceStoring {
     func saveVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy) {
         voiceInputSessionRetentionPolicy = policy
         savedVoiceInputSessionRetentionPolicies.append(policy)
+    }
+
+    func saveAppLanguage(_ language: AppLanguage) {
+        appLanguage = language
+        savedAppLanguages.append(language)
     }
 }
 

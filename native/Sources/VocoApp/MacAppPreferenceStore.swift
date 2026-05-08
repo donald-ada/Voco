@@ -8,6 +8,7 @@ final class MacAppPreferenceStore: AppPreferenceStoring {
         static let displayInDockEnabled = "app.displayInDockEnabled"
         static let voiceInputSessionHistoryEnabled = "voiceInputSession.historyEnabled"
         static let voiceInputSessionRetentionPolicy = "voiceInputSession.retentionPolicy"
+        static let appLanguage = "app.language"
     }
 
     private let defaults: UserDefaults
@@ -42,6 +43,16 @@ final class MacAppPreferenceStore: AppPreferenceStoring {
         return policy
     }
 
+    var appLanguage: AppLanguage {
+        guard let rawValue = defaults.string(forKey: Keys.appLanguage),
+              let language = AppLanguage(rawValue: rawValue)
+        else {
+            return .default
+        }
+
+        return language
+    }
+
     func saveSilentLaunchEnabled(_ enabled: Bool) {
         defaults.set(enabled, forKey: Keys.silentLaunchEnabled)
     }
@@ -56,5 +67,9 @@ final class MacAppPreferenceStore: AppPreferenceStoring {
 
     func saveVoiceInputSessionRetentionPolicy(_ policy: VoiceInputSessionRetentionPolicy) {
         defaults.set(policy.rawValue, forKey: Keys.voiceInputSessionRetentionPolicy)
+    }
+
+    func saveAppLanguage(_ language: AppLanguage) {
+        defaults.set(language.rawValue, forKey: Keys.appLanguage)
     }
 }

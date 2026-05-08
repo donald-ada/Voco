@@ -32,6 +32,17 @@ final class AppPreferenceModelsTests: XCTestCase {
         XCTAssertEqual(NoOpAppPreferenceStore().voiceInputSessionRetentionPolicy, .last1000)
     }
 
+    func testAppLanguageDefaultsToChineseAndExposesDisplayNames() {
+        XCTAssertEqual(AppLanguage.allCases.map(\.rawValue), ["zh-Hans", "en"])
+        XCTAssertEqual(AppLanguage.default, .zhHans)
+        XCTAssertEqual(AppLanguage.zhHans.displayName, "中文")
+        XCTAssertEqual(AppLanguage.en.displayName, "English")
+    }
+
+    func testNoOpAppPreferenceStoreDefaultsToChineseLanguage() {
+        XCTAssertEqual(NoOpAppPreferenceStore().appLanguage, .zhHans)
+    }
+
     func testVoiceInputSessionRetentionPolicyExposesCustomerChoices() {
         XCTAssertEqual(
             VoiceInputSessionRetentionPolicy.allCases.map(\.title),

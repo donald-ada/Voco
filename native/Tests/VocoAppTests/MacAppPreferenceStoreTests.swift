@@ -58,4 +58,34 @@ final class MacAppPreferenceStoreTests: XCTestCase {
         XCTAssertFalse(reloadedStore.voiceInputSessionHistoryEnabled)
         XCTAssertEqual(reloadedStore.voiceInputSessionRetentionPolicy, .forever)
     }
+
+    func testAppLanguagePreferenceRoundTripsThroughUserDefaults() throws {
+        let suiteName = "VocoTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = MacAppPreferenceStore(defaults: defaults)
+
+        XCTAssertEqual(store.appLanguage, .zhHans)
+
+        store.saveAppLanguage(.en)
+        XCTAssertEqual(MacAppPreferenceStore(defaults: defaults).appLanguage, .en)
+
+        store.saveAppLanguage(.zhHans)
+        XCTAssertEqual(MacAppPreferenceStore(defaults: defaults).appLanguage, .zhHans)
+    }
+
+    func testInvalidStoredAppLanguageFallsBackToChinese() throws {
+        let suiteName = "VocoTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        defaults.set("fr", forKey: "app.language")
+
+        XCTAssertEqual(MacAppPreferenceStore(defaults: defaults).appLanguage, .zhHans)
+    }
 }
