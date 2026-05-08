@@ -394,4 +394,16 @@ public struct SettingsWorkbenchStrings: Sendable {
 
 public struct SettingsStrings: Sendable {
     let language: AppLanguage
+
+    public var languageLabel: String { language == .zhHans ? "语言" : "Language" }
+    public var languageDetail: String { language == .zhHans ? "切换 Voco 界面语言。" : "Switch the Voco interface language." }
+
+    public func languageFeedback(_ displayName: String) -> String {
+        switch language {
+        case .zhHans:
+            "界面语言已切换为 \(displayName)。"
+        case .en:
+            "Interface language changed to \(displayName)."
+        }
+    }
 }

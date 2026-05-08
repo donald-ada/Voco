@@ -4,7 +4,6 @@ import VocoAppCore
 
 enum HUDOverlayChrome {
     enum Layout {
-        static let statusLabelText = "语音输入"
         static let waveformWidth: CGFloat = 48
         static let waveformHeight: CGFloat = 30
         static let waveformRefreshInterval = 1.0 / 30.0
@@ -26,6 +25,15 @@ enum HUDOverlayChrome {
         static let transcriptStatusFontSize: CGFloat = 13
         static let transcriptLineLimit = 1
         static let transcriptRevealOffsetY: CGFloat = -5
+
+        static func statusLabelText(strings: VocoStrings) -> String {
+            switch strings.language {
+            case .zhHans:
+                "语音输入"
+            case .en:
+                "Voice Input"
+            }
+        }
     }
 
     struct ColorToken: Equatable, Sendable {

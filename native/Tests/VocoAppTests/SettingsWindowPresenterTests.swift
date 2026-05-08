@@ -63,6 +63,21 @@ final class SettingsWindowPresenterTests: XCTestCase {
         existingWindow.close()
     }
 
+    func testPresenterAppliesLocalizedWindowTitle() {
+        Self.closeSettingsWindows()
+        defer { Self.closeSettingsWindows() }
+
+        let coordinator = AppCoordinator(appPreferenceStore: NoOpAppPreferenceStore())
+        let presenter = SettingsWindowPresenter(windowFactory: Self.makeTestWindow)
+
+        presenter.show(coordinator: coordinator)
+        XCTAssertEqual(presenter.presentedWindowForTesting?.title, "Voco 设置")
+
+        coordinator.setAppLanguage(.en)
+        presenter.show(coordinator: coordinator)
+        XCTAssertEqual(presenter.presentedWindowForTesting?.title, "Voco Settings")
+    }
+
     private static func makeTestWindow(_: AppCoordinator) -> NSWindow {
         NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),

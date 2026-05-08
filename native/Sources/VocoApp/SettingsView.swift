@@ -17,6 +17,10 @@ struct SettingsView: View {
     @State private var selectedStatisticsAppName = VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle
     @State private var statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.empty(period: .last7Days)
 
+    private var strings: VocoStrings {
+        coordinator.strings
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             SettingsWorkbenchSidebar(
@@ -528,6 +532,25 @@ struct SettingsView: View {
             )
         } content: {
             VStack(spacing: 10) {
+                VoiceInputSettingRow(
+                    label: strings.settings.languageLabel,
+                    title: coordinator.appLanguage.displayName,
+                    detail: strings.settings.languageDetail,
+                    systemImage: "globe",
+                    color: SettingsWorkbenchVisual.neutral
+                ) {
+                    WorkbenchMenuControl(
+                        title: coordinator.appLanguage.displayName,
+                        width: 132,
+                        options: Array(AppLanguage.allCases),
+                        selected: coordinator.appLanguage,
+                        titleForOption: \.displayName
+                    ) { language in
+                        coordinator.setAppLanguage(language)
+                        settingsFeedbackMessage = strings.settings.languageFeedback(language.displayName)
+                    }
+                }
+
                 VoiceInputSettingRow(
                     label: "开机自启动",
                     title: coordinator.launchAtLoginEnabled ? "已开启" : coordinator.launchAtLoginState.title,

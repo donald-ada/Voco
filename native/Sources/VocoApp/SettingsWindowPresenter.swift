@@ -16,7 +16,7 @@ final class SettingsWindowPresenter {
 
     func show(coordinator: AppCoordinator) {
         let settingsWindow = resolvedWindow(coordinator: coordinator)
-        configure(settingsWindow)
+        configure(settingsWindow, coordinator: coordinator)
 
         NSApplication.shared.activate(ignoringOtherApps: true)
         if settingsWindow.isMiniaturized {
@@ -44,8 +44,9 @@ final class SettingsWindowPresenter {
         return settingsWindow
     }
 
-    private func configure(_ settingsWindow: NSWindow) {
+    private func configure(_ settingsWindow: NSWindow, coordinator: AppCoordinator) {
         settingsWindow.identifier = Self.settingsWindowIdentifier
+        settingsWindow.title = coordinator.strings.app.settingsWindowTitle
         settingsWindow.isReleasedWhenClosed = false
         settingsWindow.isRestorable = false
         settingsWindow.tabbingMode = .disallowed

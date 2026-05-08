@@ -8,7 +8,7 @@ struct HUDOverlayView: View {
         let snapshot = coordinator.hudSnapshot
 
         if snapshot.isVisible {
-            HUDNotchIslandOverlay(snapshot: snapshot)
+            HUDNotchIslandOverlay(snapshot: snapshot, strings: coordinator.strings)
         } else {
             Color.clear
                 .frame(
@@ -21,6 +21,7 @@ struct HUDOverlayView: View {
 
 private struct HUDNotchIslandOverlay: View {
     let snapshot: HUDSnapshot
+    let strings: VocoStrings
 
     var body: some View {
         let preview = transcriptPreview
@@ -116,9 +117,9 @@ private struct HUDNotchIslandOverlay: View {
 
     private var statusText: String {
         if snapshot.phase == .error {
-            return "输入失败"
+            return strings.language == .zhHans ? "输入失败" : "Input Failed"
         }
-        return HUDOverlayChrome.Layout.statusLabelText
+        return HUDOverlayChrome.Layout.statusLabelText(strings: strings)
     }
 
     private var transcriptPreview: String? {

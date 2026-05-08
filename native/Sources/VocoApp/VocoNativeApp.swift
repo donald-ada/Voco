@@ -5,23 +5,20 @@ import VocoAppCore
 @main
 @MainActor
 struct VocoNativeApp: App {
-    static let showSettingsMenuTitle = "显示 Voco"
-    static let quitMenuTitle = "退出"
-
     @NSApplicationDelegateAdaptor(VocoAppDelegate.self) private var appDelegate
     @StateObject private var coordinator: AppCoordinator
     @State private var didPresentInitialSettingsWindow = false
 
     var body: some Scene {
         MenuBarExtra {
-            Button(Self.showSettingsMenuTitle) {
+            Button(coordinator.strings.app.showSettingsMenuTitle) {
                 coordinator.prepareForSettingsPresentation()
                 SettingsWindowPresenter.shared.show(coordinator: coordinator)
             }
 
             Divider()
 
-            Button(Self.quitMenuTitle) {
+            Button(coordinator.strings.app.quitMenuTitle) {
                 NSApp.terminate(nil)
             }
         } label: {
