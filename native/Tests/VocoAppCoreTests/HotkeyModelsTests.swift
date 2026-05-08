@@ -72,4 +72,12 @@ final class HotkeyModelsTests: XCTestCase {
         XCTAssertTrue(HotkeyRuntimeState.listening.canReceiveEvents)
         XCTAssertFalse(HotkeyRuntimeState.failed("boom").canReceiveEvents)
     }
+
+    func testHotkeyCopyCanRenderInEnglish() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(HotkeyMode.toggle.title(strings: strings), "Toggle Recording")
+        XCTAssertEqual(HotkeyRuntimeState.listening.title(strings: strings), "Listening")
+        XCTAssertEqual(HotkeyRuntimeState.permissionNeeded.detail(strings: strings), "Accessibility permission is required to listen for the global hotkey.")
+    }
 }

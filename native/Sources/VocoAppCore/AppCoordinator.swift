@@ -66,6 +66,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var displayInDockEnabled: Bool
     @Published public private(set) var voiceInputSessionHistoryEnabled: Bool
     @Published public private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
+    @Published public private(set) var appLanguage: AppLanguage
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -159,6 +160,7 @@ public final class AppCoordinator: ObservableObject {
         self.displayInDockEnabled = appPreferenceStore.displayInDockEnabled
         self.voiceInputSessionHistoryEnabled = initialVoiceInputSessionHistoryEnabled
         self.voiceInputSessionRetentionPolicy = initialVoiceInputSessionRetentionPolicy
+        self.appLanguage = appPreferenceStore.appLanguage
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -231,6 +233,10 @@ public final class AppCoordinator: ObservableObject {
 
     public var launchAtLoginEnabled: Bool {
         launchAtLoginState.isEnabled
+    }
+
+    public var strings: VocoStrings {
+        VocoStrings(language: appLanguage)
     }
 
     public func finishLaunching() {
@@ -432,6 +438,16 @@ public final class AppCoordinator: ObservableObject {
         hotkeyMode = mode
         voiceInputPreferenceStore.saveHotkeyMode(mode)
         restartHotkeyRuntime()
+    }
+
+    public func setAppLanguage(_ language: AppLanguage) {
+        guard appLanguage != language else {
+            appPreferenceStore.saveAppLanguage(language)
+            return
+        }
+
+        appLanguage = language
+        appPreferenceStore.saveAppLanguage(language)
     }
 
     public func setAudioInputDevice(_ device: AudioInputDeviceSelection) {

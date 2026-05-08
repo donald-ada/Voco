@@ -37,6 +37,14 @@ final class PermissionModelsTests: XCTestCase {
         XCTAssertEqual(PermissionGrantState.unknown.title, "未知")
     }
 
+    func testPermissionCopyCanRenderInEnglish() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(PermissionKind.microphone.title(strings: strings), "Microphone")
+        XCTAssertEqual(PermissionKind.accessibility.recoveryActionTitle(strings: strings), "Open Accessibility Settings")
+        XCTAssertEqual(PermissionGrantState.denied.title(strings: strings), "Denied")
+    }
+
     func testPermissionSummaryRequiresAllRequiredPermissions() {
         let summary = PermissionSummary(
             snapshots: [

@@ -825,6 +825,26 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorReadsInitialAppLanguageFromPreferences() {
+        let store = FakeAppPreferenceStore(appLanguage: .en)
+        let coordinator = AppCoordinator(appPreferenceStore: store)
+
+        XCTAssertEqual(coordinator.appLanguage, .en)
+        XCTAssertEqual(coordinator.strings.language, .en)
+    }
+
+    @MainActor
+    func testCoordinatorPersistsAppLanguageChanges() {
+        let store = FakeAppPreferenceStore(appLanguage: .zhHans)
+        let coordinator = AppCoordinator(appPreferenceStore: store)
+
+        coordinator.setAppLanguage(.en)
+
+        XCTAssertEqual(coordinator.appLanguage, .en)
+        XCTAssertEqual(store.appLanguage, .en)
+    }
+
+    @MainActor
     func testCoordinatorSettingsSnapshotsReflectRecentRuntimeState() async {
         let result = RecordingWorkflowResult(
             audio: CapturedAudioSnapshot(durationSeconds: 1.2, sampleRate: 16_000, peakAmplitude: 0.64),

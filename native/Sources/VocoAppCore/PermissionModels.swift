@@ -9,21 +9,19 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
     }
 
     public var title: String {
-        switch self {
-        case .microphone:
-            "麦克风"
-        case .accessibility:
-            "辅助功能"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.permissions.title(for: self)
     }
 
     public var description: String {
-        switch self {
-        case .microphone:
-            "用于录制语音并生成转写文本。"
-        case .accessibility:
-            "用于把转写文本插入当前正在输入的 App。"
-        }
+        description(strings: VocoStrings())
+    }
+
+    public func description(strings: VocoStrings) -> String {
+        strings.permissions.description(for: self)
     }
 
     public var systemImage: String {
@@ -36,12 +34,11 @@ public enum PermissionKind: String, CaseIterable, Identifiable, Sendable {
     }
 
     public var recoveryActionTitle: String {
-        switch self {
-        case .microphone:
-            "打开麦克风设置"
-        case .accessibility:
-            "打开辅助功能设置"
-        }
+        recoveryActionTitle(strings: VocoStrings())
+    }
+
+    public func recoveryActionTitle(strings: VocoStrings) -> String {
+        strings.permissions.recoveryActionTitle(for: self)
     }
 
     public var settingsURLString: String {
@@ -66,18 +63,11 @@ public enum PermissionGrantState: Equatable, Sendable {
     }
 
     public var title: String {
-        switch self {
-        case .notDetermined:
-            "未决定"
-        case .granted:
-            "已允许"
-        case .denied:
-            "已拒绝"
-        case .restricted:
-            "受限制"
-        case .unknown:
-            "未知"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.permissions.title(for: self)
     }
 
     public var systemImage: String {

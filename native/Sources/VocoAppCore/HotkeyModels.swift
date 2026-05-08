@@ -7,12 +7,11 @@ public enum HotkeyMode: String, CaseIterable, Identifiable, Equatable, Sendable 
     public var id: String { rawValue }
 
     public var title: String {
-        switch self {
-        case .toggle:
-            "切换录音"
-        case .pressAndHold:
-            "按住录音"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.hotkeys.title(for: self)
     }
 }
 
@@ -78,29 +77,19 @@ public enum HotkeyRuntimeState: Equatable, Sendable {
     case failed(String)
 
     public var title: String {
-        switch self {
-        case .inactive:
-            "未监听"
-        case .listening:
-            "监听中"
-        case .permissionNeeded:
-            "需要权限"
-        case .failed:
-            "出错"
-        }
+        title(strings: VocoStrings())
+    }
+
+    public func title(strings: VocoStrings) -> String {
+        strings.hotkeys.title(for: self)
     }
 
     public var detail: String {
-        switch self {
-        case .inactive:
-            "快捷键监听未启动。"
-        case .listening:
-            "Voco 正在监听全局快捷键。"
-        case .permissionNeeded:
-            "需要辅助功能权限才能监听全局快捷键。"
-        case .failed(let message):
-            message
-        }
+        detail(strings: VocoStrings())
+    }
+
+    public func detail(strings: VocoStrings) -> String {
+        strings.hotkeys.detail(for: self)
     }
 
     public var systemImage: String {
