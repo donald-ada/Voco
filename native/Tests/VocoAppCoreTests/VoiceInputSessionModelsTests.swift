@@ -27,6 +27,21 @@ final class VoiceInputSessionModelsTests: XCTestCase {
         )
     }
 
+    func testSessionStoreErrorsCanRenderKnownAppGeneratedDetailsInEnglish() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            VoiceInputSessionStoreError.loadFailed(message: "无法定位 Application Support 目录。")
+                .localizedDescription(strings: strings),
+            "Unable to load session history: Unable to locate the Application Support directory."
+        )
+        XCTAssertEqual(
+            VoiceInputSessionStoreError.loadFailed(message: "数据库中存在格式无效的会话记录。")
+                .localizedDescription(strings: strings),
+            "Unable to load session history: The database contains an invalid session record."
+        )
+    }
+
     func testSessionSnapshotUsesRawTranscriptPreviewWithoutGeneratedTitle() {
         let session = VoiceInputSessionSnapshot(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

@@ -27,13 +27,17 @@ public struct TextInjectionSnapshot: Equatable, Sendable {
     public let targetAppName: String?
     public let strategy: TextInjectionStrategy
     public let succeeded: Bool
-    public let detail: String
+    private let detailSource: DetailSource
+
+    public var detail: String {
+        detail(strings: VocoStrings())
+    }
 
     public init(targetAppName: String?, strategy: TextInjectionStrategy, succeeded: Bool, detail: String) {
         self.targetAppName = targetAppName
         self.strategy = strategy
         self.succeeded = succeeded
-        self.detail = detail
+        self.detailSource = .raw(detail)
     }
 
     public static var skippedEmpty: TextInjectionSnapshot {
@@ -41,8 +45,65 @@ public struct TextInjectionSnapshot: Equatable, Sendable {
             targetAppName: nil,
             strategy: .skippedEmpty,
             succeeded: true,
-            detail: "Final transcript was empty; skipped text insertion."
+            detailSource: .skippedEmpty
         )
+    }
+
+    public static func success(
+        targetAppName: String?,
+        strategy: TextInjectionStrategy
+    ) -> TextInjectionSnapshot {
+        TextInjectionSnapshot(
+            targetAppName: targetAppName,
+            strategy: strategy,
+            succeeded: true,
+            detailSource: .success(strategy)
+        )
+    }
+
+    public static func failed(
+        targetAppName: String?,
+        strategy: TextInjectionStrategy,
+        error: TextInjectionError
+    ) -> TextInjectionSnapshot {
+        TextInjectionSnapshot(
+            targetAppName: targetAppName,
+            strategy: strategy,
+            succeeded: false,
+            detailSource: .failure(error)
+        )
+    }
+
+    public func detail(strings: VocoStrings) -> String {
+        switch detailSource {
+        case .raw(let detail):
+            detail
+        case .skippedEmpty:
+            strings.injection.skippedEmptyDetail
+        case .success(let strategy):
+            strings.injection.successDetail(for: strategy)
+        case .failure(let error):
+            error.localizedDescription(strings: strings)
+        }
+    }
+
+    private init(
+        targetAppName: String?,
+        strategy: TextInjectionStrategy,
+        succeeded: Bool,
+        detailSource: DetailSource
+    ) {
+        self.targetAppName = targetAppName
+        self.strategy = strategy
+        self.succeeded = succeeded
+        self.detailSource = detailSource
+    }
+
+    private enum DetailSource: Equatable, Sendable {
+        case raw(String)
+        case skippedEmpty
+        case success(TextInjectionStrategy)
+        case failure(TextInjectionError)
     }
 }
 
@@ -143,11 +204,9 @@ public final class NativeTextInjectionProvider: TextInjectionProviding {
 
         do {
             try await client.insert(text, using: strategy)
-            return TextInjectionSnapshot(
+            return .success(
                 targetAppName: context.targetAppName,
-                strategy: strategy,
-                succeeded: true,
-                detail: successDetail(for: strategy)
+                strategy: strategy
             )
         } catch {
             return failedSnapshot(context: context, strategy: strategy, error: error)
@@ -159,26 +218,14 @@ public final class NativeTextInjectionProvider: TextInjectionProviding {
         strategy: TextInjectionStrategy,
         error: Error
     ) -> TextInjectionSnapshot {
-        TextInjectionSnapshot(
+        let injectionError = (error as? TextInjectionError) ?? TextInjectionError.insertionFailed(
+            strategy: strategy,
+            message: error.localizedDescription
+        )
+        return .failed(
             targetAppName: context.targetAppName,
             strategy: strategy,
-            succeeded: false,
-            detail: error.localizedDescription
+            error: injectionError
         )
-    }
-
-    private func successDetail(for strategy: TextInjectionStrategy) -> String {
-        switch strategy {
-        case .directAccessibility:
-            "已通过辅助功能直接插入文本。"
-        case .unicodeEvent:
-            "已通过 Unicode 事件插入文本。"
-        case .clipboardFallback:
-            "已通过剪贴板回退插入文本并恢复剪贴板。"
-        case .unavailable:
-            "没有可用的文本插入方式。"
-        case .skippedEmpty:
-            "Final transcript was empty; skipped text insertion."
-        }
     }
 }

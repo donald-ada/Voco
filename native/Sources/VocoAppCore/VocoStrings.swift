@@ -24,6 +24,45 @@ public struct VocoStrings: Sendable {
     public var legacyInstall: LegacyInstallStrings { LegacyInstallStrings(language: language) }
 }
 
+private func localizedDiagnosticDetail(_ detail: String, language: AppLanguage) -> String {
+    guard language == .en else {
+        return detail
+    }
+
+    switch detail {
+    case "Keychain 中没有保存火山引擎凭证。":
+        return "No Volcengine credentials are saved in Keychain."
+    case "Keychain 中没有保存火山引擎 API Key。":
+        return "No Volcengine API Key is saved in Keychain."
+    case "Keychain 返回的数据格式无效。":
+        return "Keychain returned data in an invalid format."
+    case "Keychain 返回的数据不是 JSON 或 UTF-8 文本。":
+        return "Keychain returned data that was not JSON or UTF-8 text."
+    case "无法定位 Application Support 目录。":
+        return "Unable to locate the Application Support directory."
+    case "数据库中存在格式无效的会话记录。":
+        return "The database contains an invalid session record."
+    default:
+        break
+    }
+
+    let handshakePrefix = "OpenSpeech WebSocket 握手被服务端拒绝。请检查火山引擎凭证，并确认 Resource ID 已开通。"
+    if detail.hasPrefix(handshakePrefix) {
+        let suffix = detail.dropFirst(handshakePrefix.count)
+        let separator = suffix.isEmpty ? "" : " "
+        return "OpenSpeech WebSocket handshake was rejected by the server. Check Volcengine credentials and confirm the Resource ID is enabled.\(separator)\(suffix)"
+    }
+
+    let shortHandshakePrefix = "OpenSpeech WebSocket 握手被服务端拒绝。"
+    if detail.hasPrefix(shortHandshakePrefix) {
+        let suffix = detail.dropFirst(shortHandshakePrefix.count)
+        let separator = suffix.isEmpty ? "" : " "
+        return "OpenSpeech WebSocket handshake was rejected by the server.\(separator)\(suffix)"
+    }
+
+    return detail
+}
+
 public struct AppStrings: Sendable {
     let language: AppLanguage
 
@@ -302,11 +341,12 @@ public struct SettingsWorkbenchStrings: Sendable {
     }
 
     public func credentialReadFailedDetail(message: String) -> String {
+        let detail = localizedDiagnosticDetail(message, language: language)
         switch language {
         case .zhHans:
-            "Keychain 访问失败：\(message)"
+            return "Keychain 访问失败：\(detail)"
         case .en:
-            "Keychain access failed: \(message)"
+            return "Keychain access failed: \(detail)"
         }
     }
 
@@ -380,7 +420,7 @@ public struct SettingsWorkbenchStrings: Sendable {
         case (.en, .offline):
             "The model is temporarily unavailable. Try again later."
         case (.en, .failed(_, let message)):
-            message
+            localizedDiagnosticDetail(message, language: language)
         }
     }
 
@@ -394,15 +434,15 @@ public struct SettingsWorkbenchStrings: Sendable {
     }
 
     public func transcriptionFailureDetail(_ message: String) -> String {
-        message
+        localizedDiagnosticDetail(message, language: language)
     }
 
     public func textInputFailureDetail(_ detail: String) -> String {
-        detail
+        localizedDiagnosticDetail(detail, language: language)
     }
 
     public func recentOperationFailureDetail(_ detail: String) -> String {
-        detail
+        localizedDiagnosticDetail(detail, language: language)
     }
 }
 
@@ -610,7 +650,12 @@ public struct CredentialStrings: Sendable {
     }
 
     public func failedStorageDetail(message: String) -> String {
-        language == .zhHans ? "Keychain 访问失败：\(message)" : "Keychain access failed: \(message)"
+        let detail = localizedDiagnosticDetail(message, language: language)
+        return language == .zhHans ? "Keychain 访问失败：\(detail)" : "Keychain access failed: \(detail)"
+    }
+
+    public func failureMessage(_ message: String) -> String {
+        localizedDiagnosticDetail(message, language: language)
     }
 
     public func errorDescription(for error: TranscriptionCredentialError) -> String {
@@ -620,21 +665,21 @@ public struct CredentialStrings: Sendable {
         case (.zhHans, .emptyAppIDAccessToken):
             "火山引擎 App ID 和 Access Token 不能为空。"
         case (.zhHans, .readFailed(let message)):
-            "读取 ASR 凭证失败：\(message)"
+            "读取 ASR 凭证失败：\(localizedDiagnosticDetail(message, language: language))"
         case (.zhHans, .storeFailed(let message)):
-            "保存 ASR 凭证失败：\(message)"
+            "保存 ASR 凭证失败：\(localizedDiagnosticDetail(message, language: language))"
         case (.zhHans, .deleteFailed(let message)):
-            "删除 ASR 凭证失败：\(message)"
+            "删除 ASR 凭证失败：\(localizedDiagnosticDetail(message, language: language))"
         case (.en, .emptyAPIKey):
             "ASR API Key cannot be empty."
         case (.en, .emptyAppIDAccessToken):
             "Volcengine App ID and Access Token cannot be empty."
         case (.en, .readFailed(let message)):
-            "Unable to read ASR credentials: \(message)"
+            "Unable to read ASR credentials: \(localizedDiagnosticDetail(message, language: language))"
         case (.en, .storeFailed(let message)):
-            "Unable to save ASR credentials: \(message)"
+            "Unable to save ASR credentials: \(localizedDiagnosticDetail(message, language: language))"
         case (.en, .deleteFailed(let message)):
-            "Unable to delete ASR credentials: \(message)"
+            "Unable to delete ASR credentials: \(localizedDiagnosticDetail(message, language: language))"
         }
     }
 }
@@ -707,11 +752,11 @@ public struct TranscriptionStatusStrings: Sendable {
         case (.en, .emptyAudio):
             "Transcription failed: no usable audio."
         case (.en, .authentication(let providerName, let message)):
-            "\(providerDisplayName(providerName)) authentication failed: \(message)"
+            "\(providerDisplayName(providerName)) authentication failed: \(localizedDiagnosticDetail(message, language: language))"
         case (.en, .transport(let providerName, let message, _)):
-            "\(providerDisplayName(providerName)) network error: \(message)"
+            "\(providerDisplayName(providerName)) network error: \(localizedDiagnosticDetail(message, language: language))"
         case (.en, .provider(let providerName, let message)):
-            "\(providerDisplayName(providerName)) transcription failed: \(message)"
+            "\(providerDisplayName(providerName)) transcription failed: \(localizedDiagnosticDetail(message, language: language))"
         case (.en, .cancelled):
             "Transcription cancelled."
         }
@@ -731,6 +776,7 @@ public struct InjectionSettingsStrings: Sendable {
     public var noRecentTargetDetail: String { language == .zhHans ? "尚未完成文本插入，无法显示最近聚焦 App。" : "No text insertion has completed, so the recent focused app is unavailable." }
     public var recentTargetDetail: String { language == .zhHans ? "最近插入目标 App。" : "Recent insertion target app." }
     public var noTargetAppTitle: String { language == .zhHans ? "无目标 App" : "No Target App" }
+    public var skippedEmptyDetail: String { language == .zhHans ? "最终转写为空，已跳过文本插入。" : "Final transcript was empty; skipped text insertion." }
 
     public func title(for strategy: TextInjectionStrategy) -> String {
         switch (language, strategy) {
@@ -746,6 +792,31 @@ public struct InjectionSettingsStrings: Sendable {
             "Unavailable"
         case (.en, .skippedEmpty):
             "Empty text skipped"
+        }
+    }
+
+    public func successDetail(for strategy: TextInjectionStrategy) -> String {
+        switch (language, strategy) {
+        case (.zhHans, .directAccessibility):
+            "已通过辅助功能直接插入文本。"
+        case (.zhHans, .unicodeEvent):
+            "已通过 Unicode 事件插入文本。"
+        case (.zhHans, .clipboardFallback):
+            "已通过剪贴板回退插入文本并恢复剪贴板。"
+        case (.zhHans, .unavailable):
+            "没有可用的文本插入方式。"
+        case (.zhHans, .skippedEmpty):
+            skippedEmptyDetail
+        case (.en, .directAccessibility):
+            "Inserted text with Direct Accessibility."
+        case (.en, .unicodeEvent):
+            "Inserted text with Unicode events."
+        case (.en, .clipboardFallback):
+            "Inserted text with clipboard fallback and restored the clipboard."
+        case (.en, .unavailable):
+            "No text insertion method was available."
+        case (.en, .skippedEmpty):
+            skippedEmptyDetail
         }
     }
 
@@ -845,15 +916,24 @@ public struct SessionStrings: Sendable {
     }
 
     public func loadFailureMessage(detail: String) -> String {
-        language == .zhHans ? "无法加载会话记录：\(detail)" : "Unable to load session history: \(detail)"
+        let localizedDetail = localizedDiagnosticDetail(detail, language: language)
+        return language == .zhHans
+            ? "无法加载会话记录：\(localizedDetail)"
+            : "Unable to load session history: \(localizedDetail)"
     }
 
     public func saveFailureMessage(detail: String) -> String {
-        language == .zhHans ? "无法保存会话记录：\(detail)" : "Unable to save session history: \(detail)"
+        let localizedDetail = localizedDiagnosticDetail(detail, language: language)
+        return language == .zhHans
+            ? "无法保存会话记录：\(localizedDetail)"
+            : "Unable to save session history: \(localizedDetail)"
     }
 
     public func updateRetentionFailureMessage(detail: String) -> String {
-        language == .zhHans ? "无法更新会话记录保留策略：\(detail)" : "Unable to update session retention policy: \(detail)"
+        let localizedDetail = localizedDiagnosticDetail(detail, language: language)
+        return language == .zhHans
+            ? "无法更新会话记录保留策略：\(localizedDetail)"
+            : "Unable to update session retention policy: \(localizedDetail)"
     }
 
     public func storeErrorDescription(for error: VoiceInputSessionStoreError) -> String {

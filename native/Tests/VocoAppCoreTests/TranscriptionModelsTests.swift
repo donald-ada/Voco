@@ -62,6 +62,27 @@ final class TranscriptionModelsTests: XCTestCase {
         )
     }
 
+    func testProviderErrorCanRenderKnownAppGeneratedDetailsInEnglish() {
+        let strings = VocoStrings(language: .en)
+        let endpoint = URL(string: "wss://example.test/asr")!
+
+        XCTAssertEqual(
+            TranscriptionProviderError.authentication(
+                providerName: "火山引擎",
+                message: "Keychain 中没有保存火山引擎凭证。"
+            ).localizedDescription(strings: strings),
+            "Volcengine authentication failed: No Volcengine credentials are saved in Keychain."
+        )
+        XCTAssertEqual(
+            VolcengineTranscriptionErrorMapper.transportError(
+                URLError(.badServerResponse),
+                endpoint: endpoint,
+                resourceID: "volc.test"
+            ).localizedDescription(strings: strings),
+            "Volcengine network error: OpenSpeech WebSocket handshake was rejected by the server. Check Volcengine credentials and confirm the Resource ID is enabled. endpoint=wss://example.test/asr resourceID=volc.test"
+        )
+    }
+
     func testTranscriptSnapshotAppendsNonEmptyPartials() {
         let base = TranscriptSnapshot(
             finalText: "",

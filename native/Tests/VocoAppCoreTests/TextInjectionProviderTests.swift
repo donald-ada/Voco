@@ -26,6 +26,10 @@ final class TextInjectionProviderTests: XCTestCase {
         XCTAssertEqual(result.strategy, .clipboardFallback)
         XCTAssertTrue(result.succeeded)
         XCTAssertEqual(result.detail, "已通过剪贴板回退插入文本并恢复剪贴板。")
+        XCTAssertEqual(
+            result.detail(strings: VocoStrings(language: .en)),
+            "Inserted text with clipboard fallback and restored the clipboard."
+        )
     }
 
     @MainActor
@@ -70,6 +74,10 @@ final class TextInjectionProviderTests: XCTestCase {
         XCTAssertEqual(result.strategy, .unavailable)
         XCTAssertFalse(result.succeeded)
         XCTAssertEqual(result.detail, "无法插入文本：请先在系统设置中允许 Voco 使用辅助功能。")
+        XCTAssertEqual(
+            result.detail(strings: VocoStrings(language: .en)),
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
         XCTAssertTrue(client.insertions.isEmpty)
     }
 
@@ -91,6 +99,10 @@ final class TextInjectionProviderTests: XCTestCase {
         XCTAssertEqual(result.strategy, .directAccessibility)
         XCTAssertFalse(result.succeeded)
         XCTAssertEqual(result.detail, "辅助功能直接插入失败：AX error -25204")
+        XCTAssertEqual(
+            result.detail(strings: VocoStrings(language: .en)),
+            "Direct Accessibility insertion failed: AX error -25204"
+        )
     }
 }
 

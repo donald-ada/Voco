@@ -64,7 +64,7 @@ public struct HUDSnapshot: Equatable, Sendable {
             self = HUDSnapshot(
                 phase: .error,
                 title: hudStrings.errorTitle,
-                detail: lastErrorMessage ?? lastInjection?.detail ?? hudStrings.genericErrorDetail,
+                detail: lastErrorMessage ?? lastInjection?.detail(strings: strings) ?? hudStrings.genericErrorDetail,
                 systemImage: "exclamationmark.triangle.fill",
                 transcriptPreview: nil,
                 autoHideAfterSeconds: nil

@@ -50,6 +50,22 @@ final class LegacyInstallModelsTests: XCTestCase {
         XCTAssertTrue(error.localizedDescription.contains("Permission denied"))
     }
 
+    func testRemovalFailureCanRenderEnglishDescription() {
+        let path = "/Users/alice/Library/LaunchAgents/com.voco.daemon.plist"
+        let underlying = NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(EACCES),
+            userInfo: [NSLocalizedDescriptionKey: "Permission denied"]
+        )
+
+        let error = LegacyInstallCleanupError.removeFailed(path: path, underlying: underlying)
+
+        XCTAssertEqual(
+            error.localizedDescription(strings: VocoStrings(language: .en)),
+            "Failed to remove legacy LaunchAgent: \(path); OS error: Permission denied"
+        )
+    }
+
     @MainActor
     func testCoordinatorRefreshesLegacyInstallSnapshot() {
         let provider = FakeLegacyInstallProvider(
@@ -118,6 +134,7 @@ final class LegacyInstallModelsTests: XCTestCase {
             removalError: LegacyInstallCleanupError.removeFailed(path: launchAgent.path, underlying: underlying)
         )
         let coordinator = AppCoordinator(legacyInstallProvider: provider)
+        coordinator.setAppLanguage(.en)
 
         await coordinator.removeLegacyLaunchAgentFromUserAction()
 
@@ -126,6 +143,7 @@ final class LegacyInstallModelsTests: XCTestCase {
         XCTAssertTrue(coordinator.legacyInstall.requiresUserAction)
         XCTAssertTrue(coordinator.lastErrorMessage?.contains(launchAgent.path) == true)
         XCTAssertTrue(coordinator.lastErrorMessage?.contains("Permission denied") == true)
+        XCTAssertTrue(coordinator.lastErrorMessage?.contains("Failed to remove legacy LaunchAgent") == true)
     }
 
 }

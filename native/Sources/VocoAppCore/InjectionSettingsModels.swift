@@ -25,8 +25,8 @@ public struct InjectionStrategySettingsSnapshot: Equatable, Sendable {
             return
         }
 
-        self.title = lastInjection.strategy.title
-        self.detail = lastInjection.detail
+        self.title = strings.injection.title(for: lastInjection.strategy)
+        self.detail = lastInjection.detail(strings: strings)
         self.systemImage = lastInjection.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill"
         self.succeeded = lastInjection.succeeded
     }
@@ -49,12 +49,12 @@ public struct FocusedAppSettingsSnapshot: Equatable, Sendable {
 
         if let targetAppName = lastInjection.targetAppName, !targetAppName.isEmpty {
             self.title = targetAppName
-            self.detail = lastInjection.succeeded ? strings.injection.recentTargetDetail : lastInjection.detail
+            self.detail = lastInjection.succeeded ? strings.injection.recentTargetDetail : lastInjection.detail(strings: strings)
             self.systemImage = lastInjection.succeeded ? "app.connected.to.app.below.fill" : "app.badge"
             self.hasRecentTarget = true
         } else {
             self.title = strings.injection.noTargetAppTitle
-            self.detail = lastInjection.detail
+            self.detail = lastInjection.detail(strings: strings)
             self.systemImage = "app.dashed"
             self.hasRecentTarget = false
         }

@@ -9,6 +9,42 @@ final class InjectionSettingsModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.focusedApp.title, "No Recent Target")
     }
 
+    func testEnglishInjectionSettingsLocalizeSemanticInjectionSnapshot() {
+        let success = TextInjectionSnapshot.success(
+            targetAppName: "Notes",
+            strategy: .directAccessibility
+        )
+        let successSnapshot = InjectionSettingsSnapshot(
+            lastInjection: success,
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(successSnapshot.strategy.title, "Direct Accessibility insertion")
+        XCTAssertEqual(successSnapshot.strategy.detail, "Inserted text with Direct Accessibility.")
+        XCTAssertEqual(successSnapshot.focusedApp.detail, "Recent insertion target app.")
+
+        let failure = TextInjectionSnapshot.failed(
+            targetAppName: nil,
+            strategy: .unavailable,
+            error: .accessibilityPermissionMissing
+        )
+        let failureSnapshot = InjectionSettingsSnapshot(
+            lastInjection: failure,
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(failureSnapshot.strategy.title, "Unavailable")
+        XCTAssertEqual(
+            failureSnapshot.strategy.detail,
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
+        XCTAssertEqual(failureSnapshot.focusedApp.title, "No Target App")
+        XCTAssertEqual(
+            failureSnapshot.focusedApp.detail,
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
+    }
+
     func testDefaultInjectionSettingsShowNoRecentTarget() {
         let snapshot = InjectionSettingsSnapshot(lastInjection: nil)
 

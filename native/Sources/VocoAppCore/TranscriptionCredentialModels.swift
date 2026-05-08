@@ -179,15 +179,37 @@ public struct TranscriptionCredentialSnapshot: Equatable, Sendable {
         message: String,
         strings: VocoStrings = VocoStrings()
     ) -> TranscriptionCredentialSnapshot {
-        TranscriptionCredentialSnapshot(
+        let localizedMessage = strings.credentials.failureMessage(message)
+        return TranscriptionCredentialSnapshot(
             provider: provider,
             hasCredential: false,
             mode: nil,
             maskedCredential: nil,
             hasAPIKey: false,
             maskedAPIKey: nil,
-            storageDetail: strings.credentials.failedStorageDetail(message: message),
-            lastErrorMessage: message
+            storageDetail: strings.credentials.failedStorageDetail(message: localizedMessage),
+            lastErrorMessage: localizedMessage
+        )
+    }
+
+    public func localized(strings: VocoStrings) -> TranscriptionCredentialSnapshot {
+        if let lastErrorMessage {
+            return .failed(provider: provider, message: lastErrorMessage, strings: strings)
+        }
+
+        guard hasCredential, let mode else {
+            return .missing(provider: provider, strings: strings)
+        }
+
+        return TranscriptionCredentialSnapshot(
+            provider: provider,
+            hasCredential: hasCredential,
+            mode: mode,
+            maskedCredential: maskedCredential,
+            hasAPIKey: hasAPIKey,
+            maskedAPIKey: maskedAPIKey,
+            storageDetail: strings.credentials.storedStorageDetail(mode: mode),
+            lastErrorMessage: nil
         )
     }
 }

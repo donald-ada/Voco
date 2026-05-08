@@ -81,6 +81,21 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
         )
     }
 
+    func testCredentialErrorsCanRenderKnownAppGeneratedDetailsInEnglish() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            TranscriptionCredentialError.readFailed(message: "Keychain 返回的数据格式无效。")
+                .localizedDescription(strings: strings),
+            "Unable to read ASR credentials: Keychain returned data in an invalid format."
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.readFailed(message: "Keychain 返回的数据不是 JSON 或 UTF-8 文本。")
+                .localizedDescription(strings: strings),
+            "Unable to read ASR credentials: Keychain returned data that was not JSON or UTF-8 text."
+        )
+    }
+
     func testCredentialErrorsCanRenderEnglishDescription() {
         let strings = VocoStrings(language: .en)
 

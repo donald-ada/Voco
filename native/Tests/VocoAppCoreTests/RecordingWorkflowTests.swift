@@ -77,7 +77,11 @@ final class RecordingWorkflowTests: XCTestCase {
         XCTAssertTrue(textInjection.requests.isEmpty)
         XCTAssertEqual(result.injection.strategy, .skippedEmpty)
         XCTAssertTrue(result.injection.succeeded)
-        XCTAssertEqual(result.injection.detail, "Final transcript was empty; skipped text insertion.")
+        XCTAssertEqual(result.injection.detail, "最终转写为空，已跳过文本插入。")
+        XCTAssertEqual(
+            result.injection.detail(strings: VocoStrings(language: .en)),
+            "Final transcript was empty; skipped text insertion."
+        )
     }
 
     @MainActor

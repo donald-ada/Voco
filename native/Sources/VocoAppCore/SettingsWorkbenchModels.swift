@@ -185,7 +185,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         } else if let injection, !injection.succeeded {
             overview = SettingsWorkbenchOverviewSnapshot(
                 title: workbenchStrings.textInputFailedTitle,
-                detail: workbenchStrings.textInputFailureDetail(injection.detail),
+                detail: workbenchStrings.textInputFailureDetail(injection.detail(strings: strings)),
                 primaryActionID: SettingsWorkbenchActionID.openSettings,
                 primaryActionDisplayTitle: workbenchStrings.openSettingsAction,
                 secondaryActionDisplayTitle: workbenchStrings.refreshAction
@@ -223,6 +223,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             settingsStatus = .ok
         }
         let homeIssueItems = makeHomeIssueItems(
+            appStrings: strings,
             strings: workbenchStrings,
             missingRequiredPermissions: missingRequiredPermissions,
             credentials: credentials,
@@ -248,6 +249,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
     }
 
     private static func makeHomeIssueItems(
+        appStrings: VocoStrings,
         strings: SettingsWorkbenchStrings,
         missingRequiredPermissions: [PermissionSnapshot],
         credentials: TranscriptionCredentialSnapshot,
@@ -295,7 +297,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                 SettingsWorkbenchIssueItem(
                     id: "text-injection",
                     title: strings.textInputFailedTitle,
-                    detail: strings.textInputFailureDetail(injection.detail)
+                    detail: strings.textInputFailureDetail(injection.detail(strings: appStrings))
                 )
             )
         } else if let lastErrorMessage = lastErrorMessage?.nonEmpty, items.isEmpty {

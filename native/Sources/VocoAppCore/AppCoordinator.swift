@@ -82,6 +82,7 @@ public final class AppCoordinator: ObservableObject {
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
     private var isTranscriptionCredentialRefreshInFlight: Bool
+    private var lastRuntimeErrorSource: RuntimeErrorSource?
 
     public init(
         launchAtLoginEnabled: Bool = false,
@@ -163,6 +164,7 @@ public final class AppCoordinator: ObservableObject {
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
         self.isTranscriptionCredentialRefreshInFlight = false
+        self.lastRuntimeErrorSource = nil
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -241,7 +243,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func finishLaunching() {
-        lastErrorMessage = nil
+        clearRuntimeError()
         installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         refreshLegacyInstall()
         permissions = permissionProvider.currentSnapshots()
@@ -305,9 +307,10 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func applyTranscriptionCredentialSnapshot(_ snapshot: TranscriptionCredentialSnapshot) {
-        transcriptionCredentials = snapshot
-        if let message = snapshot.lastErrorMessage {
-            lastErrorMessage = message
+        let localizedSnapshot = snapshot.localized(strings: strings)
+        transcriptionCredentials = localizedSnapshot
+        if let message = localizedSnapshot.lastErrorMessage {
+            setRuntimeError(.credentialSnapshotFailure(message))
         }
     }
 
@@ -343,7 +346,7 @@ public final class AppCoordinator: ObservableObject {
     public func finishTranscribing(result: TranscriptionCompletionResult) {
         switch result {
         case .success:
-            lastErrorMessage = nil
+            clearRuntimeError()
             status = .ready
         case .failure(let message):
             fail(message)
@@ -353,19 +356,18 @@ public final class AppCoordinator: ObservableObject {
     public func setLaunchAtLoginEnabled(_ enabled: Bool) async {
         installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         if enabled, !installLocation.allowsLaunchAtLogin {
-            let message = installLocation.warningDetail ?? strings.settings.launchAtLoginUnsupportedDetail
             launchAtLoginState = .unavailable
-            lastErrorMessage = message
+            setRuntimeError(.launchAtLoginUnsupported)
             return
         }
 
         do {
             launchAtLoginState = try await launchAtLoginProvider.setEnabled(enabled)
-            lastErrorMessage = nil
+            clearRuntimeError()
         } catch {
             let message = error.localizedDescription
             launchAtLoginState = .failed(message)
-            lastErrorMessage = strings.settings.launchAtLoginSetupFailedMessage(message)
+            setRuntimeError(.launchAtLoginSetup(message))
         }
     }
 
@@ -389,7 +391,7 @@ public final class AppCoordinator: ObservableObject {
         appPreferenceStore.saveVoiceInputSessionHistoryEnabled(enabled)
 
         if enabled {
-            lastErrorMessage = reloadRecentVoiceInputSessions()
+            applyOptionalRuntimeErrorMessage(reloadRecentVoiceInputSessions())
         }
     }
 
@@ -401,7 +403,7 @@ public final class AppCoordinator: ObservableObject {
 
         voiceInputSessionRetentionPolicy = policy
         appPreferenceStore.saveVoiceInputSessionRetentionPolicy(policy)
-        lastErrorMessage = applyVoiceInputSessionRetentionPolicy()
+        applyOptionalRuntimeErrorMessage(applyVoiceInputSessionRetentionPolicy())
     }
 
     public func setHotkeyPreset(_ preset: HotkeyPreset) {
@@ -461,7 +463,7 @@ public final class AppCoordinator: ObservableObject {
         recordingWorkflow.setAudioInputDevice(device)
         selectedAudioInputDevice = recordingWorkflow.selectedAudioInputDevice
         voiceInputPreferenceStore.saveAudioInputDevice(selectedAudioInputDevice)
-        lastErrorMessage = nil
+        clearRuntimeError()
     }
 
     public func saveTranscriptionAPIKey(_ apiKey: String) async {
@@ -478,11 +480,11 @@ public final class AppCoordinator: ObservableObject {
         do {
             transcriptionCredentials = try await transcriptionCredentialStore.saveCredential(credential, for: .volcengine)
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
-            lastErrorMessage = nil
+            clearRuntimeError()
         } catch {
             let message = localizedErrorDescription(error)
             transcriptionCredentials = .failed(provider: .volcengine, message: message, strings: strings)
-            lastErrorMessage = message
+            setRuntimeError(.localizedError(error))
         }
     }
 
@@ -490,11 +492,11 @@ public final class AppCoordinator: ObservableObject {
         do {
             transcriptionCredentials = try await transcriptionCredentialStore.deleteCredentials(for: .volcengine)
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
-            lastErrorMessage = nil
+            clearRuntimeError()
         } catch {
             let message = localizedErrorDescription(error)
             transcriptionCredentials = .failed(provider: .volcengine, message: message, strings: strings)
-            lastErrorMessage = message
+            setRuntimeError(.localizedError(error))
         }
     }
 
@@ -510,22 +512,46 @@ public final class AppCoordinator: ObservableObject {
 
         do {
             legacyInstall = try await legacyInstallProvider.removeKnownLaunchAgent(strings: strings)
-            lastErrorMessage = nil
+            clearRuntimeError()
         } catch {
-            let message = error.localizedDescription
+            let message = localizedErrorDescription(error)
             legacyInstall = .failed(launchAgentURL: legacyInstall.launchAgentURL, message: message, strings: strings)
-            lastErrorMessage = message
+            setRuntimeError(.localizedError(error))
         }
     }
 
     public func fail(_ message: String) {
-        lastErrorMessage = message
+        setRuntimeError(.message(message))
         status = .error
     }
 
     private func refreshLocalizedRuntimeSnapshots() {
         installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         legacyInstall = legacyInstallProvider.currentSnapshot(strings: strings)
+        refreshRuntimeErrorMessage()
+        transcriptionCredentials = localizedTranscriptionCredentialsSnapshot()
+    }
+
+    private func localizedTranscriptionCredentialsSnapshot() -> TranscriptionCredentialSnapshot {
+        if case let .localizedError(error)? = lastRuntimeErrorSource,
+           error is TranscriptionCredentialError,
+           let lastErrorMessage {
+            return .failed(
+                provider: transcriptionCredentials.provider,
+                message: lastErrorMessage,
+                strings: strings
+            )
+        }
+        if case .credentialSnapshotFailure? = lastRuntimeErrorSource,
+           let lastErrorMessage {
+            return .failed(
+                provider: transcriptionCredentials.provider,
+                message: lastErrorMessage,
+                strings: strings
+            )
+        }
+
+        return transcriptionCredentials.localized(strings: strings)
     }
 
     private func runtimeStatusAfterPermissionCheck() -> AppRuntimeStatus {
@@ -557,7 +583,7 @@ public final class AppCoordinator: ObservableObject {
         }
 
         if case .failed(let message) = hotkeyRuntimeState {
-            lastErrorMessage = message
+            setRuntimeError(.message(message))
         }
     }
 
@@ -599,7 +625,7 @@ public final class AppCoordinator: ObservableObject {
         }
 
         isRecordingWorkflowTransitionActive = true
-        lastErrorMessage = nil
+        clearRuntimeError()
         lastAudio = nil
         currentTranscript = nil
         lastInjection = nil
@@ -656,10 +682,11 @@ public final class AppCoordinator: ObservableObject {
             }
 
             if result.injection.succeeded {
-                lastErrorMessage = sessionPersistenceErrorMessage
+                applyOptionalRuntimeErrorMessage(sessionPersistenceErrorMessage)
                 status = .ready
             } else {
-                fail(result.injection.detail)
+                setRuntimeError(.textInjection(result.injection))
+                status = .error
             }
             isRecordingWorkflowTransitionActive = false
         } catch {
@@ -670,7 +697,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func failFromWorkflowError(_ error: Error) {
-        lastErrorMessage = localizedErrorDescription(error)
+        setRuntimeError(.localizedError(error))
         if error is TranscriptionProviderError {
             status = .providerOffline
         } else {
@@ -718,7 +745,9 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = sessionStoreFailureMessage(kind: .save, error: error)
+            let source = RuntimeErrorSource.sessionStore(kind: .save, error: error)
+            let message = runtimeErrorMessage(for: source)
+            lastRuntimeErrorSource = source
             NSLog("Voco: \(message)")
             return message
         }
@@ -739,7 +768,9 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = sessionStoreFailureMessage(kind: .updateRetention, error: error)
+            let source = RuntimeErrorSource.sessionStore(kind: .updateRetention, error: error)
+            let message = runtimeErrorMessage(for: source)
+            lastRuntimeErrorSource = source
             NSLog("Voco: \(message)")
             return message
         }
@@ -752,7 +783,9 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = sessionStoreFailureMessage(kind: .load, error: error)
+            let source = RuntimeErrorSource.sessionStore(kind: .load, error: error)
+            let message = runtimeErrorMessage(for: source)
+            lastRuntimeErrorSource = source
             NSLog("Voco: \(message)")
             return message
         }
@@ -768,8 +801,54 @@ public final class AppCoordinator: ObservableObject {
             credentialError.localizedDescription(strings: strings)
         case let sessionStoreError as VoiceInputSessionStoreError:
             sessionStoreError.localizedDescription(strings: strings)
+        case let legacyInstallError as LegacyInstallCleanupError:
+            legacyInstallError.localizedDescription(strings: strings)
         default:
             error.localizedDescription
+        }
+    }
+
+    private func clearRuntimeError() {
+        lastErrorMessage = nil
+        lastRuntimeErrorSource = nil
+    }
+
+    private func setRuntimeError(_ source: RuntimeErrorSource) {
+        lastRuntimeErrorSource = source
+        lastErrorMessage = runtimeErrorMessage(for: source)
+    }
+
+    private func applyOptionalRuntimeErrorMessage(_ message: String?) {
+        if let message {
+            lastErrorMessage = message
+        } else {
+            clearRuntimeError()
+        }
+    }
+
+    private func refreshRuntimeErrorMessage() {
+        guard let lastRuntimeErrorSource else {
+            return
+        }
+        lastErrorMessage = runtimeErrorMessage(for: lastRuntimeErrorSource)
+    }
+
+    private func runtimeErrorMessage(for source: RuntimeErrorSource) -> String {
+        switch source {
+        case .localizedError(let error):
+            localizedErrorDescription(error)
+        case .textInjection(let injection):
+            injection.detail(strings: strings)
+        case .sessionStore(let kind, let error):
+            sessionStoreFailureMessage(kind: kind, error: error)
+        case .credentialSnapshotFailure(let message):
+            strings.credentials.failureMessage(message)
+        case .launchAtLoginSetup(let message):
+            strings.settings.launchAtLoginSetupFailedMessage(message)
+        case .launchAtLoginUnsupported:
+            installLocation.warningDetail ?? strings.settings.launchAtLoginUnsupportedDetail
+        case .message(let message):
+            message
         }
     }
 
@@ -806,6 +885,16 @@ public final class AppCoordinator: ObservableObject {
         case load
         case save
         case updateRetention
+    }
+
+    private enum RuntimeErrorSource {
+        case localizedError(Error)
+        case textInjection(TextInjectionSnapshot)
+        case sessionStore(kind: VoiceInputSessionStoreFailureKind, error: Error)
+        case credentialSnapshotFailure(String)
+        case launchAtLoginSetup(String)
+        case launchAtLoginUnsupported
+        case message(String)
     }
 }
 

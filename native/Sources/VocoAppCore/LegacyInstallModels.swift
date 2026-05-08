@@ -108,11 +108,25 @@ public enum LegacyInstallCleanupError: LocalizedError {
     case unsafePath(path: String, detail: String)
 
     public var errorDescription: String? {
+        localizedDescription(strings: VocoStrings())
+    }
+
+    public func localizedDescription(strings: VocoStrings) -> String {
         switch self {
         case .removeFailed(let path, let underlying):
-            "移除旧版 LaunchAgent 失败：\(path)；OS error: \(underlying.localizedDescription)"
+            switch strings.language {
+            case .zhHans:
+                "移除旧版 LaunchAgent 失败：\(path)；OS error: \(underlying.localizedDescription)"
+            case .en:
+                "Failed to remove legacy LaunchAgent: \(path); OS error: \(underlying.localizedDescription)"
+            }
         case .unsafePath(let path, let detail):
-            "移除旧版 LaunchAgent 失败：\(path)；safety error: \(detail)"
+            switch strings.language {
+            case .zhHans:
+                "移除旧版 LaunchAgent 失败：\(path)；safety error: \(detail)"
+            case .en:
+                "Failed to remove legacy LaunchAgent: \(path); safety error: \(detail)"
+            }
         }
     }
 }

@@ -728,6 +728,50 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testChangingAppLanguageRelocalizesCredentialStoreFailure() async {
+        let credentialStore = FakeTranscriptionCredentialStore(
+            saveError: TranscriptionCredentialError.storeFailed(message: "Keychain denied")
+        )
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
+
+        await coordinator.saveTranscriptionAPIKey("sk-test-abcdef")
+        coordinator.setAppLanguage(.en)
+
+        XCTAssertEqual(coordinator.lastErrorMessage, "Unable to save ASR credentials: Keychain denied")
+        XCTAssertEqual(
+            coordinator.transcriptionCredentials.lastErrorMessage,
+            "Unable to save ASR credentials: Keychain denied"
+        )
+        XCTAssertEqual(
+            coordinator.transcriptionCredentials.statusTitle(strings: VocoStrings(language: .en)),
+            "Volcengine credentials read failed"
+        )
+    }
+
+    @MainActor
+    func testChangingAppLanguageRelocalizesLoadedCredentialSnapshotFailure() {
+        let credentialStore = FakeTranscriptionCredentialStore(
+            snapshot: .failed(
+                provider: .volcengine,
+                message: "Keychain 返回的数据格式无效。"
+            )
+        )
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
+
+        coordinator.refreshTranscriptionCredentials()
+        coordinator.setAppLanguage(.en)
+
+        XCTAssertEqual(
+            coordinator.lastErrorMessage,
+            "Keychain returned data in an invalid format."
+        )
+        XCTAssertEqual(
+            coordinator.transcriptionCredentials.storageDetail,
+            "Keychain access failed: Keychain returned data in an invalid format."
+        )
+    }
+
+    @MainActor
     func testCoordinatorPublishesRecordingHUDSnapshot() async {
         let coordinator = AppCoordinator()
         coordinator.finishLaunching()
@@ -749,6 +793,65 @@ final class AppCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.hudSnapshot.phase, .error)
         XCTAssertEqual(coordinator.hudSnapshot.detail, "模型未配置：请先在设置中配置火山引擎凭证。")
+    }
+
+    @MainActor
+    func testChangingAppLanguageRelocalizesCurrentProviderError() async {
+        let recordingWorkflow = FakeRecordingWorkflow(stopError: TranscriptionProviderError.notConfigured)
+        let coordinator = AppCoordinator(recordingWorkflow: recordingWorkflow)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+        XCTAssertEqual(coordinator.lastErrorMessage, "模型未配置：请先在设置中配置火山引擎凭证。")
+
+        coordinator.setAppLanguage(.en)
+
+        XCTAssertEqual(
+            coordinator.lastErrorMessage,
+            "Model not configured: configure Volcengine credentials in Settings first."
+        )
+        XCTAssertEqual(
+            coordinator.hudSnapshot.detail,
+            "Model not configured: configure Volcengine credentials in Settings first."
+        )
+    }
+
+    @MainActor
+    func testEnglishCoordinatorUsesLocalizedTextInjectionFailure() async {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 0.4, sampleRate: 16_000, peakAmplitude: 0.5),
+            transcript: TranscriptSnapshot(
+                finalText: "hello",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: 10
+            ),
+            injection: .failed(
+                targetAppName: "Notes",
+                strategy: .unavailable,
+                error: .accessibilityPermissionMissing
+            )
+        )
+        let coordinator = AppCoordinator(
+            transcriptionCredentialStore: InMemoryTranscriptionCredentialStore(apiKey: "sk-test-abcdef"),
+            recordingWorkflow: FakeRecordingWorkflow(result: result)
+        )
+        coordinator.setAppLanguage(.en)
+        coordinator.finishLaunching()
+
+        await coordinator.toggleRecordingFromUserAction()
+        await coordinator.toggleRecordingFromUserAction()
+
+        XCTAssertEqual(coordinator.status, .error)
+        XCTAssertEqual(
+            coordinator.lastErrorMessage,
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
+        XCTAssertEqual(
+            coordinator.settingsWorkbenchSnapshot.overview.detail,
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
     }
 
     @MainActor
