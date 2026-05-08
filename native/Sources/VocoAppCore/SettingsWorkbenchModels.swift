@@ -3,6 +3,7 @@ import Foundation
 public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendable {
     case overview
     case model
+    case statistics
     case settings
 
     public var id: String { rawValue }
@@ -11,10 +12,12 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
         switch self {
         case .overview:
             "主页"
-        case .settings:
-            "设置"
         case .model:
             "模型"
+        case .statistics:
+            "统计"
+        case .settings:
+            "设置"
         }
     }
 
@@ -22,10 +25,12 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
         switch self {
         case .overview:
             "当前状态"
-        case .settings:
-            "快捷键、麦克风、系统"
         case .model:
             "火山引擎和 Keychain"
+        case .statistics:
+            "使用趋势和分布"
+        case .settings:
+            "快捷键、麦克风、系统"
         }
     }
 }
@@ -198,8 +203,9 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                 .overview: hasRequiredPermissionProblem || transcriptionNeedsAttention || inputNeedsAttention || hasRuntimeError
                     ? .needsAttention
                     : .ok,
+                .model: transcriptionNeedsAttention ? .needsAttention : .ok,
+                .statistics: .ok,
                 .settings: settingsStatus,
-                .model: transcriptionNeedsAttention ? .needsAttention : .ok
             ],
             homeIssueItems: homeIssueItems
         )

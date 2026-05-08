@@ -1,5 +1,6 @@
 import CoreGraphics
 import SwiftUI
+import VocoAppCore
 
 enum HUDOverlayChrome {
     enum Layout {
@@ -97,5 +98,9 @@ enum HUDOverlayChrome {
                 + Layout.notchShadowPadding
                 - Layout.notchTopOffset
         )
+    }
+
+    static func waveformAnimates(for phase: HUDPhase) -> Bool {
+        phase != .hidden
     }
 }

@@ -80,6 +80,7 @@ public final class AppCoordinator: ObservableObject {
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
+    private var isTranscriptionCredentialRefreshInFlight: Bool
 
     public init(
         launchAtLoginEnabled: Bool = false,
@@ -161,6 +162,7 @@ public final class AppCoordinator: ObservableObject {
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
+        self.isTranscriptionCredentialRefreshInFlight = false
     }
 
     public var snapshot: MenuBarSnapshot {
@@ -239,6 +241,7 @@ public final class AppCoordinator: ObservableObject {
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshTranscriptionCredentials()
+        refreshTranscriptionCredentialsInBackground()
         status = runtimeStatusAfterPermissionCheck()
         refreshHotkeyRuntime()
     }
@@ -260,6 +263,7 @@ public final class AppCoordinator: ObservableObject {
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshLegacyInstall()
         refreshTranscriptionCredentials()
+        refreshTranscriptionCredentialsInBackground()
         refreshPermissions()
     }
 
@@ -268,8 +272,34 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func refreshTranscriptionCredentials() {
-        transcriptionCredentials = transcriptionCredentialStore.currentSnapshot()
-        if let message = transcriptionCredentials.lastErrorMessage {
+        applyTranscriptionCredentialSnapshot(transcriptionCredentialStore.currentSnapshot())
+    }
+
+    public func refreshTranscriptionCredentialsInBackground() {
+        guard !isTranscriptionCredentialRefreshInFlight else {
+            return
+        }
+
+        isTranscriptionCredentialRefreshInFlight = true
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.refreshTranscriptionCredentialsFromStore()
+            self.isTranscriptionCredentialRefreshInFlight = false
+        }
+    }
+
+    public func refreshTranscriptionCredentialsFromStore() async {
+        let snapshot = await transcriptionCredentialStore.loadCurrentSnapshot()
+        applyTranscriptionCredentialSnapshot(snapshot)
+        transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
+    }
+
+    private func applyTranscriptionCredentialSnapshot(_ snapshot: TranscriptionCredentialSnapshot) {
+        transcriptionCredentials = snapshot
+        if let message = snapshot.lastErrorMessage {
             lastErrorMessage = message
         }
     }

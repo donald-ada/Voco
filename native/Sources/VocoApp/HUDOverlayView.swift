@@ -7,7 +7,15 @@ struct HUDOverlayView: View {
     var body: some View {
         let snapshot = coordinator.hudSnapshot
 
-        HUDNotchIslandOverlay(snapshot: snapshot)
+        if snapshot.isVisible {
+            HUDNotchIslandOverlay(snapshot: snapshot)
+        } else {
+            Color.clear
+                .frame(
+                    width: HUDOverlayChrome.Layout.panelSize.width,
+                    height: HUDOverlayChrome.Layout.panelSize.height
+                )
+        }
     }
 }
 
@@ -143,12 +151,16 @@ private struct HUDMiniWaveform: View {
     let phase: HUDPhase
 
     var body: some View {
-        TimelineView(
-            .animation(minimumInterval: HUDOverlayChrome.Layout.waveformRefreshInterval)
-        ) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
+        if HUDOverlayChrome.waveformAnimates(for: phase) {
+            TimelineView(
+                .animation(minimumInterval: HUDOverlayChrome.Layout.waveformRefreshInterval)
+            ) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate
 
-            waveformBars(time: time)
+                waveformBars(time: time)
+            }
+        } else {
+            waveformBars(time: 0)
         }
     }
 

@@ -1,6 +1,7 @@
 import CoreGraphics
 import XCTest
 @testable import VocoApp
+@testable import VocoAppCore
 
 final class HUDOverlayChromeTests: XCTestCase {
     func testNotchIslandUsesLatestTopLayoutTokens() {
@@ -36,6 +37,13 @@ final class HUDOverlayChromeTests: XCTestCase {
         XCTAssertEqual(HUDOverlayChrome.ColorToken.transcriptStable.hex, "#F8F1D4")
         XCTAssertEqual(HUDOverlayChrome.ColorToken.transcriptLive.hex, "#8DFFB5")
         XCTAssertEqual(HUDOverlayChrome.ColorToken.error.hex, "#FF5E57")
+    }
+
+    func testWaveformAnimationIsDisabledWhenHUDIsHidden() {
+        XCTAssertFalse(HUDOverlayChrome.waveformAnimates(for: .hidden))
+        XCTAssertTrue(HUDOverlayChrome.waveformAnimates(for: .recording))
+        XCTAssertTrue(HUDOverlayChrome.waveformAnimates(for: .transcribing))
+        XCTAssertTrue(HUDOverlayChrome.waveformAnimates(for: .error))
     }
 
     func testNotchIslandPanelIsTopCenteredAndBleedsPastScreenTop() {

@@ -585,6 +585,42 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testAsyncCredentialRefreshUpdatesSnapshotAfterNonBlockingLaunch() async {
+        let credentialStore = AsyncTranscriptionCredentialStore(
+            syncSnapshot: .missing(provider: .volcengine),
+            asyncSnapshot: .stored(provider: .volcengine, credential: .volcengineAPIKey("sk-test-abcdef"))
+        )
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
+
+        coordinator.finishLaunching()
+        XCTAssertFalse(coordinator.transcriptionCredentials.hasCredential)
+
+        await coordinator.refreshTranscriptionCredentialsFromStore()
+
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasCredential)
+        XCTAssertEqual(coordinator.transcriptionCredentials.maskedAPIKey, "sk-t...cdef")
+    }
+
+    @MainActor
+    func testBackgroundCredentialRefreshCoalescesInFlightReads() async {
+        let credentialStore = SuspendingTranscriptionCredentialStore()
+        let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
+
+        coordinator.refreshTranscriptionCredentialsInBackground()
+        coordinator.refreshTranscriptionCredentialsInBackground()
+        await Task.yield()
+
+        XCTAssertEqual(credentialStore.loadCount, 1)
+
+        credentialStore.resume(
+            .stored(provider: .volcengine, credential: .volcengineAPIKey("sk-test-abcdef"))
+        )
+        await Task.yield()
+
+        XCTAssertTrue(coordinator.transcriptionCredentials.hasCredential)
+    }
+
+    @MainActor
     func testCoordinatorSavesAndClearsTranscriptionCredentials() async throws {
         let credentialStore = InMemoryTranscriptionCredentialStore()
         let coordinator = AppCoordinator(transcriptionCredentialStore: credentialStore)
@@ -1431,5 +1467,79 @@ private final class FakeTranscriptionCredentialStore: TranscriptionCredentialSto
 
     func credential(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredential? {
         storedCredential
+    }
+}
+
+@MainActor
+private final class AsyncTranscriptionCredentialStore: TranscriptionCredentialStoring {
+    let syncSnapshot: TranscriptionCredentialSnapshot
+    let asyncSnapshot: TranscriptionCredentialSnapshot
+
+    init(
+        syncSnapshot: TranscriptionCredentialSnapshot,
+        asyncSnapshot: TranscriptionCredentialSnapshot
+    ) {
+        self.syncSnapshot = syncSnapshot
+        self.asyncSnapshot = asyncSnapshot
+    }
+
+    func currentSnapshot() -> TranscriptionCredentialSnapshot {
+        syncSnapshot
+    }
+
+    func loadCurrentSnapshot() async -> TranscriptionCredentialSnapshot {
+        asyncSnapshot
+    }
+
+    func saveCredential(
+        _ credential: TranscriptionCredential,
+        for provider: TranscriptionCredentialProvider
+    ) async throws -> TranscriptionCredentialSnapshot {
+        .stored(provider: provider, credential: try credential.normalized())
+    }
+
+    func deleteCredentials(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredentialSnapshot {
+        .missing(provider: provider)
+    }
+
+    func credential(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredential? {
+        nil
+    }
+}
+
+@MainActor
+private final class SuspendingTranscriptionCredentialStore: TranscriptionCredentialStoring {
+    private var continuation: CheckedContinuation<TranscriptionCredentialSnapshot, Never>?
+    private(set) var loadCount = 0
+
+    func currentSnapshot() -> TranscriptionCredentialSnapshot {
+        .missing(provider: .volcengine)
+    }
+
+    func loadCurrentSnapshot() async -> TranscriptionCredentialSnapshot {
+        loadCount += 1
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resume(_ snapshot: TranscriptionCredentialSnapshot) {
+        continuation?.resume(returning: snapshot)
+        continuation = nil
+    }
+
+    func saveCredential(
+        _ credential: TranscriptionCredential,
+        for provider: TranscriptionCredentialProvider
+    ) async throws -> TranscriptionCredentialSnapshot {
+        .stored(provider: provider, credential: try credential.normalized())
+    }
+
+    func deleteCredentials(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredentialSnapshot {
+        .missing(provider: provider)
+    }
+
+    func credential(for provider: TranscriptionCredentialProvider) async throws -> TranscriptionCredential? {
+        nil
     }
 }

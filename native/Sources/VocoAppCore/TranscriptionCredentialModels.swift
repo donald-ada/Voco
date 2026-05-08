@@ -198,6 +198,7 @@ public enum TranscriptionCredentialError: LocalizedError, Equatable, Sendable {
 @MainActor
 public protocol TranscriptionCredentialStoring {
     func currentSnapshot() -> TranscriptionCredentialSnapshot
+    func loadCurrentSnapshot() async -> TranscriptionCredentialSnapshot
     func saveCredential(
         _ credential: TranscriptionCredential,
         for provider: TranscriptionCredentialProvider
@@ -207,6 +208,10 @@ public protocol TranscriptionCredentialStoring {
 }
 
 public extension TranscriptionCredentialStoring {
+    func loadCurrentSnapshot() async -> TranscriptionCredentialSnapshot {
+        currentSnapshot()
+    }
+
     func saveAPIKey(
         _ apiKey: String,
         for provider: TranscriptionCredentialProvider

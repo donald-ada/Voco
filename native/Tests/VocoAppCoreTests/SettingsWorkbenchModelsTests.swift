@@ -5,18 +5,18 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
     func testWorkbenchSectionsStayInApprovedOrder() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.rawValue),
-            ["overview", "model", "settings"]
+            ["overview", "model", "statistics", "settings"]
         )
     }
 
     func testWorkbenchSectionsExposeUserVisibleCopy() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.title),
-            ["主页", "模型", "设置"]
+            ["主页", "模型", "统计", "设置"]
         )
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.summary),
-            ["当前状态", "火山引擎和 Keychain", "快捷键、麦克风、系统"]
+            ["当前状态", "火山引擎和 Keychain", "使用趋势和分布", "快捷键、麦克风、系统"]
         )
     }
 

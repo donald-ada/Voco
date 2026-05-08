@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voco 主页总览原型</title>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #f6f6f1;
+    --sidebar: #efefeb;
+    --surface: #fffefa;
+    --surface-tight: #f8f8f4;
+    --ink: #141613;
+    --muted: #777b73;
+    --muted-2: #9a9d96;
+    --line: rgba(20, 22, 19, 0.12);
+    --line-strong: rgba(20, 22, 19, 0.2);
+    --red: #d3352b;
+    --red-soft: #fbebe9;
+    --green: #22b873;
+    --green-soft: #e8f8ef;
+    --amber: #f4b23c;
+    --black: #050505;
+    --shadow: 0 20px 55px rgba(20, 22, 19, 0.09);
+    --font-body: 'IBM Plex Sans', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body, #root { min-height: 100%; }
+  body {
+    margin: 0;
+    background: #e9e9e4;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  .window {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 444px minmax(0, 1fr);
+    background: var(--bg);
+  }
+
+  .sidebar {
+    position: relative;
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    padding: 14px 22px 42px 26px;
+  }
+
+  .traffic {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    height: 28px;
+    margin-bottom: 58px;
+  }
+
+  .traffic span {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid rgba(20, 22, 19, 0.15);
+  }
+
+  .traffic span:nth-child(1) { background: #ff5a56; }
+  .traffic span:nth-child(2) { background: #ffbd16; }
+  .traffic span:nth-child(3) { background: #23c95b; }
+
+  .brand-kicker {
+    margin-left: 14px;
+    color: #868a82;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .brand-name {
+    margin: 10px 0 38px 14px;
+    font-size: 46px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  .nav-list {
+    display: grid;
+    gap: 18px;
+  }
+
+  .nav-item {
+    min-height: 84px;
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 22px;
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+  }
+
+  .nav-item.active {
+    background: var(--surface);
+    box-shadow: 0 5px 18px rgba(20, 22, 19, 0.11), inset 0 0 0 1px rgba(20, 22, 19, 0.05);
+  }
+
+  .nav-icon {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    color: #8b8e87;
+  }
+
+  .nav-item.active .nav-icon {
+    color: var(--ink);
+  }
+
+  .nav-title {
+    font-size: 27px;
+    font-weight: 700;
+  }
+
+  .status-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: var(--muted-2);
+  }
+
+  .status-dot.red { background: var(--red); }
+  .status-dot.green { background: var(--green); }
+
+  .content {
+    min-width: 0;
+    overflow: auto;
+    padding: 54px 64px 88px;
+  }
+
+  .content-inner {
+    max-width: 1230px;
+  }
+
+  .content-inner.wide {
+    max-width: 1280px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 40px;
+  }
+
+  .eyebrow {
+    color: #676b64;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .top-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--muted);
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .top-status::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--red);
+  }
+
+  .top-status strong {
+    color: var(--red);
+  }
+
+  .home-card {
+    border: 1.5px solid rgba(211, 53, 43, 0.2);
+    background: var(--red-soft);
+    box-shadow: var(--shadow);
+    border-radius: 34px;
+  }
+
+  .home-card-a {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) 620px;
+    gap: 42px;
+    align-items: start;
+    padding: 36px 36px 34px;
+  }
+
+  .home-card-b {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 28px;
+    align-items: center;
+    padding: 25px 28px;
+    margin-bottom: 18px;
+  }
+
+  .home-card-c {
+    min-height: 474px;
+    padding: 34px 36px;
+  }
+
+  .alert-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(211, 53, 43, 0.25);
+    background: #f9dcd8;
+    color: var(--red);
+    font-size: 21px;
+    font-weight: 700;
+  }
+
+  .alert-triangle {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--red);
+    color: white;
+    font-size: 15px;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  .status-copy h1 {
+    margin: 28px 0 14px;
+    font-size: 52px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+
+  .status-copy p {
+    max-width: 520px;
+    margin: 0 0 28px;
+    color: #6f6d68;
+    font-size: 18px;
+    text-wrap: pretty;
+  }
+
+  .action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .primary-action,
+  .secondary-action {
+    min-height: 58px;
+    border-radius: 14px;
+    padding: 0 22px;
+    font-size: 24px;
+    font-weight: 700;
+    border: 1px solid rgba(20, 22, 19, 0.12);
+    box-shadow: 0 3px 8px rgba(20, 22, 19, 0.08);
+  }
+
+  .primary-action {
+    background: var(--ink);
+    color: white;
+  }
+
+  .secondary-action {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .flow-card {
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 254, 250, 0.88);
+    box-shadow: 0 12px 28px rgba(20, 22, 19, 0.08);
+    border-radius: 26px;
+  }
+
+  .flow-card.compact {
+    padding: 22px 24px;
+  }
+
+  .flow-card.inline {
+    min-width: 474px;
+    padding: 14px 16px;
+    border-radius: 22px;
+  }
+
+  .flow-card.stack {
+    padding: 18px 20px;
+    border-radius: 24px;
+  }
+
+  .flow-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .flow-card.inline .flow-title-row {
+    margin-bottom: 10px;
+  }
+
+  .flow-title {
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 700;
+  }
+
+  .flow-card.inline .flow-title,
+  .flow-card.stack .flow-title {
+    font-size: 17px;
+  }
+
+  .flow-route {
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+
+  .flow-row {
+    display: grid;
+    grid-template-columns: 60px 32px minmax(160px, 1fr) 32px 60px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .flow-card.inline .flow-row {
+    grid-template-columns: 46px 22px 132px 22px 46px;
+    gap: 7px;
+  }
+
+  .flow-node {
+    height: 60px;
+    border-radius: 17px;
+    border: 1px solid rgba(20, 22, 19, 0.08);
+    background: var(--green-soft);
+    display: grid;
+    place-items: center;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  .flow-card.inline .flow-node {
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .command-symbol {
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .flow-card.inline .command-symbol {
+    font-size: 24px;
+  }
+
+  .flow-connector {
+    height: 1px;
+    background: var(--line-strong);
+    position: relative;
+  }
+
+  .flow-connector::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    width: 8px;
+    height: 8px;
+    border-right: 1px solid var(--line-strong);
+    border-top: 1px solid var(--line-strong);
+    transform: rotate(45deg);
+  }
+
+  .hud-pill {
+    height: 58px;
+    border-radius: 23px;
+    background: #000;
+    color: var(--amber);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 20px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .flow-card.inline .hud-pill {
+    height: 44px;
+    border-radius: 18px;
+    padding: 0 13px;
+    gap: 9px;
+    font-size: 13px;
+  }
+
+  .bars {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+  }
+
+  .bars span {
+    width: 4px;
+    border-radius: 999px;
+    background: var(--green);
+  }
+
+  .bars span:nth-child(1) { height: 15px; }
+  .bars span:nth-child(2) { height: 24px; }
+  .bars span:nth-child(3) { height: 32px; }
+  .bars span:nth-child(4) { height: 22px; }
+  .bars span:nth-child(5) { height: 28px; }
+  .bars span:nth-child(6) { height: 18px; }
+
+  .flow-card.inline .bars {
+    gap: 3px;
+    height: 18px;
+  }
+
+  .flow-card.inline .bars span {
+    width: 3px;
+  }
+
+  .input-glyph {
+    font-size: 25px;
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+  }
+
+  .flow-card.inline .input-glyph {
+    font-size: 19px;
+  }
+
+  .session-panel {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: 0 14px 38px rgba(20, 22, 19, 0.07);
+    overflow: hidden;
+  }
+
+  .session-panel.tight {
+    margin-top: 16px;
+    border-radius: 20px;
+  }
+
+  .session-panel.paginated {
+    overflow: hidden;
+  }
+
+  .session-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .session-header h2 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.1;
+    font-weight: 700;
+  }
+
+  .session-header span {
+    color: var(--muted);
+    font-size: 14px;
+    font-family: var(--font-mono);
+  }
+
+  .session-list {
+    display: grid;
+  }
+
+  .session-row {
+    min-height: 92px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px 74px 62px 74px;
+    gap: 18px;
+    align-items: center;
+    width: 100%;
+    padding: 17px 22px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .session-row:hover {
+    background: #fafaf6;
+  }
+
+  .session-row:last-child {
+    border-bottom: 0;
+  }
+
+  .session-panel.paginated .session-row {
+    min-height: 78px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .session-transcript-preview {
+    margin: 0;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .session-panel.paginated .session-transcript-preview {
+    font-size: 14px;
+  }
+
+  .meta {
+    color: #666a62;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .detail-chip {
+    justify-self: end;
+    min-height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface-tight);
+    color: var(--ink);
+    padding: 0 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .pagination-footer {
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 18px 14px 22px;
+    border-top: 1px solid var(--line);
+    background: #fbfbf7;
+  }
+
+  .page-range {
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+
+  .pager {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pager-button,
+  .page-number {
+    min-width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .pager-button {
+    min-width: 72px;
+    padding: 0 12px;
+  }
+
+  .pager-button:disabled,
+  .page-number:disabled {
+    color: var(--muted-2);
+    background: #f2f2ee;
+    cursor: default;
+  }
+
+  .page-number.active {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: white;
+  }
+
+  .dense-layout {
+    max-width: 1290px;
+  }
+
+  .dense-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .dense-title h1 {
+    margin: 0 0 5px;
+    font-size: 34px;
+    line-height: 1.1;
+  }
+
+  .dense-title p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .dense-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .metric-card {
+    min-height: 94px;
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  .metric-label {
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--font-mono);
+  }
+
+  .metric-value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .split-layout {
+    max-width: 1240px;
+    display: grid;
+    grid-template-columns: minmax(360px, 470px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .right-stack {
+    display: grid;
+    gap: 16px;
+  }
+
+  .mini-health {
+    margin-top: 34px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .health-row {
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    border-radius: 14px;
+    background: rgba(255, 254, 250, 0.65);
+    border: 1px solid rgba(20, 22, 19, 0.08);
+  }
+
+  .health-row span:nth-child(1) {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--green);
+  }
+
+  .health-row.blocked span:nth-child(1) {
+    background: var(--red);
+  }
+
+  .health-row strong {
+    font-size: 15px;
+  }
+
+  .health-row em {
+    color: var(--muted);
+    font-style: normal;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .variant-switcher {
+    position: fixed;
+    z-index: 40;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    gap: 4px;
+    padding: 5px;
+    border-radius: 999px;
+    border: 1px solid rgba(20, 22, 19, 0.14);
+    background: rgba(255, 254, 250, 0.9);
+    box-shadow: 0 10px 28px rgba(20, 22, 19, 0.18);
+    backdrop-filter: blur(12px);
+  }
+
+  .variant-switcher button {
+    min-height: 36px;
+    border-radius: 999px;
+    border: 0;
+    padding: 0 13px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .variant-switcher button.active {
+    background: var(--ink);
+    color: white;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 30px;
+    background: rgba(20, 22, 19, 0.28);
+    backdrop-filter: blur(10px);
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    max-height: min(760px, calc(100vh - 60px));
+    overflow: auto;
+    border-radius: 24px;
+    background: var(--surface);
+    border: 1px solid rgba(20, 22, 19, 0.12);
+    box-shadow: 0 28px 80px rgba(20, 22, 19, 0.28);
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px 26px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .modal-head h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    line-height: 1.2;
+  }
+
+  .modal-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    font-family: var(--font-mono);
+  }
+
+  .close-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface-tight);
+    color: var(--ink);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 22px 26px 26px;
+  }
+
+  .modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .modal-meta span {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 10px;
+    background: var(--surface-tight);
+    border: 1px solid var(--line);
+    color: #5f635d;
+    font-size: 13px;
+    font-family: var(--font-mono);
+  }
+
+  .full-text {
+    margin: 0;
+    color: #282a26;
+    font-size: 17px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    text-wrap: pretty;
+  }
+
+  .icon-svg {
+    width: 30px;
+    height: 30px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  @media (max-width: 1400px) {
+    .home-card-a,
+    .split-layout,
+    .dense-top {
+      grid-template-columns: 1fr;
+    }
+
+    .home-card-b {
+      grid-template-columns: 1fr;
+    }
+
+    .flow-card.inline {
+      min-width: 0;
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .window {
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+    .sidebar {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+    .brand-name {
+      font-size: 38px;
+    }
+    .nav-title {
+      font-size: 22px;
+    }
+    .content {
+      padding: 42px 34px 80px;
+    }
+    .session-row {
+      grid-template-columns: minmax(0, 1fr) 74px 66px 70px;
+      gap: 12px;
+    }
+    .session-row .meta.duration {
+      display: none;
+    }
+    .detail-chip {
+      min-height: 34px;
+      padding: 0 10px;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useEffect, useState } = React;
+
+  const sessionData = [
+    {
+      id: "s1",
+      fullText: "把总览改成主页。右侧的语音输入流程不要再占四大行，改成一行表达：Right Command、HUD 胶囊、当前输入框。HUD 只展示第一行状态，不展示实时转写内容。流程卡片下面增加每次会话的列表，行内展示内容预览、会话字数和会话时间；完整内容通过详情弹窗查看。",
+      words: 128,
+      time: "08:36",
+      date: "2026-05-08",
+      duration: "42s",
+      app: "Codex",
+      provider: "火山引擎"
+    },
+    {
+      id: "s2",
+      fullText: "测试录音。设置窗口打开后应该直接看到主页，而不是 Overview。顶部状态保留阻塞和需要权限，主体卡片只保留当前最重要的问题和两个操作按钮。会话列表不需要展示完整录音内容，避免页面被长文本撑高。",
+      words: 96,
+      time: "00:18",
+      date: "2026-05-08",
+      duration: "31s",
+      app: "TextEdit",
+      provider: "火山引擎"
+    },
+    {
+      id: "s3",
+      fullText: "HUD 展示应该更克制。主页里的流程示意只要让用户知道会出现一个黑色小胶囊即可，不需要把第二行正在说的内容放进去。真正录音时仍然可以显示实时内容，但主页说明不应该占太多空间。",
+      words: 82,
+      time: "23:47",
+      date: "2026-05-07",
+      duration: "27s",
+      app: "Notes",
+      provider: "火山引擎"
+    },
+    {
+      id: "s4",
+      fullText: "主页的优先级是先让用户知道 Voco 当前能不能用，再让用户看到最近说过什么。模型和设置仍然是独立页面，不要把所有配置项都塞到主页。最近会话列表应该可扫读，点击后再展开完整文本。",
+      words: 90,
+      time: "22:13",
+      date: "2026-05-07",
+      duration: "35s",
+      app: "Slack",
+      provider: "火山引擎"
+    },
+    {
+      id: "s5",
+      fullText: "补一条今天的日报：完成主页原型方案选择。B 方案更像实际工作台，流程说明不占空间，会话表格支持分页。下一步进入 SwiftUI 实现时，需要先补会话模型和列表交互测试。",
+      words: 76,
+      time: "21:08",
+      date: "2026-05-07",
+      duration: "24s",
+      app: "Obsidian",
+      provider: "火山引擎"
+    },
+    {
+      id: "s6",
+      fullText: "代码评审口述。SettingsView 里主页命名要和侧边栏一致，用户看到的是主页，不再是总览或者 Overview。内部 enum 可以继续叫 overview，除非后续要彻底改模型层命名。",
+      words: 69,
+      time: "20:42",
+      date: "2026-05-07",
+      duration: "22s",
+      app: "Xcode",
+      provider: "火山引擎"
+    },
+    {
+      id: "s7",
+      fullText: "验证分页。第一页显示四条最近会话，第二页显示更早的会话。点击任何一条详情都应该打开完整内容弹窗，关闭弹窗后分页状态保持不变。",
+      words: 58,
+      time: "19:55",
+      date: "2026-05-07",
+      duration: "18s",
+      app: "Safari",
+      provider: "火山引擎"
+    },
+    {
+      id: "s8",
+      fullText: "输入框行为备注。语音输入完成后应该插入到当前前台应用，不要因为设置窗口打开过就丢失焦点。主页的流程图只表达最终进入当前输入框，不需要解释底层 Accessibility 细节。",
+      words: 74,
+      time: "18:30",
+      date: "2026-05-07",
+      duration: "26s",
+      app: "Messages",
+      provider: "火山引擎"
+    },
+    {
+      id: "s9",
+      fullText: "打开主页后默认看到最近会话。每一行只展示原始转写内容的一小段、字数、时间和时长，不需要额外生成标题。",
+      words: 52,
+      time: "17:44",
+      date: "2026-05-07",
+      duration: "16s",
+      app: "Notes",
+      provider: "火山引擎"
+    },
+    {
+      id: "s10",
+      fullText: "分页默认每页十条。会话多的时候保持表格稳定，下一页只负责展示更早的原始转写记录。",
+      words: 43,
+      time: "17:12",
+      date: "2026-05-07",
+      duration: "14s",
+      app: "Codex",
+      provider: "火山引擎"
+    },
+    {
+      id: "s11",
+      fullText: "详情弹窗里展示完整转写内容。列表本身不要塞满长文本，否则主页会变得很难扫读。",
+      words: 40,
+      time: "16:50",
+      date: "2026-05-07",
+      duration: "13s",
+      app: "TextEdit",
+      provider: "火山引擎"
+    },
+    {
+      id: "s12",
+      fullText: "如果后续真的要做标题或总结，那应该作为新功能单独设计，不要在当前会话记录原型里提前暗示。",
+      words: 46,
+      time: "16:21",
+      date: "2026-05-07",
+      duration: "15s",
+      app: "Slack",
+      provider: "火山引擎"
+    }
+  ];
+
+  function transcriptPreview(text, maxLength = 44) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    return normalized.length > maxLength
+      ? `${normalized.slice(0, maxLength)}...`
+      : normalized;
+  }
+
+  function Icon({ name }) {
+    const paths = {
+      home: (
+        <>
+          <path d="M4 13.5L16 4l12 9.5" />
+          <path d="M7.5 12v15h17V12" />
+          <path d="M13 27v-8h6v8" />
+        </>
+      ),
+      chip: (
+        <>
+          <rect x="9" y="9" width="14" height="14" rx="3" />
+          <path d="M13 5v4M19 5v4M13 23v4M19 23v4M5 13h4M5 19h4M23 13h4M23 19h4" />
+        </>
+      ),
+      gear: (
+        <>
+          <circle cx="16" cy="16" r="4.2" />
+          <path d="M16 4.5v3M16 24.5v3M6.1 8.4l2.2 2.1M23.7 21.5l2.2 2.1M4.5 16h3M24.5 16h3M6.1 23.6l2.2-2.1M23.7 10.5l2.2-2.1" />
+          <path d="M10.2 6.2l1.4 2.5M21.8 25.8l-1.4-2.5M25.8 10.2l-2.5 1.4M6.2 21.8l2.5-1.4" />
+        </>
+      )
+    };
+    return <svg className="icon-svg" viewBox="0 0 32 32" aria-hidden="true">{paths[name]}</svg>;
+  }
+
+  function Sidebar() {
+    return (
+      <aside className="sidebar">
+        <div className="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div className="brand-kicker">VOCAL INPUT</div>
+        <div className="brand-name">Voco</div>
+        <nav className="nav-list" aria-label="Voco 设置">
+          <button className="nav-item active">
+            <span className="nav-icon"><Icon name="home" /></span>
+            <span className="nav-title">主页</span>
+            <span className="status-dot red"></span>
+          </button>
+          <button className="nav-item">
+            <span className="nav-icon"><Icon name="chip" /></span>
+            <span className="nav-title">模型</span>
+            <span className="status-dot green"></span>
+          </button>
+          <button className="nav-item">
+            <span className="nav-icon"><Icon name="gear" /></span>
+            <span className="nav-title">设置</span>
+            <span className="status-dot red"></span>
+          </button>
+        </nav>
+      </aside>
+    );
+  }
+
+  function PageHeader() {
+    return (
+      <header className="page-header">
+        <div className="eyebrow">HOME</div>
+        <div className="top-status"><strong>阻塞</strong><span>需要权限</span></div>
+      </header>
+    );
+  }
+
+  function StatusCopy({ compact = false }) {
+    return (
+      <div className="status-copy">
+        <div className="alert-pill"><span className="alert-triangle">!</span> 需要处理 1 项</div>
+        <h1>{compact ? "麦克风权限缺失" : "麦克风权限缺失"}</h1>
+        <p>Voco 还不能完成语音输入链路。处理麦克风权限后，Right Command 会触发录音、转写和文本插入。</p>
+        <div className="action-row">
+          <button className="primary-action">检查麦克风</button>
+          <button className="secondary-action">重新检查</button>
+        </div>
+      </div>
+    );
+  }
+
+  function HudPill() {
+    return (
+      <div className="hud-pill" title="HUD 胶囊：只展示状态和波形">
+        <span>语音输入</span>
+        <span className="bars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </span>
+      </div>
+    );
+  }
+
+  function FlowCard({ mode = "compact" }) {
+    return (
+      <section className={`flow-card ${mode}`} aria-label="语音输入流程">
+        <div className="flow-title-row">
+          <div className="flow-title">语音输入流程</div>
+          <div className="flow-route">R Cmd / HUD / Input</div>
+        </div>
+        <div className="flow-row">
+          <div className="flow-node" title="Right Command"><span className="command-symbol">⌘</span></div>
+          <span className="flow-connector"></span>
+          <HudPill />
+          <span className="flow-connector"></span>
+          <div className="flow-node" title="当前输入框"><span className="input-glyph">A|</span></div>
+        </div>
+      </section>
+    );
+  }
+
+  function SessionPanel({
+    onSelect,
+    tight = false,
+    title = "最近会话",
+    caption = "点击行查看完整内容",
+    paginated = false,
+    pageSize = 10
+  }) {
+    const [page, setPage] = useState(1);
+    const totalPages = paginated ? Math.ceil(sessionData.length / pageSize) : 1;
+    const startIndex = paginated ? (page - 1) * pageSize : 0;
+    const visibleSessions = paginated
+      ? sessionData.slice(startIndex, startIndex + pageSize)
+      : sessionData;
+    const endIndex = startIndex + visibleSessions.length;
+    const panelClassName = [
+      "session-panel",
+      tight ? "tight" : "",
+      paginated ? "paginated" : ""
+    ].filter(Boolean).join(" ");
+
+    return (
+      <section className={panelClassName}>
+        <div className="session-header">
+          <h2>{title}</h2>
+          <span>{caption}</span>
+        </div>
+        <div className="session-list">
+          {visibleSessions.map((session) => (
+            <button key={session.id} className="session-row" onClick={() => onSelect(session)}>
+              <div>
+                <p className="session-transcript-preview">{transcriptPreview(session.fullText, 58)}</p>
+              </div>
+              <div className="meta">{session.words} 字</div>
+              <div className="meta">{session.time}</div>
+              <div className="meta duration">{session.duration}</div>
+              <span className="detail-chip">详情</span>
+            </button>
+          ))}
+        </div>
+        {paginated && (
+          <div className="pagination-footer">
+            <div className="page-range">
+              {startIndex + 1}-{endIndex} / {sessionData.length} 条
+            </div>
+            <div className="pager" aria-label="会话分页">
+              <button
+                className="pager-button"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                上一页
+              </button>
+              {Array.from({ length: totalPages }, (_, index) => {
+                const pageNumber = index + 1;
+                return (
+                  <button
+                    key={pageNumber}
+                    className={`page-number ${pageNumber === page ? "active" : ""}`}
+                    disabled={pageNumber === page}
+                    onClick={() => setPage(pageNumber)}
+                  >
+                    {pageNumber}
+                  </button>
+                );
+              })}
+              <button
+                className="pager-button"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function VariantA({ onSelect }) {
+    return (
+      <main className="content">
+        <div className="content-inner wide">
+          <PageHeader />
+          <section className="home-card home-card-a">
+            <StatusCopy />
+            <FlowCard mode="compact" />
+          </section>
+          <SessionPanel onSelect={onSelect} />
+        </div>
+      </main>
+    );
+  }
+
+  function VariantB({ onSelect }) {
+    return (
+      <main className="content">
+        <div className="dense-layout">
+          <PageHeader />
+          <section className="home-card home-card-b">
+            <div className="dense-title">
+              <h1>主页</h1>
+              <p>当前阻塞：麦克风权限。流程说明压缩为一行，列表成为主页主内容。</p>
+            </div>
+            <FlowCard mode="inline" />
+          </section>
+          <div className="dense-metrics">
+            <div className="metric-card">
+              <div className="metric-label">TODAY</div>
+              <div className="metric-value">2 次会话</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">WORDS</div>
+              <div className="metric-value">224 字</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">LAST</div>
+              <div className="metric-value">08:36</div>
+            </div>
+          </div>
+          <SessionPanel
+            onSelect={onSelect}
+            title="会话记录"
+            caption="内容预览 / 字数 / 时间 / 时长"
+            tight
+            paginated
+            pageSize={10}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  function VariantC({ onSelect }) {
+    return (
+      <main className="content">
+        <PageHeader />
+        <div className="split-layout">
+          <section className="home-card home-card-c">
+            <StatusCopy compact />
+            <div className="mini-health">
+              <div className="health-row blocked"><span></span><strong>麦克风</strong><em>需要权限</em></div>
+              <div className="health-row"><span></span><strong>模型</strong><em>已就绪</em></div>
+              <div className="health-row"><span></span><strong>快捷键</strong><em>监听中</em></div>
+            </div>
+          </section>
+          <div className="right-stack">
+            <FlowCard mode="stack" />
+            <SessionPanel onSelect={onSelect} title="每次会话" caption="右侧收紧布局" tight />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  function SessionModal({ session, onClose }) {
+    useEffect(() => {
+      if (!session) return;
+      const handler = (event) => {
+        if (event.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handler);
+      return () => window.removeEventListener("keydown", handler);
+    }, [session, onClose]);
+
+    if (!session) return null;
+
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <article className="modal-card" onClick={(event) => event.stopPropagation()}>
+          <header className="modal-head">
+            <div>
+              <h3>会话详情</h3>
+              <p>{session.date} {session.time}</p>
+            </div>
+            <button className="close-btn" onClick={onClose} aria-label="关闭">×</button>
+          </header>
+          <div className="modal-body">
+            <div className="modal-meta">
+              <span>{session.words} 字</span>
+              <span>{session.duration}</span>
+              <span>{session.app}</span>
+              <span>{session.provider}</span>
+            </div>
+            <p className="full-text">{session.fullText}</p>
+          </div>
+        </article>
+      </div>
+    );
+  }
+
+  const variants = [
+    { id: "a", label: "A 紧凑卡片", component: VariantA },
+    { id: "b", label: "B 表格优先", component: VariantB },
+    { id: "c", label: "C 右侧工作台", component: VariantC }
+  ];
+
+  function App() {
+    const [variant, setVariant] = useState(() => localStorage.getItem("voco.home.prototype.variant") || "a");
+    const [selectedSession, setSelectedSession] = useState(null);
+
+    useEffect(() => {
+      localStorage.setItem("voco.home.prototype.variant", variant);
+    }, [variant]);
+
+    const ActiveVariant = variants.find((item) => item.id === variant)?.component || VariantA;
+
+    return (
+      <>
+        <div className="window">
+          <Sidebar />
+          <ActiveVariant onSelect={setSelectedSession} />
+        </div>
+        <div className="variant-switcher" aria-label="方案切换">
+          {variants.map((item) => (
+            <button
+              key={item.id}
+              className={variant === item.id ? "active" : ""}
+              onClick={() => setVariant(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <SessionModal session={selectedSession} onClose={() => setSelectedSession(null)} />
+      </>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -8,7 +8,9 @@ struct VocoNativeApp: App {
     static let showSettingsMenuTitle = "显示 Voco"
     static let quitMenuTitle = "退出"
 
+    @NSApplicationDelegateAdaptor(VocoAppDelegate.self) private var appDelegate
     @StateObject private var coordinator: AppCoordinator
+    @State private var didPresentInitialSettingsWindow = false
 
     var body: some Scene {
         MenuBarExtra {
@@ -29,6 +31,9 @@ struct VocoNativeApp: App {
             )
             .accessibilityLabel(Text("Voco \(coordinator.snapshot.title)"))
             .help("Voco \(coordinator.snapshot.title)")
+            .onAppear {
+                presentInitialSettingsWindowIfNeeded()
+            }
         }
         .menuBarExtraStyle(.menu)
     }
@@ -68,12 +73,18 @@ struct VocoNativeApp: App {
         appCoordinator.finishLaunching()
         HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
         _coordinator = StateObject(wrappedValue: appCoordinator)
+        appDelegate.coordinator = appCoordinator
+        appDelegate.coordinatorDidBecomeAvailable()
+    }
 
-        if AppLaunchPresentationPolicy(silentLaunchEnabled: appPreferences.silentLaunchEnabled).action == .showSettingsWindow {
-            DispatchQueue.main.async {
-                appCoordinator.prepareForSettingsPresentation()
-                SettingsWindowPresenter.shared.show(coordinator: appCoordinator)
-            }
+    private func presentInitialSettingsWindowIfNeeded() {
+        guard !didPresentInitialSettingsWindow,
+              !coordinator.silentLaunchEnabled else {
+            return
         }
+
+        didPresentInitialSettingsWindow = true
+        coordinator.prepareForSettingsPresentation()
+        SettingsWindowPresenter.shared.show(coordinator: coordinator)
     }
 }

@@ -5,33 +5,74 @@ import VocoAppCore
 @MainActor
 final class SettingsWindowPresenter {
     static let shared = SettingsWindowPresenter()
+    static let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("com.voco.settings-window")
 
     private var window: NSWindow?
+    private let windowFactory: @MainActor (AppCoordinator) -> NSWindow
 
-    private init() {}
+    init(windowFactory: @escaping @MainActor (AppCoordinator) -> NSWindow = SettingsWindowPresenter.makeSettingsWindow) {
+        self.windowFactory = windowFactory
+    }
 
     func show(coordinator: AppCoordinator) {
-        if window == nil {
-            let view = SettingsView(coordinator: coordinator)
-            let hostingController = NSHostingController(rootView: view)
-            let settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
-            settingsWindow.title = "Voco 设置"
-            settingsWindow.titleVisibility = .hidden
-            settingsWindow.titlebarAppearsTransparent = true
-            settingsWindow.isMovableByWindowBackground = true
-            settingsWindow.minSize = NSSize(width: 900, height: 600)
-            settingsWindow.center()
-            settingsWindow.contentViewController = hostingController
-            settingsWindow.isReleasedWhenClosed = false
-            window = settingsWindow
+        let settingsWindow = resolvedWindow(coordinator: coordinator)
+        configure(settingsWindow)
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        if settingsWindow.isMiniaturized {
+            settingsWindow.deminiaturize(nil)
+        }
+        settingsWindow.makeKeyAndOrderFront(nil)
+    }
+
+    var presentedWindowForTesting: NSWindow? {
+        window
+    }
+
+    private func resolvedWindow(coordinator: AppCoordinator) -> NSWindow {
+        if let window {
+            return window
         }
 
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+        if let existingWindow = NSApplication.shared.windows.first(where: { $0.identifier == Self.settingsWindowIdentifier }) {
+            window = existingWindow
+            return existingWindow
+        }
+
+        let settingsWindow = windowFactory(coordinator)
+        window = settingsWindow
+        return settingsWindow
+    }
+
+    private func configure(_ settingsWindow: NSWindow) {
+        settingsWindow.identifier = Self.settingsWindowIdentifier
+        settingsWindow.isReleasedWhenClosed = false
+        settingsWindow.isRestorable = false
+        settingsWindow.tabbingMode = .disallowed
+
+        var collectionBehavior = settingsWindow.collectionBehavior
+        collectionBehavior.insert(.fullScreenNone)
+        collectionBehavior.remove(.fullScreenPrimary)
+        collectionBehavior.remove(.fullScreenAuxiliary)
+        settingsWindow.collectionBehavior = collectionBehavior
+    }
+
+    private static func makeSettingsWindow(coordinator: AppCoordinator) -> NSWindow {
+        let view = SettingsView(coordinator: coordinator)
+        let hostingController = NSHostingController(rootView: view)
+        let settingsWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        settingsWindow.title = "Voco 设置"
+        settingsWindow.titleVisibility = .hidden
+        settingsWindow.titlebarAppearsTransparent = true
+        settingsWindow.isMovableByWindowBackground = false
+        settingsWindow.minSize = NSSize(width: 900, height: 600)
+        settingsWindow.center()
+        settingsWindow.contentViewController = hostingController
+        return settingsWindow
     }
 }

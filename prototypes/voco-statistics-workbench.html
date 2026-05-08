@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voco Statistics Workbench Prototype</title>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --page-bg: #ecebea;
+    --window-bg: #f8f8f6;
+    --sidebar-bg: #efefec;
+    --panel-bg: #ffffff;
+    --small-bg: #f1f1ee;
+    --soft-bg: #f6f6f3;
+    --selected-bg: rgba(255, 255, 255, 0.82);
+    --text: #161716;
+    --text-2: #666a64;
+    --text-3: #8a8e87;
+    --accent: #21b66f;
+    --accent-ink: #05391f;
+    --accent-soft: #dff7eb;
+    --blue: #2c6dd2;
+    --blue-soft: #e4eefc;
+    --warning: #b7791f;
+    --warning-soft: #fff0d1;
+    --danger: #c7352e;
+    --danger-soft: #ffe2df;
+    --border: rgba(22, 23, 22, 0.11);
+    --strong-border: rgba(22, 23, 22, 0.18);
+    --shadow: rgba(0, 0, 0, 0.05);
+    --font-body: "IBM Plex Sans", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  .prototype-page {
+    min-height: 100vh;
+    padding: 28px;
+  }
+
+  .prototype-toolbar {
+    width: min(1180px, 100%);
+    margin: 0 auto 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .prototype-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .variant-tabs,
+  .period-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .variant-tabs button,
+  .period-tabs button {
+    border: 0;
+    min-height: 34px;
+    padding: 0 11px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .variant-tabs button.active,
+  .period-tabs button.active {
+    background: var(--text);
+    color: #fff;
+  }
+
+  .dense-controls {
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  .control-panel {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 54px;
+    padding: 9px 10px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+
+  .control-label {
+    padding-left: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .inline-segment {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    background: var(--soft-bg);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+  }
+
+  .inline-segment button,
+  .chip-select button {
+    border: 0;
+    min-height: 30px;
+    padding: 0 9px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .inline-segment button.active,
+  .chip-select button.active {
+    background: var(--text);
+    color: #fff;
+  }
+
+  .chip-select {
+    min-width: 0;
+    display: flex;
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .window {
+    width: min(1180px, 100%);
+    min-height: 700px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    overflow: hidden;
+    background: var(--window-bg);
+    border: 1px solid rgba(22, 23, 22, 0.13);
+    border-radius: 22px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
+  }
+
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 52px 10px 18px;
+    border-right: 1px solid var(--border);
+  }
+
+  .brand {
+    padding: 0 8px 28px;
+  }
+
+  .brand-kicker,
+  .eyebrow,
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .brand-title {
+    margin-top: 3px;
+    font-size: 23px;
+    font-weight: 700;
+  }
+
+  .nav-list {
+    display: grid;
+    gap: 5px;
+  }
+
+  .nav-row {
+    width: 100%;
+    min-height: 44px;
+    display: grid;
+    grid-template-columns: 18px 1fr 8px;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    padding: 0 11px;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .nav-row.active {
+    background: var(--selected-bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+  }
+
+  .nav-icon {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    color: var(--text-3);
+  }
+
+  .nav-icon .mini-home,
+  .nav-icon .mini-cpu,
+  .nav-icon .mini-bars,
+  .nav-icon .mini-gear {
+    width: 15px;
+    height: 15px;
+    display: block;
+    border: 1.7px solid currentColor;
+  }
+
+  .mini-home {
+    border-radius: 4px 4px 2px 2px;
+    transform: rotate(45deg) scale(0.78);
+  }
+
+  .mini-cpu {
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 3px var(--sidebar-bg);
+  }
+
+  .mini-bars {
+    position: relative;
+    border: 0 !important;
+    border-radius: 3px;
+  }
+
+  .mini-bars::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    bottom: 2px;
+    width: 2px;
+    height: 7px;
+    border-radius: 2px;
+    background: currentColor;
+    box-shadow: 5px -3px 0 currentColor, 10px -6px 0 currentColor;
+  }
+
+  .mini-gear {
+    border-radius: 50%;
+  }
+
+  .nav-row.active .nav-icon {
+    color: var(--text);
+  }
+
+  .nav-title {
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  .status-dot.warning {
+    background: var(--warning);
+  }
+
+  .content {
+    min-width: 0;
+    padding: 30px 32px 34px;
+    overflow: hidden;
+  }
+
+  .topline {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+
+  .header-copy {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+
+  .title-block h1 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .title-block p {
+    margin: 7px 0 0;
+    max-width: 620px;
+    color: var(--text-2);
+  }
+
+  .header-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    color: var(--text-2);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .metric-card,
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+  }
+
+  .metric-card {
+    min-height: 98px;
+    padding: 17px 18px;
+  }
+
+  .metric-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .metric-value {
+    margin-top: 8px;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.08;
+    white-space: nowrap;
+  }
+
+  .metric-note {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+
+  .panel {
+    min-width: 0;
+    padding: 18px;
+    box-shadow: 0 10px 26px var(--shadow);
+  }
+
+  .panel.tight {
+    padding: 14px;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .panel-title {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .panel-subtitle {
+    margin-top: 4px;
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--small-bg);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .pill.green {
+    background: var(--accent-soft);
+    border-color: rgba(33, 182, 111, 0.22);
+    color: var(--accent-ink);
+  }
+
+  .pill.blue {
+    background: var(--blue-soft);
+    border-color: rgba(44, 109, 210, 0.2);
+    color: var(--blue);
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+    gap: 12px;
+  }
+
+  .stack {
+    display: grid;
+    gap: 12px;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .trend-chart {
+    height: 238px;
+    display: grid;
+    grid-template-columns: repeat(14, minmax(14px, 1fr));
+    align-items: end;
+    gap: 8px;
+    padding-top: 8px;
+    border-bottom: 1px solid var(--strong-border);
+  }
+
+  .trend-item {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    align-items: end;
+    justify-items: center;
+  }
+
+  .trend-bar {
+    width: 100%;
+    max-width: 24px;
+    min-height: 5px;
+    border-radius: 4px 4px 2px 2px;
+    background: var(--accent);
+  }
+
+  .trend-bar.blue {
+    background: var(--blue);
+  }
+
+  .trend-label {
+    height: 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  .bar-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(78px, 1fr) minmax(110px, 1.3fr) 52px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  button.bar-row {
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  button.bar-row.active .bar-label,
+  button.session-row.active .session-text {
+    color: var(--accent-ink);
+  }
+
+  button.bar-row.active .bar-track,
+  button.session-row.active {
+    background: var(--accent-soft);
+  }
+
+  .bar-label {
+    min-width: 0;
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--small-bg);
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  .bar-fill.blue {
+    background: var(--blue);
+  }
+
+  .bar-fill.warning {
+    background: var(--warning);
+  }
+
+  .bar-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .heat-grid {
+    display: grid;
+    grid-template-columns: 46px repeat(6, 1fr);
+    gap: 6px;
+    align-items: center;
+  }
+
+  .heat-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+  }
+
+  .heat-cell {
+    appearance: none;
+    min-height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(22, 23, 22, 0.08);
+    cursor: pointer;
+  }
+
+  .heat-cell.active {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+  }
+
+  .distribution {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 14px;
+  }
+
+  .distribution-pie {
+    width: 132px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+
+  .distribution-pie-center {
+    width: 68px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .distribution-legend {
+    width: 100%;
+    display: grid;
+    gap: 9px;
+  }
+
+  .distribution-row {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) 72px;
+    gap: 9px;
+    align-items: center;
+  }
+
+  .distribution-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  .distribution-row:nth-child(2) .distribution-swatch {
+    background: var(--blue);
+  }
+
+  .distribution-row:nth-child(3) .distribution-swatch {
+    background: var(--warning);
+  }
+
+  .distribution-label {
+    font-weight: 700;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .distribution-row .panel-subtitle {
+    white-space: nowrap;
+  }
+
+  .distribution-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .session-table {
+    display: grid;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .session-row {
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) 54px 52px 58px 76px;
+    gap: 12px;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+
+  button.session-row {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .session-row:last-child {
+    border-bottom: 0;
+  }
+
+  .session-row.head {
+    min-height: 38px;
+    background: var(--soft-bg);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .session-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .table-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+
+  .dense-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) 300px;
+    gap: 12px;
+  }
+
+  .dense-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .dense-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dense-stat:last-child {
+    border-bottom: 0;
+  }
+
+  .dense-stat strong {
+    display: block;
+    font-size: 20px;
+    line-height: 1.05;
+  }
+
+  .dense-stat span {
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .detail-card {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--soft-bg);
+    border: 1px solid var(--border);
+  }
+
+  .detail-card strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 18px;
+    line-height: 1.05;
+  }
+
+  .detail-card span,
+  .detail-copy {
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
+  .compact-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .big-number {
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 0.95;
+  }
+
+  .insight-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .insight-row {
+    display: grid;
+    grid-template-columns: 9px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .insight-row .marker {
+    width: 9px;
+    height: 9px;
+    margin-top: 5px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  .insight-row:nth-child(2) .marker {
+    background: var(--blue);
+  }
+
+  .insight-row:nth-child(3) .marker {
+    background: var(--warning);
+  }
+
+  .insight-row strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  .insight-row span {
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
+  .compact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 940px) {
+    .prototype-page {
+      padding: 14px;
+    }
+
+    .prototype-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .window {
+      grid-template-columns: 1fr;
+      border-radius: 18px;
+    }
+
+    .sidebar {
+      padding: 18px 12px;
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      padding-bottom: 14px;
+    }
+
+    .nav-list {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .nav-row {
+      grid-template-columns: 18px 1fr;
+    }
+
+    .nav-row .status-dot {
+      display: none;
+    }
+
+    .content {
+      padding: 22px 18px 26px;
+    }
+
+    .metric-row,
+    .dense-controls,
+    .two-col,
+    .dashboard-grid,
+    .dense-layout,
+    .dense-matrix,
+    .compact-hero,
+    .compact-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .session-row {
+      grid-template-columns: minmax(150px, 1fr) 64px 64px;
+    }
+
+    .session-row > :nth-child(4),
+    .session-row > :nth-child(5) {
+      display: none;
+    }
+
+    .control-panel {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .inline-segment,
+    .chip-select {
+      overflow-x: auto;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useMemo, useEffect, useState } = React;
+
+  const BASE_DATE = new Date("2026-05-08T10:00:00+08:00");
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  function daysAgo(dayOffset, hour, minute) {
+    const date = new Date(BASE_DATE);
+    date.setDate(date.getDate() - dayOffset);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  }
+
+  const sampleSessions = [
+    { id: 1, transcriptText: "把设置页的状态提示改成更清楚的权限检查文案", wordCount: 24, durationSeconds: 11, createdAt: daysAgo(0, 9, 22), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 2, transcriptText: "给产品经理回复一下今天统计模块只做本地会话分析", wordCount: 23, durationSeconds: 9, createdAt: daysAgo(0, 8, 48), targetAppName: "Messages", providerName: "火山引擎" },
+    { id: 3, transcriptText: "总结刚才会议里关于菜单栏应用启动行为的决定", wordCount: 25, durationSeconds: 14, createdAt: daysAgo(1, 17, 34), targetAppName: "Notes", providerName: "火山引擎" },
+    { id: 4, transcriptText: "把保留策略相关测试再跑一遍确认没有破坏历史会话", wordCount: 26, durationSeconds: 12, createdAt: daysAgo(1, 14, 12), targetAppName: "Terminal", providerName: "火山引擎" },
+    { id: 5, transcriptText: "写一段说明解释为什么统计页暂时不展示失败率", wordCount: 23, durationSeconds: 10, createdAt: daysAgo(2, 19, 6), targetAppName: "Linear", providerName: "火山引擎" },
+    { id: 6, transcriptText: "记录一下明天要检查 Keychain 凭证模式的兼容性", wordCount: 24, durationSeconds: 10, createdAt: daysAgo(2, 11, 42), targetAppName: "Notes", providerName: "火山引擎" },
+    { id: 7, transcriptText: "请把这一段转成简短的提交信息强调会话统计入口", wordCount: 24, durationSeconds: 8, createdAt: daysAgo(3, 16, 18), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 8, transcriptText: "回复客户说新版本不会上传本地转写历史", wordCount: 18, durationSeconds: 7, createdAt: daysAgo(3, 10, 2), targetAppName: "Mail", providerName: "火山引擎" },
+    { id: 9, transcriptText: "整理几个统计指标包括总字数总时长和应用分布", wordCount: 23, durationSeconds: 12, createdAt: daysAgo(4, 20, 41), targetAppName: "Craft", providerName: "火山引擎" },
+    { id: 10, transcriptText: "这条录音用于测试较长文本在列表里的截断效果是否稳定", wordCount: 27, durationSeconds: 16, createdAt: daysAgo(4, 15, 16), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 11, transcriptText: "把今天的可用字段写清楚避免把 latency 当成已存数据", wordCount: 27, durationSeconds: 13, createdAt: daysAgo(5, 13, 24), targetAppName: "Notes", providerName: "火山引擎" },
+    { id: 12, transcriptText: "快速起草一个统计模块的界面标题", wordCount: 17, durationSeconds: 6, createdAt: daysAgo(5, 9, 4), targetAppName: "Figma", providerName: "火山引擎" },
+    { id: 13, transcriptText: "把设计里右侧图表的密度降低一点不要像管理后台", wordCount: 25, durationSeconds: 12, createdAt: daysAgo(6, 18, 55), targetAppName: "Figma", providerName: "火山引擎" },
+    { id: 14, transcriptText: "提醒我检查保存会话记录关闭时统计页的空态", wordCount: 21, durationSeconds: 9, createdAt: daysAgo(6, 11, 9), targetAppName: "Reminders", providerName: "火山引擎" },
+    { id: 15, transcriptText: "给测试用例补充目标应用为空的分组逻辑", wordCount: 18, durationSeconds: 8, createdAt: daysAgo(7, 14, 50), targetAppName: null, providerName: "火山引擎" },
+    { id: 16, transcriptText: "说明当前统计只读取 recentVoiceInputSessions 不做远端请求", wordCount: 25, durationSeconds: 11, createdAt: daysAgo(8, 16, 22), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 17, transcriptText: "给用户回一条中文说明这个入口会在模型下面", wordCount: 22, durationSeconds: 9, createdAt: daysAgo(9, 8, 17), targetAppName: "Messages", providerName: "火山引擎" },
+    { id: 18, transcriptText: "会议纪要第一点是统计页默认展示最近七天", wordCount: 20, durationSeconds: 9, createdAt: daysAgo(10, 17, 3), targetAppName: "Notes", providerName: "火山引擎" },
+    { id: 19, transcriptText: "分析一下哪些应用里语音输入最频繁", wordCount: 17, durationSeconds: 8, createdAt: daysAgo(11, 12, 26), targetAppName: "Craft", providerName: "火山引擎" },
+    { id: 20, transcriptText: "写一段关于本地隐私的设置页辅助文案", wordCount: 18, durationSeconds: 7, createdAt: daysAgo(12, 19, 45), targetAppName: "Mail", providerName: "火山引擎" },
+    { id: 21, transcriptText: "把统计页热力图改成按小时段聚合", wordCount: 17, durationSeconds: 7, createdAt: daysAgo(13, 15, 37), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 22, transcriptText: "测试另外一种 provider 名称在图表里如何显示", wordCount: 21, durationSeconds: 9, createdAt: daysAgo(14, 10, 44), targetAppName: "Terminal", providerName: "Unconfigured" },
+    { id: 23, transcriptText: "补充统计页面的首次使用说明", wordCount: 15, durationSeconds: 6, createdAt: daysAgo(15, 13, 2), targetAppName: "Codex", providerName: "火山引擎" },
+    { id: 24, transcriptText: "今天先不做导出功能保留界面位置", wordCount: 16, durationSeconds: 7, createdAt: daysAgo(17, 16, 31), targetAppName: "Linear", providerName: "火山引擎" },
+    { id: 25, transcriptText: "把统计卡片的值限制在一行内显示", wordCount: 17, durationSeconds: 6, createdAt: daysAgo(19, 9, 18), targetAppName: "Figma", providerName: "火山引擎" },
+    { id: 26, transcriptText: "快速记录一次较短的语音输入", wordCount: 13, durationSeconds: 5, createdAt: daysAgo(22, 12, 8), targetAppName: "Notes", providerName: "火山引擎" },
+    { id: 27, transcriptText: "复盘本月语音输入主要用于写代码和整理笔记", wordCount: 21, durationSeconds: 10, createdAt: daysAgo(25, 18, 27), targetAppName: "Craft", providerName: "火山引擎" },
+    { id: 28, transcriptText: "最后检查原型文件能否直接打开", wordCount: 15, durationSeconds: 6, createdAt: daysAgo(28, 11, 15), targetAppName: "Safari", providerName: "火山引擎" }
+  ];
+
+  const periodOptions = [
+    { id: "7d", label: "近 7 天", days: 7 },
+    { id: "30d", label: "近 30 天", days: 30 },
+    { id: "all", label: "全部", days: null }
+  ];
+
+  const metricOptions = [
+    { id: "sessions", label: "会话" },
+    { id: "words", label: "字数" },
+    { id: "duration", label: "时长" }
+  ];
+
+  const variants = [
+    { id: "overview", label: "A · 工作台概览", component: OverviewVariant },
+    { id: "dense", label: "B · 深入设计", component: DenseVariant },
+    { id: "compact", label: "C · 极简摘要", component: CompactVariant }
+  ];
+
+  function localDateKey(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  function localDayLabel(date) {
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  }
+
+  function formatTime(date) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function formatNumber(value) {
+    return new Intl.NumberFormat("zh-CN").format(value);
+  }
+
+  function formatMinutes(seconds) {
+    return `${(seconds / 60).toFixed(1)} 分钟`;
+  }
+
+  function groupBy(items, keyFn) {
+    return items.reduce((groups, item) => {
+      const key = keyFn(item);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+      return groups;
+    }, {});
+  }
+
+  function summarizeSessions(filtered, periodLabel, chartDays = 14) {
+    const totalSessions = filtered.length;
+    const totalWords = filtered.reduce((sum, session) => sum + session.wordCount, 0);
+    const totalDuration = filtered.reduce((sum, session) => sum + session.durationSeconds, 0);
+    const avgDuration = totalSessions ? totalDuration / totalSessions : 0;
+    const wordsPerMinute = totalDuration ? Math.round(totalWords / (totalDuration / 60)) : 0;
+    const activeApps = new Set(filtered.map(session => session.targetAppName || "未知 App")).size;
+    const todaySessions = filtered.filter(session => localDateKey(session.createdAt) === localDateKey(BASE_DATE)).length;
+
+    const dailySeries = Array.from({ length: chartDays }).map((_, index) => {
+      const date = new Date(BASE_DATE);
+      date.setDate(date.getDate() - (chartDays - 1 - index));
+      const key = localDateKey(date);
+      const daySessions = filtered.filter(session => localDateKey(session.createdAt) === key);
+      return {
+        key,
+        label: localDayLabel(date),
+        sessions: daySessions.length,
+        words: daySessions.reduce((sum, session) => sum + session.wordCount, 0),
+        duration: daySessions.reduce((sum, session) => sum + session.durationSeconds, 0)
+      };
+    });
+
+    const appStats = Object.entries(groupBy(filtered, session => session.targetAppName || "未知 App"))
+      .map(([name, sessions]) => ({
+        name,
+        sessions: sessions.length,
+        words: sessions.reduce((sum, session) => sum + session.wordCount, 0),
+        duration: sessions.reduce((sum, session) => sum + session.durationSeconds, 0)
+      }))
+      .sort((a, b) => b.words - a.words);
+
+    const providerStats = Object.entries(groupBy(filtered, session => session.providerName))
+      .map(([name, sessions]) => ({
+        name,
+        sessions: sessions.length,
+        words: sessions.reduce((sum, session) => sum + session.wordCount, 0)
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    const ranges = [
+      { label: "00-06", start: 0, end: 6 },
+      { label: "06-10", start: 6, end: 10 },
+      { label: "10-14", start: 10, end: 14 },
+      { label: "14-18", start: 14, end: 18 },
+      { label: "18-22", start: 18, end: 22 },
+      { label: "22-24", start: 22, end: 24 }
+    ];
+    const hourRanges = ranges.map(range => {
+      const sessions = filtered.filter(session => {
+        const hour = session.createdAt.getHours();
+        return hour >= range.start && hour < range.end;
+      });
+      return {
+        ...range,
+        sessions: sessions.length,
+        words: sessions.reduce((sum, session) => sum + session.wordCount, 0)
+      };
+    });
+
+    const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const heatmap = weekdays.map((label, weekdayIndex) => ({
+      label,
+      cells: ranges.map(range => {
+        const cellSessions = filtered.filter(session => {
+          const day = session.createdAt.getDay();
+          const normalizedDay = day === 0 ? 6 : day - 1;
+          const hour = session.createdAt.getHours();
+          return normalizedDay === weekdayIndex && hour >= range.start && hour < range.end;
+        });
+        return {
+          key: `${label}-${range.label}`,
+          range: range.label,
+          count: cellSessions.length,
+          words: cellSessions.reduce((sum, session) => sum + session.wordCount, 0),
+          duration: cellSessions.reduce((sum, session) => sum + session.durationSeconds, 0),
+          sessions: cellSessions
+        };
+      })
+    }));
+
+    return {
+      periodLabel,
+      filtered,
+      totalSessions,
+      totalWords,
+      totalDuration,
+      avgDuration,
+      wordsPerMinute,
+      activeApps,
+      todaySessions,
+      dailySeries,
+      appStats,
+      providerStats,
+      hourRanges,
+      heatmap,
+      latest: filtered.slice(0, 5)
+    };
+  }
+
+  function buildAnalytics(period) {
+    const option = periodOptions.find(item => item.id === period) || periodOptions[0];
+    const filtered = sampleSessions.filter(session => {
+      if (!option.days) return true;
+      return BASE_DATE - session.createdAt < option.days * MS_PER_DAY;
+    });
+
+    return summarizeSessions(filtered, option.label, option.id === "7d" ? 7 : 14);
+  }
+
+  function Shell({ children, variant, setVariant, period, setPeriod }) {
+    return (
+      <div className="prototype-page">
+        <div className="prototype-toolbar">
+          <div>
+            <div className="prototype-label">Voco statistics prototype</div>
+          </div>
+          <div className="variant-tabs">
+            {variants.map(item => (
+              <button
+                key={item.id}
+                className={item.id === variant ? "active" : ""}
+                onClick={() => setVariant(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="window">
+          <Sidebar />
+          <main className="content">
+            <div className="topline">
+              <div className="eyebrow">ANALYTICS</div>
+              <div className="header-status">
+                <span className="status-dot"></span>
+                <span>正常 · 本机会话记录</span>
+              </div>
+            </div>
+            <div className="header-copy">
+              <div className="title-block">
+                <h1>统计</h1>
+                <p>基于已保存的语音输入会话，查看用量趋势、输入效率、目标应用分布和活跃时段。</p>
+              </div>
+              <div className="period-tabs">
+                {periodOptions.map(item => (
+                  <button
+                    key={item.id}
+                    className={item.id === period ? "active" : ""}
+                    onClick={() => setPeriod(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {children}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  function Sidebar() {
+    const rows = [
+      { id: "home", title: "主页", icon: "mini-home", status: "" },
+      { id: "model", title: "模型", icon: "mini-cpu", status: "" },
+      { id: "stats", title: "统计", icon: "mini-bars", status: "" },
+      { id: "settings", title: "设置", icon: "mini-gear", status: "warning" }
+    ];
+
+    return (
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-kicker">VOCAL INPUT</div>
+          <div className="brand-title">Voco</div>
+        </div>
+        <nav className="nav-list">
+          {rows.map(row => (
+            <button className={`nav-row ${row.id === "stats" ? "active" : ""}`} key={row.id}>
+              <span className="nav-icon"><span className={row.icon}></span></span>
+              <span className="nav-title">{row.title}</span>
+              <span className={`status-dot ${row.status}`}></span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+    );
+  }
+
+  function MetricCard({ label, value, note }) {
+    return (
+      <div className="metric-card">
+        <div className="metric-label">{label}</div>
+        <div className="metric-value">{value}</div>
+        <div className="metric-note">{note}</div>
+      </div>
+    );
+  }
+
+  function MetricsRow({ data }) {
+    return (
+      <div className="metric-row">
+        <MetricCard label="SESSIONS" value={`${data.totalSessions} 次`} note={`今日 ${data.todaySessions} 次`} />
+        <MetricCard label="WORDS" value={`${formatNumber(data.totalWords)} 字`} note="来自 wordCount" />
+        <MetricCard label="DURATION" value={formatMinutes(data.totalDuration)} note={`平均 ${Math.round(data.avgDuration)} 秒`} />
+        <MetricCard label="PACE" value={`${data.wordsPerMinute} 字/分`} note={`${data.activeApps} 个目标应用`} />
+      </div>
+    );
+  }
+
+  function Panel({ title, subtitle, badge, children, className = "" }) {
+    return (
+      <section className={`panel ${className}`}>
+        <div className="panel-header">
+          <div>
+            <div className="panel-title">{title}</div>
+            {subtitle && <div className="panel-subtitle">{subtitle}</div>}
+          </div>
+          {badge && (typeof badge === "string" ? <span className="pill green">{badge}</span> : badge)}
+        </div>
+        {children}
+      </section>
+    );
+  }
+
+  function TrendChart({ data, metric = "sessions" }) {
+    const maxValue = Math.max(1, ...data.dailySeries.map(day => day[metric]));
+    return (
+      <div
+        className="trend-chart"
+        style={{ gridTemplateColumns: `repeat(${data.dailySeries.length}, minmax(14px, 1fr))` }}
+      >
+        {data.dailySeries.map(day => {
+          const height = Math.max(5, Math.round((day[metric] / maxValue) * 192));
+          return (
+            <div className="trend-item" key={day.key} title={`${day.label}: ${day[metric]}`}>
+              <div
+                className={`trend-bar ${metric === "words" ? "blue" : ""}`}
+                style={{ height: `${height}px` }}
+              ></div>
+              <div className="trend-label">{day.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function BarList({ items, metric, suffix, color = "", onSelect, selectedName }) {
+    const maxValue = Math.max(1, ...items.map(item => item[metric]));
+    return (
+      <div className="bar-list">
+        {items.slice(0, 6).map(item => {
+          const name = item.name || item.label;
+          const rowContent = (
+            <>
+              <div className="bar-label">{name}</div>
+              <div className="bar-track">
+                <div
+                  className={`bar-fill ${color}`}
+                  style={{ width: `${Math.max(4, (item[metric] / maxValue) * 100)}%` }}
+                ></div>
+              </div>
+              <div className="bar-value">{item[metric]}{suffix}</div>
+            </>
+          );
+
+          return onSelect ? (
+            <button
+              type="button"
+              className={`bar-row ${selectedName === name ? "active" : ""}`}
+              key={name}
+              onClick={() => onSelect(name)}
+            >
+              {rowContent}
+            </button>
+          ) : (
+            <div className="bar-row" key={name}>{rowContent}</div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function HourRangeList({ data }) {
+    return (
+      <BarList
+        items={data.hourRanges.map(item => ({ name: item.label, sessions: item.sessions }))}
+        metric="sessions"
+        suffix=" 次"
+        color="warning"
+      />
+    );
+  }
+
+  function Heatmap({ data, selectedCell, onSelect }) {
+    const maxValue = Math.max(1, ...data.heatmap.flatMap(row => row.cells.map(cell => cell.count)));
+    return (
+      <div className="heat-grid">
+        <div className="heat-label"></div>
+        {data.hourRanges.map(range => (
+          <div className="heat-label" key={range.label}>{range.label}</div>
+        ))}
+        {data.heatmap.map(row => (
+          <React.Fragment key={row.label}>
+            <div className="heat-label">{row.label}</div>
+            {row.cells.map(cell => {
+              const alpha = cell.count === 0 ? 0.05 : 0.18 + (cell.count / maxValue) * 0.62;
+              const isActive = selectedCell?.key === cell.key;
+              return (
+                <button
+                  type="button"
+                  className={`heat-cell ${isActive ? "active" : ""}`}
+                  key={`${row.label}-${cell.range}`}
+                  title={`${row.label} ${cell.range}: ${cell.count} 次`}
+                  style={{ backgroundColor: `rgba(33, 182, 111, ${alpha})` }}
+                  onClick={() => onSelect?.({ ...cell, weekday: row.label })}
+                ></button>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  function LengthDistribution({ sessions }) {
+    const buckets = [
+      { label: "短句", detail: "0-18 字", count: sessions.filter(session => session.wordCount <= 18).length, color: "var(--accent)" },
+      { label: "中段", detail: "19-24 字", count: sessions.filter(session => session.wordCount > 18 && session.wordCount <= 24).length, color: "var(--blue)" },
+      { label: "长段", detail: "25 字以上", count: sessions.filter(session => session.wordCount > 24).length, color: "var(--warning)" }
+    ];
+    const total = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
+    let cursor = 0;
+    const pieStops = total
+      ? buckets.map(bucket => {
+          const start = cursor;
+          cursor += (bucket.count / total) * 100;
+          return `${bucket.color} ${start}% ${cursor}%`;
+        }).join(", ")
+      : "var(--soft-bg) 0% 100%";
+
+    return (
+      <div className="distribution">
+        <div
+          className="distribution-pie"
+          style={{ background: `conic-gradient(${pieStops})` }}
+        >
+          <div className="distribution-pie-center">{total} 次</div>
+        </div>
+        <div className="distribution-legend">
+          {buckets.map(bucket => {
+            const percent = total ? Math.round((bucket.count / total) * 100) : 0;
+            return (
+              <div className="distribution-row" key={bucket.label}>
+                <span className="distribution-swatch"></span>
+                <div>
+                  <div className="distribution-label">{bucket.label}</div>
+                  <div className="panel-subtitle">{bucket.detail}</div>
+                </div>
+                <div className="distribution-value">{percent}% · {bucket.count}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function SessionTable({ sessions, selectedSessionId, onSelect }) {
+    return (
+      <div className="session-table">
+        <div className="session-row head">
+          <span>内容预览</span>
+          <span>字数</span>
+          <span>时长</span>
+          <span>时间</span>
+          <span>目标 App</span>
+        </div>
+        {sessions.map(session => {
+          const rowContent = (
+            <>
+              <span className="session-text">{session.transcriptText}</span>
+              <span className="table-meta">{session.wordCount} 字</span>
+              <span className="table-meta">{session.durationSeconds}s</span>
+              <span className="table-meta">{formatTime(session.createdAt)}</span>
+              <span className="table-meta">{session.targetAppName || "未知 App"}</span>
+            </>
+          );
+
+          return onSelect ? (
+            <button
+              type="button"
+              className={`session-row ${selectedSessionId === session.id ? "active" : ""}`}
+              key={session.id}
+              onClick={() => onSelect(session)}
+            >
+              {rowContent}
+            </button>
+          ) : (
+            <div className="session-row" key={session.id}>{rowContent}</div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function OverviewVariant({ data }) {
+    return (
+      <>
+        <MetricsRow data={data} />
+        <div className="dashboard-grid">
+          <div className="stack">
+            <Panel title="会话趋势" subtitle="按 createdAt 聚合，柱高表示每日会话次数" badge={data.periodLabel}>
+              <TrendChart data={data} metric="sessions" />
+            </Panel>
+            <Panel title="最近会话" subtitle="用于保留现有主页会话列表的可扫读性">
+              <SessionTable sessions={data.latest} />
+            </Panel>
+          </div>
+          <div className="stack">
+            <Panel title="目标应用分布" subtitle="按 targetAppName 汇总字数" badge={`${data.appStats.length} 个 App`}>
+              <BarList items={data.appStats} metric="words" suffix=" 字" />
+            </Panel>
+            <Panel title="活跃时段" subtitle="按 createdAt 小时段聚合">
+              <HourRangeList data={data} />
+            </Panel>
+            <Panel title="模型来源" subtitle="按 providerName 汇总会话">
+              <BarList items={data.providerStats} metric="sessions" suffix=" 次" color="blue" />
+            </Panel>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function AnalysisControls({ app, setApp, appOptions }) {
+    return (
+      <div className="dense-controls">
+        <div className="control-panel">
+          <span className="control-label">目标 App</span>
+          <div className="chip-select">
+            {[{ name: "全部" }, ...appOptions.slice(0, 4)].map(option => (
+              <button
+                type="button"
+                key={option.name}
+                className={app === option.name ? "active" : ""}
+                onClick={() => setApp(option.name)}
+              >
+                {option.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function DetailCards({ items }) {
+    return (
+      <div className="detail-grid">
+        {items.map(item => (
+          <div className="detail-card" key={item.label}>
+            <strong>{item.value}</strong>
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function MetricSegmentedControl({ metric, setMetric }) {
+    return (
+      <div className="inline-segment">
+        {metricOptions.map(option => (
+          <button
+            type="button"
+            key={option.id}
+            className={metric === option.id ? "active" : ""}
+            onClick={() => setMetric(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function DenseInsightPanel({ data, selectedApp }) {
+    const topApp = data.appStats[0];
+    const topHour = data.hourRanges.slice().sort((a, b) => b.sessions - a.sessions)[0];
+    const selectedAppLabel = selectedApp === "全部" ? "全部应用" : selectedApp;
+    return (
+      <Panel title="本期观察" subtitle={`${selectedAppLabel} · ${data.periodLabel}`} className="tight">
+        <div className="dense-stat">
+          <div><strong>{topApp?.name || "--"}</strong><span>最常用目标应用</span></div>
+          <span className="pill">{topApp?.words || 0} 字</span>
+        </div>
+        <div className="dense-stat">
+          <div><strong>{topHour?.label || "--"}</strong><span>最高频时段</span></div>
+          <span className="pill">{topHour?.sessions || 0} 次</span>
+        </div>
+        <div className="dense-stat">
+          <div><strong>{data.providerStats[0]?.name || "--"}</strong><span>主要模型来源</span></div>
+          <span className="pill">{data.providerStats[0]?.sessions || 0} 次</span>
+        </div>
+      </Panel>
+    );
+  }
+
+  function DenseVariant({ data }) {
+    const [metric, setMetric] = useState("words");
+    const [selectedApp, setSelectedApp] = useState("全部");
+
+    const scopedSessions = selectedApp === "全部"
+      ? data.filtered
+      : data.filtered.filter(session => (session.targetAppName || "未知 App") === selectedApp);
+    const scopedData = useMemo(
+      () => summarizeSessions(scopedSessions, data.periodLabel, data.dailySeries.length),
+      [selectedApp, data]
+    );
+    const appOptions = data.appStats;
+    const metricSuffix = metric === "duration" ? "s" : metric === "words" ? " 字" : " 次";
+    const metricTitle = metricOptions.find(item => item.id === metric)?.label || "字数";
+    const activeDays = scopedData.dailySeries.filter(day => day.sessions > 0).length;
+    const busiestDay = scopedData.dailySeries.slice().sort((a, b) => b.sessions - a.sessions)[0];
+    const topHour = scopedData.hourRanges.slice().sort((a, b) => b.sessions - a.sessions)[0];
+    const topApp = scopedData.appStats[0];
+    const peakShare = scopedData.totalSessions ? Math.round(((topHour?.sessions || 0) / scopedData.totalSessions) * 100) : 0;
+    const appShare = scopedData.totalWords ? Math.round(((topApp?.words || 0) / scopedData.totalWords) * 100) : 0;
+    const isSingleWeekRange = data.periodLabel === "近 7 天";
+    const heatmapTitle = isSingleWeekRange ? "周内热力" : "使用节律";
+    const heatmapSubtitle = isSingleWeekRange
+      ? "横向是时间段，纵向是星期；用于观察一周内的使用习惯"
+      : "按星期和时段聚合当前范围，观察长期使用节奏";
+
+    function handleApp(nextApp) {
+      setSelectedApp(nextApp);
+    }
+
+    return (
+      <>
+        <AnalysisControls
+          app={selectedApp}
+          setApp={handleApp}
+          appOptions={appOptions}
+        />
+        <div className="metric-row">
+          <MetricCard label="TOTAL" value={`${scopedData.totalSessions} 次`} note={`${formatNumber(scopedData.totalWords)} 字`} />
+          <MetricCard label="EFFICIENCY" value={`${scopedData.wordsPerMinute} 字/分`} note="按字数 / 时长" />
+          <MetricCard label="APPS" value={`${scopedData.activeApps} 个`} note={selectedApp === "全部" ? "应用去重" : "当前筛选"} />
+          <MetricCard label="AVG LENGTH" value={`${Math.round(scopedData.avgDuration)} 秒`} note="单次平均时长" />
+        </div>
+        <div className="dense-layout">
+          <div className="stack">
+            <Panel
+              title={`${metricTitle}趋势`}
+              subtitle={`按天查看 ${selectedApp === "全部" ? "所有应用" : selectedApp} 的输入变化`}
+              badge={<MetricSegmentedControl metric={metric} setMetric={setMetric} />}
+            >
+              <TrendChart data={scopedData} metric={metric} />
+            </Panel>
+            <div className="dense-matrix">
+              <Panel title={heatmapTitle} subtitle={heatmapSubtitle}>
+                <Heatmap data={scopedData} />
+              </Panel>
+              <Panel title="输入长度分布" subtitle="按每次转写字数分段，判断主要是短句还是长段">
+                <LengthDistribution sessions={scopedData.filtered} />
+              </Panel>
+            </div>
+            <Panel title="应用贡献" subtitle={`按 ${metricTitle} 对比目标应用，筛选后同步更新左侧图表`}>
+              <BarList
+                items={data.appStats}
+                metric={metric}
+                suffix={metricSuffix}
+                selectedName={selectedApp === "全部" ? null : selectedApp}
+                onSelect={handleApp}
+              />
+            </Panel>
+          </div>
+          <div className="stack">
+            <DenseInsightPanel data={scopedData} selectedApp={selectedApp} />
+            <Panel title="活跃时段" subtitle="按会话次数排序，辅助调整使用习惯" className="tight">
+              <HourRangeList data={scopedData} />
+            </Panel>
+            <Panel title="模型来源" subtitle="确认本期语音输入主要由哪个模型完成" className="tight">
+              <BarList items={scopedData.providerStats} metric="sessions" suffix=" 次" color="blue" />
+            </Panel>
+            <Panel title="使用节奏" subtitle="观察分布是否集中在少数日期或场景" className="tight">
+              <DetailCards items={[
+                { label: "活跃天数", value: `${activeDays} 天` },
+                { label: "最高单日", value: busiestDay?.label || "--" },
+                { label: "高峰占比", value: `${peakShare}%` },
+                { label: "应用集中度", value: `${appShare}%` }
+              ]} />
+            </Panel>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function CompactVariant({ data }) {
+    const topApp = data.appStats[0];
+    const topHour = data.hourRanges.slice().sort((a, b) => b.sessions - a.sessions)[0];
+    return (
+      <>
+        <div className="compact-hero">
+          <Panel title="语音输入摘要" subtitle={`当前范围：${data.periodLabel}`} badge="本地数据">
+            <div className="big-number">{formatNumber(data.totalWords)}</div>
+            <div className="panel-subtitle">总字数 · {data.totalSessions} 次会话 · {formatMinutes(data.totalDuration)}</div>
+          </Panel>
+          <Panel title="重点观察" subtitle="少图表，强调可读结论">
+            <div className="insight-list">
+              <div className="insight-row">
+                <span className="marker"></span>
+                <div><strong>{topApp?.name || "--"} 是主要输入场景</strong><span>{topApp ? `${topApp.words} 字，${topApp.sessions} 次会话` : "暂无数据"}</span></div>
+              </div>
+              <div className="insight-row">
+                <span className="marker"></span>
+                <div><strong>{data.wordsPerMinute} 字/分钟</strong><span>按总字数和总时长估算</span></div>
+              </div>
+              <div className="insight-row">
+                <span className="marker"></span>
+                <div><strong>{topHour?.label || "--"} 使用最集中</strong><span>{topHour ? `${topHour.sessions} 次会话` : "暂无数据"}</span></div>
+              </div>
+            </div>
+          </Panel>
+        </div>
+        <div className="compact-grid">
+          <Panel title="趋势" subtitle="每日会话次数">
+            <TrendChart data={data} metric="sessions" />
+          </Panel>
+          <Panel title="应用" subtitle="按字数排序">
+            <BarList items={data.appStats} metric="words" suffix=" 字" />
+          </Panel>
+          <Panel title="时段" subtitle="按会话次数排序">
+            <HourRangeList data={data} />
+          </Panel>
+        </div>
+      </>
+    );
+  }
+
+  function App() {
+    const [variant, setVariant] = useState(() => localStorage.getItem("voco.stats.proto.v2.variant") || "dense");
+    const [period, setPeriod] = useState(() => localStorage.getItem("voco.stats.proto.v2.period") || "7d");
+
+    useEffect(() => {
+      localStorage.setItem("voco.stats.proto.v2.variant", variant);
+    }, [variant]);
+
+    useEffect(() => {
+      localStorage.setItem("voco.stats.proto.v2.period", period);
+    }, [period]);
+
+    const data = useMemo(() => buildAnalytics(period), [period]);
+    const selectedVariant = variants.find(item => item.id === variant) || variants[0];
+    const ActiveVariant = selectedVariant.component;
+
+    return (
+      <Shell variant={selectedVariant.id} setVariant={setVariant} period={period} setPeriod={setPeriod}>
+        <ActiveVariant data={data} />
+      </Shell>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

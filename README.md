@@ -1,200 +1,164 @@
 # Voco
 
-Terminal-controlled local/cloud STT voice input tool for macOS.
+中文 | [English](#english)
 
-Voco is now developed primarily as a native macOS app. Older Rust daemon notes
-remain in this repository for legacy development and migration reference.
+Voco 是一款 macOS 语音输入工具。它运行在菜单栏中，按下热键即可录音、转写，并把文本输入到当前应用。
 
-## Status
+## 功能
 
-Native rewrite development: Voco now has a native macOS menu bar app with a
-settings workbench, Keychain-backed Volcengine model credentials, microphone
-capture, selectable hotkey recording, realtime top HUD overlay, text insertion,
-launch-at-login, silent launch, optional Dock visibility, and native release
-packaging. The user-facing install path is the native `Voco.app` distributed
-through `dist/Voco.dmg`.
+- 菜单栏常驻，主窗口按需打开。
+- 支持按住说话和切换录音两种热键模式。
+- 使用 macOS Keychain 保存模型凭证。
+- 支持火山引擎新控制台 API Key，以及 App ID + Access Token 凭证。
+- 录音、转写和错误状态会显示在顶部 HUD。
+- 支持将转写文本插入当前应用。
+- 支持开机登录、静默启动和 Dock 图标显示设置。
+- 内置会话记录和统计页，可查看输入趋势、目标 App、活跃时段、输入长度分布和模型来源。
 
-The older Rust CLI/daemon, user LaunchAgent template, and Swift HUD helper
-packaging remain in the repository for development reference until the final
-feature-parity and manual UX gate passes. They are not the native user install
-path.
+## 使用
 
-## Current Native App
+1. 启动 `Voco.app`。
+2. 在菜单栏点击 Voco 图标，选择 `显示 Voco`。
+3. 在 `模型` 页面保存模型凭证。
+4. 在 `设置` 页面配置热键、录音模式和麦克风。
+5. 授予麦克风和辅助功能权限。
 
-The native app runs from the menu bar by default. The menu bar menu intentionally
-stays minimal:
+完成配置后，在任意可输入文本的应用中按下热键即可开始语音输入。
 
-- `显示 Voco`: opens the main settings window.
-- `退出`: quits the app.
+## 权限
 
-The settings window currently has three sections:
+Voco 需要以下 macOS 权限：
 
-- `总览`: shows whether voice input is ready and routes the primary recovery
-  action. Missing microphone permission triggers the macOS permission prompt
-  when possible; previously denied microphone permission must still be changed
-  in System Settings because macOS will not show the prompt again.
-- `模型`: stores Volcengine credentials in macOS Keychain. The UI supports the
-  new gateway API Key mode and the legacy App ID + Access Token mode.
-- `设置`: controls the voice-input hotkey, recording mode, microphone input,
-  permissions, launch-at-login, silent launch, and optional Dock visibility.
+- 麦克风：用于录音。
+- 辅助功能：用于把转写文本输入到当前应用。
 
-Native permissions are microphone and accessibility. Input Monitoring is not a
-native app requirement.
+如果之前拒绝过麦克风权限，需要到系统设置中手动重新开启。
 
-## Native Build
+## 安装
 
-```sh
-swift build --package-path native
-swift test --package-path native
-```
-
-Build a local native app bundle:
-
-```bash
-packaging/build_native_app_bundle.sh --profile debug
-open target/native/Voco.app
-```
-
-Run the native bundle smoke test:
-
-```bash
-packaging/tests/native_app_bundle_smoke.sh
-```
-
-## Native Install
-
-Build a native DMG for local smoke testing:
+本地调试安装可以先构建 DMG：
 
 ```bash
 packaging/build_native_dmg.sh --profile debug --signing-style adhoc
 open dist/Voco.dmg
 ```
 
-For a Developer ID release build:
+打开 DMG 后，将 `Voco.app` 拖入 `/Applications`，再从应用程序中启动。
+
+## 开发
+
+构建和测试应用：
+
+```bash
+swift build --package-path native
+swift test --package-path native
+```
+
+构建本地 app bundle：
+
+```bash
+packaging/build_native_app_bundle.sh --profile debug
+open target/native/Voco.app
+```
+
+运行 bundle smoke test：
+
+```bash
+packaging/tests/native_app_bundle_smoke.sh
+```
+
+构建 Developer ID 版本：
 
 ```bash
 VOCO_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Team (TEAMID)" \
 packaging/build_native_dmg.sh --profile release --signing-style developer-id
 ```
 
-Open the DMG, drag `Voco.app` to `/Applications`, then launch Voco from the app.
-Grant microphone and accessibility permissions when requested. Login behavior is
-managed by the native app through macOS Login Items; the native app does not
-install `~/Library/LaunchAgents/com.voco.daemon.plist`.
+## 项目结构
 
-Credentials are configured inside Voco:
+- `native/`：macOS 应用和测试。
+- `packaging/`：app bundle、DMG 和 smoke test 脚本。
+- `prototypes/`：界面原型文件。
 
-1. Open `显示 Voco` from the menu bar.
-2. Go to `模型`.
-3. Choose `新控制台 API Key` or `旧控制台 App ID + Token`.
-4. Save the credential to Keychain.
+## English
 
-The native app does not read Volcengine tokens from local config files.
+Voco is a macOS voice input app. It lives in the menu bar, records speech through a hotkey, transcribes it, and inserts the resulting text into the active app.
 
-## Migration Cleanup
+## Features
 
-If an older development install left this user-level LaunchAgent behind:
+- Menu bar app with an on-demand main window.
+- Press-and-hold and toggle recording modes.
+- macOS Keychain storage for model credentials.
+- Volcengine API Key and App ID + Access Token credential modes.
+- Top HUD for recording, transcription, and error states.
+- Text insertion into the current app.
+- Launch at login, silent launch, and optional Dock visibility.
+- Session history and statistics for input trends, target apps, active time ranges, input length distribution, and model sources.
 
-```text
-~/Library/LaunchAgents/com.voco.daemon.plist
-```
+## Usage
 
-the native Settings window shows a migration warning and offers an explicit
-remove action. Cleanup removes only that known plist path, never touches
-`/Library/LaunchAgents`, and does not require `sudo`. Any removal failure shows
-the exact path and OS error.
+1. Launch `Voco.app`.
+2. Click the Voco icon in the menu bar and choose `显示 Voco`.
+3. Save model credentials on the `模型` page.
+4. Configure the hotkey, recording mode, and microphone on the `设置` page.
+5. Grant microphone and accessibility permissions.
 
-## Legacy Development Archive
+After setup, press the configured hotkey in any text input app to start voice input.
 
-The commands below are retained for development and historical verification of
-the pre-native architecture. Do not use them as the native user install path.
+## Permissions
 
-### Development Daemon
+Voco requires these macOS permissions:
 
-Without installing the LaunchAgent, `voco daemon start` keeps the direct-spawn
-development workflow:
+- Microphone: records audio.
+- Accessibility: inserts transcribed text into the active app.
 
-```bash
-target/debug/voco daemon start
-target/debug/voco status
-target/debug/voco daemon stop
-```
+If microphone permission was denied before, re-enable it manually in System Settings.
 
-### Legacy LaunchAgent Install
+## Install
 
-Install the legacy user LaunchAgent without `sudo`:
+Build a local DMG for testing:
 
 ```bash
-target/debug/voco daemon install
-target/debug/voco daemon start
-target/debug/voco status
+packaging/build_native_dmg.sh --profile debug --signing-style adhoc
+open dist/Voco.dmg
 ```
 
-Render the LaunchAgent from a development `Voco.app` bundle without copying the app:
+Open the DMG, drag `Voco.app` into `/Applications`, then launch it from Applications.
+
+## Development
+
+Build and test the app:
 
 ```bash
-packaging/build_app_bundle.sh --profile debug
-target/debug/voco daemon install --app-bundle target/Voco.app
-target/debug/voco daemon start
-target/debug/voco status
+swift build --package-path native
+swift test --package-path native
 ```
 
-Without `--app-bundle`, `daemon install` keeps the source-tree/direct binary
-install path. `--app-bundle` is the lower-level plist render path and does not
-copy the app bundle.
-
-The plist is written to:
-
-```text
-~/Library/LaunchAgents/com.voco.daemon.plist
-```
-
-Stop and remove the LaunchAgent:
+Build a local app bundle:
 
 ```bash
-target/debug/voco daemon stop
-target/debug/voco daemon uninstall
+packaging/build_native_app_bundle.sh --profile debug
+open target/native/Voco.app
 ```
 
-### Legacy Development App Bundle
-
-Build and install a local legacy per-user app bundle:
+Run the bundle smoke test:
 
 ```bash
-packaging/build_app_bundle.sh --profile release
-target/release/voco app install --app-bundle target/Voco.app
-target/release/voco daemon start
-target/release/voco status
+packaging/tests/native_app_bundle_smoke.sh
 ```
 
-`app install` copies the generated bundle to:
-
-```text
-~/Applications/Voco.app
-```
-
-It also installs or updates `~/Library/LaunchAgents/com.voco.daemon.plist`
-so launchd runs:
-
-```text
-~/Applications/Voco.app/Contents/MacOS/voco-daemon
-```
-
-No `sudo` is required. This legacy local install flow does not sign, notarize,
-create a DMG/pkg, or install under `/Applications`.
-
-### Phase 5 HUD Development
-
-Build the Swift HUD helper before running the daemon from source:
+Build a Developer ID release:
 
 ```bash
-cd hud
-swift build
-cd ..
-cargo build --workspace
+VOCO_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Team (TEAMID)" \
+packaging/build_native_dmg.sh --profile release --signing-style developer-id
 ```
 
-During development, `voco-daemon` resolves `hud/.build/debug/voco-hud` and starts it hidden. The HUD window remains hidden while idle and appears only while recording, transcribing, or showing an error.
+## Project Structure
+
+- `native/`: macOS app and tests.
+- `packaging/`: app bundle, DMG, and smoke test scripts.
+- `prototypes/`: UI prototype files.
 
 ## License
 

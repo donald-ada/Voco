@@ -12,6 +12,10 @@ struct SettingsView: View {
     @State private var settingsFeedbackMessage: String?
     @State private var voiceInputSessionPage = 1
     @State private var selectedVoiceInputSession: VoiceInputSessionSnapshot?
+    @State private var selectedStatisticsPeriod: VoiceInputSessionStatisticsPeriod = .last7Days
+    @State private var selectedStatisticsMetric: VoiceInputSessionStatisticsMetric = .words
+    @State private var selectedStatisticsAppName = VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle
+    @State private var statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.empty(period: .last7Days)
 
     var body: some View {
         HStack(spacing: 0) {
@@ -39,11 +43,30 @@ struct SettingsView: View {
             coordinator.prepareForSettingsPresentation()
             syncSelectedVolcengineCredentialMode()
         }
+        .onChange(of: selectedSection) { _, section in
+            if section == .statistics {
+                refreshStatisticsDashboardSnapshot()
+            }
+        }
+        .onChange(of: selectedStatisticsPeriod) { _, _ in
+            refreshStatisticsDashboardSnapshot()
+        }
+        .onChange(of: selectedStatisticsAppName) { _, _ in
+            refreshStatisticsDashboardSnapshot()
+        }
+        .onChange(of: coordinator.recentVoiceInputSessions) { _, _ in
+            if selectedSection == .statistics {
+                refreshStatisticsDashboardSnapshot()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             coordinator.refreshLegacyInstall()
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
             syncSelectedVolcengineCredentialMode()
+            if selectedSection == .statistics {
+                refreshStatisticsDashboardSnapshot()
+            }
         }
         .sheet(item: $selectedVoiceInputSession) { session in
             VoiceInputSessionDetailSheet(session: session)
@@ -55,10 +78,12 @@ struct SettingsView: View {
         switch section {
         case .overview:
             overviewSection
-        case .settings:
-            settingsSection
         case .model:
             modelWorkbenchSection
+        case .statistics:
+            statisticsSection
+        case .settings:
+            settingsSection
         }
     }
 
@@ -145,6 +170,65 @@ struct SettingsView: View {
 
             credentialPanel
         }
+    }
+
+    private var statisticsSection: some View {
+        let dashboard = statisticsDashboardSnapshot
+        let baseSnapshot = dashboard.baseSnapshot
+        let snapshot = dashboard.scopedSnapshot
+        let appOptions = dashboard.appOptions
+        let selectedApp = dashboard.selectedAppName
+        let layoutPolicy = StatisticsDashboardLayoutPolicy.resizeOptimized
+
+        return LazyVStack(alignment: .leading, spacing: layoutPolicy.verticalSpacing) {
+            settingsPageHeader(
+                eyebrow: "STATISTICS",
+                title: "统计",
+                detail: "查看语音输入使用趋势、应用分布和活跃时段。"
+            ) {
+                WorkbenchSegmentedControl(
+                    options: VoiceInputSessionStatisticsPeriod.allCases,
+                    selected: selectedStatisticsPeriod,
+                    width: 248,
+                    title: \.title
+                ) { period in
+                    selectedStatisticsPeriod = period
+                }
+            }
+
+            StatisticsAppFilter(
+                options: appOptions,
+                selectedApp: selectedApp
+            ) { app in
+                selectedStatisticsAppName = app
+            }
+
+            StatisticsMetricSummaryRow(
+                snapshot: snapshot,
+                selectedApp: selectedApp
+            )
+
+            StatisticsDashboardColumnsView(
+                layoutPolicy: layoutPolicy,
+                snapshot: snapshot,
+                baseSnapshot: baseSnapshot,
+                period: selectedStatisticsPeriod,
+                metric: selectedStatisticsMetric,
+                selectedApp: selectedApp
+            ) { metric in
+                selectedStatisticsMetric = metric
+            } onSelectApp: { app in
+                selectedStatisticsAppName = app
+            }
+        }
+    }
+
+    private func refreshStatisticsDashboardSnapshot() {
+        statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.make(
+            sessions: coordinator.recentVoiceInputSessions,
+            period: selectedStatisticsPeriod,
+            selectedAppName: selectedStatisticsAppName
+        )
     }
 
     private func settingsPageHeader<Actions: View>(
@@ -1534,6 +1618,1052 @@ private struct HomeMetricCard: View {
     }
 }
 
+private struct StatisticsAppFilter: View {
+    let options: [String]
+    let selectedApp: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("目标 App")
+                .font(SettingsWorkbenchVisual.monoTinyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                .lineLimit(1)
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 4) {
+                    ForEach(options, id: \.self) { option in
+                        let isSelected = option == selectedApp
+
+                        Button {
+                            onSelect(option)
+                        } label: {
+                            Text(option)
+                                .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                                .foregroundStyle(isSelected ? Color.white : SettingsWorkbenchVisual.primaryText)
+                                .lineLimit(1)
+                                .padding(.horizontal, 10)
+                                .frame(minHeight: 30)
+                                .background(
+                                    isSelected ? SettingsWorkbenchVisual.primaryText : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .pointingHandCursor()
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .padding(3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                SettingsWorkbenchVisual.softPreviewBackground,
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .workbenchPanel(cornerRadius: 16)
+    }
+}
+
+private struct StatisticsMetricSummaryRow: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let selectedApp: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            StatisticsMetricCard(
+                label: "TOTAL",
+                value: "\(snapshot.totalSessions) 次",
+                note: "\(StatisticsFormat.integer(snapshot.totalWords)) 字"
+            )
+            StatisticsMetricCard(
+                label: "EFFICIENCY",
+                value: "\(snapshot.wordsPerMinute) 字/分",
+                note: "字数 / 时长"
+            )
+            StatisticsMetricCard(
+                label: "APPS",
+                value: "\(snapshot.activeAppCount) 个",
+                note: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? "应用去重" : "当前筛选"
+            )
+            StatisticsMetricCard(
+                label: "AVG TIME",
+                value: StatisticsFormat.duration(snapshot.averageDurationSeconds),
+                note: "平均时长"
+            )
+        }
+    }
+}
+
+private struct StatisticsMetricCard: View {
+    let label: String
+    let value: String
+    let note: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label)
+                .font(SettingsWorkbenchVisual.monoTinyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                .lineLimit(1)
+
+            Text(value)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.74)
+
+            Text(note)
+                .font(SettingsWorkbenchVisual.captionFont)
+                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
+        .frame(maxWidth: .infinity, minHeight: 98, alignment: .leading)
+        .workbenchPanel(cornerRadius: 18)
+    }
+}
+
+private struct StatisticsDashboardColumnsView: View {
+    let layoutPolicy: StatisticsDashboardLayoutPolicy
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let baseSnapshot: VoiceInputSessionStatisticsSnapshot
+    let period: VoiceInputSessionStatisticsPeriod
+    let metric: VoiceInputSessionStatisticsMetric
+    let selectedApp: String
+    let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
+    let onSelectApp: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: layoutPolicy.horizontalSpacing) {
+            LazyVStack(spacing: layoutPolicy.verticalSpacing) {
+                ForEach(layoutPolicy.leadingPanels) { panel in
+                    StatisticsDashboardLeadingPanelView(
+                        panel: panel,
+                        layoutPolicy: layoutPolicy,
+                        snapshot: snapshot,
+                        baseSnapshot: baseSnapshot,
+                        period: period,
+                        metric: metric,
+                        selectedApp: selectedApp,
+                        onSelectMetric: onSelectMetric,
+                        onSelectApp: onSelectApp
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            LazyVStack(spacing: layoutPolicy.verticalSpacing) {
+                ForEach(layoutPolicy.trailingPanels) { panel in
+                    StatisticsDashboardTrailingPanelView(
+                        panel: panel,
+                        snapshot: snapshot,
+                        period: period,
+                        selectedApp: selectedApp
+                    )
+                }
+            }
+            .frame(width: layoutPolicy.trailingColumnWidth, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct StatisticsDashboardLeadingPanelView: View {
+    let panel: StatisticsDashboardPanel
+    let layoutPolicy: StatisticsDashboardLayoutPolicy
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let baseSnapshot: VoiceInputSessionStatisticsSnapshot
+    let period: VoiceInputSessionStatisticsPeriod
+    let metric: VoiceInputSessionStatisticsMetric
+    let selectedApp: String
+    let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
+    let onSelectApp: (String) -> Void
+
+    var body: some View {
+        switch panel {
+        case .trend:
+            StatisticsTrendPanel(
+                snapshot: snapshot,
+                metric: metric,
+                onSelectMetric: onSelectMetric
+            )
+        case .heatmapAndLengthDistribution:
+            StatisticsHeatmapAndLengthDistributionRow(
+                snapshot: snapshot,
+                period: period,
+                layoutPolicy: layoutPolicy
+            )
+        case .appContribution:
+            StatisticsAppContributionPanel(
+                contributions: baseSnapshot.appContributions,
+                metric: metric,
+                selectedApp: selectedApp,
+                onSelectApp: onSelectApp
+            )
+        case .insight, .hourRange, .provider, .rhythm:
+            EmptyView()
+        }
+    }
+}
+
+private struct StatisticsDashboardTrailingPanelView: View {
+    let panel: StatisticsDashboardPanel
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let period: VoiceInputSessionStatisticsPeriod
+    let selectedApp: String
+
+    var body: some View {
+        switch panel {
+        case .insight:
+            StatisticsInsightPanel(
+                snapshot: snapshot,
+                selectedApp: selectedApp,
+                period: period
+            )
+        case .hourRange:
+            StatisticsHourRangePanel(snapshot: snapshot)
+        case .provider:
+            StatisticsProviderPanel(snapshot: snapshot)
+        case .rhythm:
+            StatisticsRhythmPanel(snapshot: snapshot)
+        case .trend, .heatmapAndLengthDistribution, .appContribution:
+            EmptyView()
+        }
+    }
+}
+
+private struct StatisticsPanel<Accessory: View, Content: View>: View {
+    let title: String
+    private let accessory: Accessory
+    private let content: Content
+
+    init(
+        title: String,
+        @ViewBuilder accessory: () -> Accessory,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.accessory = accessory()
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(title)
+                    .font(SettingsWorkbenchVisual.panelTitleFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                accessory
+            }
+
+            content
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .workbenchPanel(cornerRadius: 18)
+        .shadow(color: Color.black.opacity(0.05), radius: 16, y: 10)
+    }
+}
+
+private extension StatisticsPanel where Accessory == EmptyView {
+    init(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(title: title) {
+            EmptyView()
+        } content: {
+            content()
+        }
+    }
+}
+
+private struct StatisticsCompactPanel<Content: View>: View {
+    let title: String
+    let minHeight: CGFloat?
+    private let content: Content
+
+    init(
+        title: String,
+        minHeight: CGFloat? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.minHeight = minHeight
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+
+            content
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .workbenchPanel(cornerRadius: 18)
+        .shadow(color: Color.black.opacity(0.04), radius: 12, y: 8)
+    }
+}
+
+private struct StatisticsTrendPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let metric: VoiceInputSessionStatisticsMetric
+    let onSelectMetric: (VoiceInputSessionStatisticsMetric) -> Void
+
+    var body: some View {
+        StatisticsPanel(title: "\(metric.title)趋势") {
+            WorkbenchSegmentedControl(
+                options: VoiceInputSessionStatisticsMetric.allCases,
+                selected: metric,
+                width: 178,
+                title: \.title,
+                action: onSelectMetric
+            )
+        } content: {
+            StatisticsTrendChart(
+                points: snapshot.dailyPoints,
+                metric: metric
+            )
+            .frame(height: 238)
+        }
+    }
+}
+
+private struct StatisticsTrendChart: View {
+    let points: [VoiceInputSessionStatisticsDailyPoint]
+    let metric: VoiceInputSessionStatisticsMetric
+
+    private var maxValue: Double {
+        max(1, points.map { metric.value(in: $0) }.max() ?? 0)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Canvas { context, size in
+                let count = max(points.count, 1)
+                let spacing: CGFloat = 8
+                let availableWidth = max(0, size.width - spacing * CGFloat(count - 1))
+                let slotWidth = availableWidth / CGFloat(count)
+                let barWidth = min(24, max(3, slotWidth * 0.54))
+
+                for (index, point) in points.enumerated() {
+                    let value = metric.value(in: point)
+                    let ratio = value / maxValue
+                    let barHeight = value > 0
+                        ? max(5, size.height * CGFloat(ratio))
+                        : 2
+                    let x = CGFloat(index) * (slotWidth + spacing) + (slotWidth - barWidth) / 2
+                    let rect = CGRect(
+                        x: x,
+                        y: size.height - barHeight,
+                        width: barWidth,
+                        height: barHeight
+                    )
+                    let path = Path(
+                        roundedRect: rect,
+                        cornerSize: CGSize(width: 4, height: 4)
+                    )
+                    context.fill(
+                        path,
+                        with: .color(value > 0 ? metric.chartColor : SettingsWorkbenchVisual.smallCardBackground)
+                    )
+                }
+            }
+            .frame(height: 206)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(SettingsWorkbenchVisual.strongBorder)
+                    .frame(height: 1)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(points) { point in
+                    Text(point.label)
+                        .font(SettingsWorkbenchVisual.monoTinyFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 16)
+        }
+    }
+}
+
+private struct StatisticsHeatmapAndLengthDistributionRow: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let period: VoiceInputSessionStatisticsPeriod
+    let layoutPolicy: StatisticsDashboardLayoutPolicy
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: layoutPolicy.horizontalSpacing) {
+                heatmapPanel(minHeight: layoutPolicy.compactCombinedPanelHorizontalHeight)
+                    .frame(minWidth: layoutPolicy.compactCombinedPanelMinimumWidth, maxWidth: .infinity)
+                    .layoutPriority(1)
+
+                lengthDistributionPanel(minHeight: layoutPolicy.compactCombinedPanelHorizontalHeight)
+                    .frame(minWidth: layoutPolicy.compactCombinedPanelMinimumWidth, maxWidth: .infinity)
+            }
+
+            VStack(spacing: layoutPolicy.verticalSpacing) {
+                heatmapPanel()
+                lengthDistributionPanel()
+            }
+        }
+    }
+
+    private func heatmapPanel(minHeight: CGFloat? = nil) -> some View {
+        StatisticsCompactPanel(
+            title: period == .last7Days ? "周内热力" : "使用节律",
+            minHeight: minHeight
+        ) {
+            StatisticsHeatmapView(
+                rows: snapshot.heatmapRows,
+                cellHeight: layoutPolicy.compactHeatmapCellHeight,
+                rowSpacing: 4,
+                columnSpacing: 5,
+                labelWidth: 30,
+                cellCornerRadius: 6
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func lengthDistributionPanel(minHeight: CGFloat? = nil) -> some View {
+        StatisticsCompactPanel(
+            title: "输入长度分布",
+            minHeight: minHeight
+        ) {
+            StatisticsCompactLengthDistributionView(
+                snapshot: snapshot,
+                donutSize: layoutPolicy.compactLengthDonutSize
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct StatisticsHeatmapPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let period: VoiceInputSessionStatisticsPeriod
+
+    var body: some View {
+        StatisticsPanel(title: period == .last7Days ? "周内热力" : "使用节律") {
+            StatisticsHeatmapView(rows: snapshot.heatmapRows)
+        }
+    }
+}
+
+private struct StatisticsHeatmapView: View {
+    let rows: [VoiceInputSessionStatisticsHeatmapRow]
+    let cellHeight: CGFloat
+    let rowSpacing: CGFloat
+    let columnSpacing: CGFloat
+    let labelWidth: CGFloat
+    let cellCornerRadius: CGFloat
+
+    init(
+        rows: [VoiceInputSessionStatisticsHeatmapRow],
+        cellHeight: CGFloat = 28,
+        rowSpacing: CGFloat = 6,
+        columnSpacing: CGFloat = 6,
+        labelWidth: CGFloat = 38,
+        cellCornerRadius: CGFloat = 8
+    ) {
+        self.rows = rows
+        self.cellHeight = cellHeight
+        self.rowSpacing = rowSpacing
+        self.columnSpacing = columnSpacing
+        self.labelWidth = labelWidth
+        self.cellCornerRadius = cellCornerRadius
+    }
+
+    private var maxSessions: Int {
+        max(1, rows.flatMap(\.cells).map(\.sessions).max() ?? 0)
+    }
+
+    var body: some View {
+        VStack(spacing: rowSpacing) {
+            if let firstRow = rows.first {
+                HStack(spacing: columnSpacing) {
+                    Color.clear
+                        .frame(width: labelWidth)
+
+                    ForEach(firstRow.cells) { cell in
+                        Text(cell.hourRangeLabel)
+                            .font(SettingsWorkbenchVisual.monoTinyFont)
+                            .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+
+            ForEach(rows) { row in
+                HStack(spacing: columnSpacing) {
+                    Text(row.weekdayTitle)
+                        .font(SettingsWorkbenchVisual.monoTinyFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                        .lineLimit(1)
+                        .frame(width: labelWidth, alignment: .leading)
+
+                    ForEach(row.cells) { cell in
+                        RoundedRectangle(cornerRadius: cellCornerRadius, style: .continuous)
+                            .fill(cellColor(cell))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: cellCornerRadius, style: .continuous)
+                                    .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+                            )
+                            .frame(maxWidth: .infinity, minHeight: cellHeight, maxHeight: cellHeight)
+                    }
+                }
+            }
+        }
+    }
+
+    private func cellColor(_ cell: VoiceInputSessionStatisticsHeatmapCell) -> Color {
+        guard cell.sessions > 0 else {
+            return SettingsWorkbenchVisual.smallCardBackground
+        }
+
+        let opacity = 0.18 + 0.64 * (Double(cell.sessions) / Double(maxSessions))
+        return SettingsWorkbenchVisual.accent.opacity(opacity)
+    }
+}
+
+private struct StatisticsCompactLengthDistributionView: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let donutSize: CGFloat
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            StatisticsLengthDonutChart(
+                buckets: snapshot.lengthBuckets,
+                size: donutSize,
+                lineWidth: 18,
+                centerSize: 50
+            )
+
+            StatisticsLengthLegend(
+                buckets: snapshot.lengthBuckets,
+                isCompact: true
+            )
+        }
+        .frame(maxWidth: .infinity, minHeight: 154)
+    }
+}
+
+private struct StatisticsLengthDistributionPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+
+    var body: some View {
+        StatisticsPanel(title: "输入长度分布") {
+            HStack(alignment: .center, spacing: 18) {
+                StatisticsLengthDonutChart(buckets: snapshot.lengthBuckets)
+                StatisticsLengthLegend(buckets: snapshot.lengthBuckets)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+private struct StatisticsLengthDonutChart: View {
+    let buckets: [VoiceInputSessionStatisticsLengthBucket]
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let centerSize: CGFloat
+
+    init(
+        buckets: [VoiceInputSessionStatisticsLengthBucket],
+        size: CGFloat = 132,
+        lineWidth: CGFloat = 26,
+        centerSize: CGFloat = 68
+    ) {
+        self.buckets = buckets
+        self.size = size
+        self.lineWidth = lineWidth
+        self.centerSize = centerSize
+    }
+
+    private var total: Int {
+        buckets.reduce(0) { $0 + $1.sessions }
+    }
+
+    private var segments: [StatisticsDonutSegment] {
+        guard total > 0 else {
+            return []
+        }
+
+        var cursor = 0.0
+        return buckets.enumerated().compactMap { index, bucket in
+            guard bucket.sessions > 0 else {
+                return nil
+            }
+
+            let start = cursor
+            cursor += Double(bucket.sessions) / Double(total)
+            return StatisticsDonutSegment(
+                id: bucket.id,
+                start: start,
+                end: cursor,
+                color: StatisticsLengthColor.color(for: index)
+            )
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Canvas { context, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = max(1, (min(size.width, size.height) - lineWidth) / 2)
+                let strokeStyle = StrokeStyle(lineWidth: lineWidth, lineCap: .butt)
+
+                if total == 0 {
+                    let rect = CGRect(
+                        x: center.x - radius,
+                        y: center.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(SettingsWorkbenchVisual.smallCardBackground),
+                        style: strokeStyle
+                    )
+                } else {
+                    for segment in segments {
+                        var path = Path()
+                        path.addArc(
+                            center: center,
+                            radius: radius,
+                            startAngle: .degrees(segment.start * 360 - 90),
+                            endAngle: .degrees(segment.end * 360 - 90),
+                            clockwise: false
+                        )
+                        context.stroke(path, with: .color(segment.color), style: strokeStyle)
+                    }
+                }
+            }
+
+            Circle()
+                .fill(SettingsWorkbenchVisual.panelBackground)
+                .frame(width: centerSize, height: centerSize)
+                .overlay(
+                    Circle()
+                        .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+                )
+
+            Text("\(total) 次")
+                .font(SettingsWorkbenchVisual.monoBadgeFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+private struct StatisticsDonutSegment: Identifiable {
+    let id: String
+    let start: Double
+    let end: Double
+    let color: Color
+}
+
+private struct StatisticsLengthLegend: View {
+    let buckets: [VoiceInputSessionStatisticsLengthBucket]
+    var isCompact = false
+
+    private var total: Int {
+        buckets.reduce(0) { $0 + $1.sessions }
+    }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 7 : 9) {
+            ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                let percent = total > 0
+                    ? Int((Double(bucket.sessions) / Double(total) * 100).rounded())
+                    : 0
+
+                HStack(spacing: isCompact ? 7 : 9) {
+                    Circle()
+                        .fill(StatisticsLengthColor.color(for: index))
+                        .frame(width: isCompact ? 8 : 10, height: isCompact ? 8 : 10)
+
+                    VStack(alignment: .leading, spacing: isCompact ? 1 : 2) {
+                        Text(bucket.title)
+                            .font(SettingsWorkbenchVisual.captionBoldFont)
+                            .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                            .lineLimit(1)
+
+                        Text(bucket.detail)
+                            .font(SettingsWorkbenchVisual.captionFont)
+                            .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text("\(percent)% · \(bucket.sessions)")
+                        .font(SettingsWorkbenchVisual.monoTinyFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private enum StatisticsLengthColor {
+    static func color(for index: Int) -> Color {
+        switch index {
+        case 0:
+            SettingsWorkbenchVisual.accent
+        case 1:
+            SettingsWorkbenchVisual.blue
+        default:
+            SettingsWorkbenchVisual.warning
+        }
+    }
+}
+
+private struct StatisticsAppContributionPanel: View {
+    let contributions: [VoiceInputSessionStatisticsContribution]
+    let metric: VoiceInputSessionStatisticsMetric
+    let selectedApp: String
+    let onSelectApp: (String) -> Void
+
+    var body: some View {
+        StatisticsPanel(title: "应用贡献") {
+            StatisticsContributionBarList(
+                contributions: contributions,
+                metric: metric,
+                selectedName: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? nil : selectedApp,
+                color: SettingsWorkbenchVisual.accent,
+                onSelect: onSelectApp
+            )
+        }
+    }
+}
+
+private struct StatisticsHourRangePanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+
+    var body: some View {
+        StatisticsPanel(title: "活跃时段") {
+            let hourRanges = Array(snapshot.hourRanges.sorted { lhs, rhs in
+                if lhs.sessions != rhs.sessions {
+                    return lhs.sessions > rhs.sessions
+                }
+                return lhs.startHour < rhs.startHour
+            }.prefix(4))
+
+            StatisticsHourRangeBarList(hourRanges: hourRanges)
+        }
+    }
+}
+
+private struct StatisticsProviderPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+
+    var body: some View {
+        StatisticsPanel(title: "模型来源") {
+            StatisticsContributionBarList(
+                contributions: Array(snapshot.providerContributions.prefix(4)),
+                metric: .sessions,
+                selectedName: nil,
+                color: SettingsWorkbenchVisual.blue,
+                onSelect: nil
+            )
+        }
+    }
+}
+
+private struct StatisticsRhythmPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+
+    var body: some View {
+        StatisticsPanel(title: "使用节奏") {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
+                StatisticsDetailCard(
+                    value: "\(snapshot.rhythm.activeDayCount)",
+                    label: "活跃天数"
+                )
+                StatisticsDetailCard(
+                    value: snapshot.rhythm.busiestDayTitle,
+                    label: "最高单日"
+                )
+                StatisticsDetailCard(
+                    value: "\(snapshot.rhythm.peakHourSharePercent)%",
+                    label: "高峰占比"
+                )
+                StatisticsDetailCard(
+                    value: "\(snapshot.rhythm.appConcentrationPercent)%",
+                    label: "应用集中度"
+                )
+            }
+        }
+    }
+}
+
+private struct StatisticsInsightPanel: View {
+    let snapshot: VoiceInputSessionStatisticsSnapshot
+    let selectedApp: String
+    let period: VoiceInputSessionStatisticsPeriod
+
+    private var topHour: VoiceInputSessionStatisticsHourRange? {
+        snapshot.hourRanges.sorted { lhs, rhs in
+            if lhs.sessions != rhs.sessions {
+                return lhs.sessions > rhs.sessions
+            }
+            return lhs.startHour < rhs.startHour
+        }
+        .first
+    }
+
+    var body: some View {
+        StatisticsPanel(title: "本期观察") {
+            WorkbenchStatusPill(
+                selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? period.title : selectedApp,
+                color: SettingsWorkbenchVisual.neutral
+            )
+        } content: {
+            VStack(spacing: 0) {
+                StatisticsInsightRow(
+                    value: snapshot.appContributions.first?.name ?? "--",
+                    label: selectedApp == VoiceInputSessionStatisticsDashboardSnapshot.allAppsTitle ? "最常用目标应用" : "当前目标应用",
+                    badge: "\(snapshot.appContributions.first?.words ?? 0) 字"
+                )
+                StatisticsInsightRow(
+                    value: topHour?.label ?? "--",
+                    label: "最高频时段",
+                    badge: "\(topHour?.sessions ?? 0) 次"
+                )
+                StatisticsInsightRow(
+                    value: snapshot.providerContributions.first?.name ?? "--",
+                    label: "主要模型来源",
+                    badge: "\(snapshot.providerContributions.first?.sessions ?? 0) 次"
+                )
+            }
+        }
+    }
+}
+
+private struct StatisticsInsightRow: View {
+    let value: String
+    let label: String
+    let badge: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(SettingsWorkbenchVisual.panelTitleFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                Text(label)
+                    .font(SettingsWorkbenchVisual.captionFont)
+                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            WorkbenchStatusPill(badge, color: SettingsWorkbenchVisual.neutral)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+}
+
+private struct StatisticsContributionBarList: View {
+    let contributions: [VoiceInputSessionStatisticsContribution]
+    let metric: VoiceInputSessionStatisticsMetric
+    let selectedName: String?
+    let color: Color
+    let onSelect: ((String) -> Void)?
+    private let barTrackWidth = StatisticsDashboardLayoutPolicy.resizeOptimized.barTrackWidth
+
+    private var maxValue: Double {
+        max(1, contributions.map { metric.value(in: $0) }.max() ?? 0)
+    }
+
+    var body: some View {
+        if contributions.isEmpty {
+            StatisticsEmptyText()
+        } else {
+            VStack(spacing: 12) {
+                ForEach(Array(contributions.prefix(6))) { contribution in
+                    let isSelected = contribution.name == selectedName
+                    if let onSelect {
+                        Button {
+                            onSelect(contribution.name)
+                        } label: {
+                            row(contribution, isSelected: isSelected)
+                        }
+                        .buttonStyle(.plain)
+                        .pointingHandCursor()
+                    } else {
+                        row(contribution, isSelected: isSelected)
+                    }
+                }
+            }
+        }
+    }
+
+    private func row(
+        _ contribution: VoiceInputSessionStatisticsContribution,
+        isSelected: Bool
+    ) -> some View {
+        let value = metric.value(in: contribution)
+        let ratio = value / maxValue
+
+        return HStack(spacing: 10) {
+            Text(contribution.name)
+                .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                .foregroundStyle(isSelected ? SettingsWorkbenchVisual.accentInk : SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(isSelected ? SettingsWorkbenchVisual.accentSoft : SettingsWorkbenchVisual.smallCardBackground)
+
+                Capsule()
+                    .fill(color)
+                    .frame(width: value > 0 ? max(5, barTrackWidth * CGFloat(ratio)) : 0)
+            }
+            .frame(width: barTrackWidth, height: 8)
+
+            Text(metric.valueTitle(for: contribution))
+                .font(SettingsWorkbenchVisual.monoTinyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                .lineLimit(1)
+                .frame(width: 58, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity, minHeight: 22)
+    }
+}
+
+private struct StatisticsHourRangeBarList: View {
+    let hourRanges: [VoiceInputSessionStatisticsHourRange]
+    private let barTrackWidth = StatisticsDashboardLayoutPolicy.resizeOptimized.barTrackWidth
+
+    private var maxSessions: Double {
+        max(1, Double(hourRanges.map(\.sessions).max() ?? 0))
+    }
+
+    var body: some View {
+        if hourRanges.isEmpty {
+            StatisticsEmptyText()
+        } else {
+            VStack(spacing: 12) {
+                ForEach(hourRanges) { hourRange in
+                    let ratio = Double(hourRange.sessions) / maxSessions
+
+                    HStack(spacing: 10) {
+                        Text(hourRange.label)
+                            .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                            .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                            .lineLimit(1)
+                            .frame(width: 54, alignment: .leading)
+
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(SettingsWorkbenchVisual.smallCardBackground)
+
+                            Capsule()
+                                .fill(SettingsWorkbenchVisual.warning)
+                                .frame(
+                                    width: hourRange.sessions > 0
+                                        ? max(5, barTrackWidth * CGFloat(ratio))
+                                        : 0
+                                )
+                        }
+                        .frame(width: barTrackWidth, height: 8)
+
+                        Text("\(hourRange.sessions) 次")
+                            .font(SettingsWorkbenchVisual.monoTinyFont)
+                            .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                            .lineLimit(1)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct StatisticsDetailCard: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Text(label)
+                .font(SettingsWorkbenchVisual.captionFont)
+                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .background(
+            SettingsWorkbenchVisual.softPreviewBackground,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+        )
+    }
+}
+
+private struct StatisticsEmptyText: View {
+    var body: some View {
+        Text("暂无记录")
+            .font(SettingsWorkbenchVisual.captionFont)
+            .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+            .frame(maxWidth: .infinity, minHeight: 46)
+    }
+}
+
 private struct VoiceInputSessionsPanel: View {
     let sessions: [VoiceInputSessionSnapshot]
     @Binding var currentPage: Int
@@ -1957,10 +3087,86 @@ private extension SettingsWorkbenchSection {
         switch self {
         case .overview:
             "house"
-        case .settings:
-            "gearshape"
         case .model:
             "cpu"
+        case .statistics:
+            "chart.bar"
+        case .settings:
+            "gearshape"
         }
+    }
+}
+
+private extension VoiceInputSessionStatisticsMetric {
+    var chartColor: Color {
+        switch self {
+        case .sessions:
+            SettingsWorkbenchVisual.blue
+        case .words:
+            SettingsWorkbenchVisual.accent
+        case .duration:
+            SettingsWorkbenchVisual.warning
+        }
+    }
+
+    func value(in point: VoiceInputSessionStatisticsDailyPoint) -> Double {
+        switch self {
+        case .sessions:
+            Double(point.sessions)
+        case .words:
+            Double(point.words)
+        case .duration:
+            point.durationSeconds
+        }
+    }
+
+    func value(in contribution: VoiceInputSessionStatisticsContribution) -> Double {
+        switch self {
+        case .sessions:
+            Double(contribution.sessions)
+        case .words:
+            Double(contribution.words)
+        case .duration:
+            contribution.durationSeconds
+        }
+    }
+
+    func valueTitle(for contribution: VoiceInputSessionStatisticsContribution) -> String {
+        switch self {
+        case .sessions:
+            "\(contribution.sessions) 次"
+        case .words:
+            "\(StatisticsFormat.integer(contribution.words)) 字"
+        case .duration:
+            StatisticsFormat.duration(contribution.durationSeconds)
+        }
+    }
+}
+
+private enum StatisticsFormat {
+    static func integer(_ value: Int) -> String {
+        guard value >= 1000 else {
+            return "\(value)"
+        }
+
+        return NumberFormatter.localizedString(
+            from: NSNumber(value: value),
+            number: .decimal
+        )
+    }
+
+    static func duration(_ seconds: Double) -> String {
+        let roundedSeconds = max(0, Int(seconds.rounded()))
+        guard roundedSeconds >= 60 else {
+            return "\(roundedSeconds) 秒"
+        }
+
+        let minutes = roundedSeconds / 60
+        let remainingSeconds = roundedSeconds % 60
+        if remainingSeconds == 0 {
+            return "\(minutes) 分"
+        }
+
+        return "\(minutes)分\(remainingSeconds)秒"
     }
 }
