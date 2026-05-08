@@ -200,18 +200,11 @@ public enum TranscriptionCredentialError: LocalizedError, Equatable, Sendable {
     case deleteFailed(message: String)
 
     public var errorDescription: String? {
-        switch self {
-        case .emptyAPIKey:
-            "ASR API Key 不能为空。"
-        case .emptyAppIDAccessToken:
-            "火山引擎 App ID 和 Access Token 不能为空。"
-        case .readFailed(let message):
-            "读取 ASR 凭证失败：\(message)"
-        case .storeFailed(let message):
-            "保存 ASR 凭证失败：\(message)"
-        case .deleteFailed(let message):
-            "删除 ASR 凭证失败：\(message)"
-        }
+        localizedDescription(strings: VocoStrings())
+    }
+
+    public func localizedDescription(strings: VocoStrings) -> String {
+        strings.credentials.errorDescription(for: self)
     }
 }
 

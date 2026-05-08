@@ -841,6 +841,28 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorSessionStoreFailureUsesSelectedLanguage() {
+        let preferences = FakeAppPreferenceStore(
+            voiceInputSessionHistoryEnabled: false,
+            appLanguage: .en
+        )
+        let sessionStore = FakeVoiceInputSessionStore(
+            loadError: VoiceInputSessionStoreError.loadFailed(message: "database unavailable")
+        )
+        let coordinator = AppCoordinator(
+            appPreferenceStore: preferences,
+            voiceInputSessionStore: sessionStore
+        )
+
+        coordinator.setVoiceInputSessionHistoryEnabled(true)
+
+        XCTAssertEqual(
+            coordinator.lastErrorMessage,
+            "Unable to load session history: database unavailable"
+        )
+    }
+
+    @MainActor
     func testCoordinatorReadsInitialAppLanguageFromPreferences() {
         let store = FakeAppPreferenceStore(appLanguage: .en)
         let coordinator = AppCoordinator(appPreferenceStore: store)
@@ -1550,23 +1572,43 @@ private final class FakeVoiceInputSessionStore: VoiceInputSessionStoring {
     private(set) var savedSessions: [VoiceInputSessionSnapshot] = []
     private(set) var loadLimitRequests: [Int] = []
     private(set) var trimLimitRequests: [Int?] = []
+    var loadError: Error?
+    var saveError: Error?
+    var trimError: Error?
 
-    init(storedSessions: [VoiceInputSessionSnapshot] = []) {
+    init(
+        storedSessions: [VoiceInputSessionSnapshot] = [],
+        loadError: Error? = nil,
+        saveError: Error? = nil,
+        trimError: Error? = nil
+    ) {
         self.storedSessions = storedSessions
+        self.loadError = loadError
+        self.saveError = saveError
+        self.trimError = trimError
     }
 
     func loadRecentSessions(limit: Int) throws -> [VoiceInputSessionSnapshot] {
         loadLimitRequests.append(limit)
+        if let loadError {
+            throw loadError
+        }
         return Array(storedSessions.prefix(max(0, limit)))
     }
 
     func save(_ session: VoiceInputSessionSnapshot) throws {
+        if let saveError {
+            throw saveError
+        }
         savedSessions.append(session)
         storedSessions.insert(session, at: 0)
     }
 
     func trimRecentSessions(limit: Int?) throws {
         trimLimitRequests.append(limit)
+        if let trimError {
+            throw trimError
+        }
         if let limit {
             storedSessions = Array(storedSessions.prefix(limit))
         }

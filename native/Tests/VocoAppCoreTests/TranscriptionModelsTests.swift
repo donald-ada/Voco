@@ -44,6 +44,24 @@ final class TranscriptionModelsTests: XCTestCase {
         XCTAssertFalse(TranscriptionProviderError.authentication(providerName: "火山引擎", message: "invalid token").isRetryable)
     }
 
+    func testProviderErrorCanRenderEnglishDescription() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            TranscriptionProviderError.notConfigured.localizedDescription(strings: strings),
+            "Model not configured: configure Volcengine credentials in Settings first."
+        )
+        XCTAssertEqual(
+            TranscriptionProviderError.authentication(providerName: "火山引擎", message: "invalid token")
+                .localizedDescription(strings: strings),
+            "Volcengine authentication failed: invalid token"
+        )
+        XCTAssertEqual(
+            TranscriptionProviderError.notConfigured.localizedDescription,
+            "模型未配置：请先在设置中配置火山引擎凭证。"
+        )
+    }
+
     func testTranscriptSnapshotAppendsNonEmptyPartials() {
         let base = TranscriptSnapshot(
             finalText: "",

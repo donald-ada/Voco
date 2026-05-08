@@ -409,20 +409,7 @@ public enum TranscriptionProviderError: LocalizedError, Equatable, Sendable {
     case cancelled
 
     public var errorDescription: String? {
-        switch self {
-        case .notConfigured:
-            "模型未配置：请先在设置中配置火山引擎凭证。"
-        case .emptyAudio:
-            "转写失败：没有可用音频。"
-        case .authentication(let providerName, let message):
-            "\(providerName)认证失败：\(message)"
-        case .transport(let providerName, let message, _):
-            "\(providerName)网络错误：\(message)"
-        case .provider(let providerName, let message):
-            "\(providerName)转写失败：\(message)"
-        case .cancelled:
-            "转写已取消。"
-        }
+        localizedDescription(strings: VocoStrings())
     }
 
     public var isRetryable: Bool {
@@ -434,5 +421,9 @@ public enum TranscriptionProviderError: LocalizedError, Equatable, Sendable {
         case .notConfigured, .authentication, .cancelled:
             false
         }
+    }
+
+    public func localizedDescription(strings: VocoStrings) -> String {
+        strings.transcription.errorDescription(for: self)
     }
 }

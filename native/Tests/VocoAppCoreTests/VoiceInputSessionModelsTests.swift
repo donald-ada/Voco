@@ -8,6 +8,25 @@ final class VoiceInputSessionModelsTests: XCTestCase {
         XCTAssertEqual(page.visibleRangeTitle(strings: VocoStrings(language: .en)), "0 / 0 items")
     }
 
+    func testVoiceInputSessionStoreErrorsCanRenderEnglishDescription() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            VoiceInputSessionStoreError.loadFailed(message: "database unavailable")
+                .localizedDescription(strings: strings),
+            "Unable to load session history: database unavailable"
+        )
+        XCTAssertEqual(
+            VoiceInputSessionStoreError.saveFailed(message: "disk full")
+                .localizedDescription(strings: strings),
+            "Unable to save session history: disk full"
+        )
+        XCTAssertEqual(
+            VoiceInputSessionStoreError.loadFailed(message: "database unavailable").localizedDescription,
+            "无法加载会话记录：database unavailable"
+        )
+    }
+
     func testSessionSnapshotUsesRawTranscriptPreviewWithoutGeneratedTitle() {
         let session = VoiceInputSessionSnapshot(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

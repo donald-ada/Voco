@@ -97,20 +97,11 @@ public enum TextInjectionError: LocalizedError, Equatable, Sendable {
     case eventPostFailed(message: String)
 
     public var errorDescription: String? {
-        switch self {
-        case .accessibilityPermissionMissing:
-            "无法插入文本：请先在系统设置中允许 Voco 使用辅助功能。"
-        case .noSupportedStrategy(let targetAppName):
-            "无法插入文本：\(targetAppName ?? "当前 App") 没有可用的文本插入方式。"
-        case .insertionFailed(let strategy, let message):
-            "\(strategy.title)失败：\(message)"
-        case .clipboardUnavailable(let message):
-            "剪贴板不可用：\(message)"
-        case .clipboardRestoreFailed(let message):
-            "剪贴板回退后恢复原剪贴板失败：\(message)"
-        case .eventPostFailed(let message):
-            "Unicode 事件发送失败：\(message)"
-        }
+        localizedDescription(strings: VocoStrings())
+    }
+
+    public func localizedDescription(strings: VocoStrings) -> String {
+        strings.injection.errorDescription(for: self)
     }
 }
 

@@ -115,7 +115,7 @@ public final class AppCoordinator: ObservableObject {
                     nil
                 )
             } catch {
-                let message = Self.sessionStoreFailureMessage(prefix: "无法加载会话记录", error: error)
+                let message = Self.sessionStoreFailureMessage(kind: .load, error: error, strings: initialStrings)
                 NSLog("Voco: \(message)")
                 initialSessionLoadResult = ([], message)
             }
@@ -480,8 +480,8 @@ public final class AppCoordinator: ObservableObject {
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
-            let message = error.localizedDescription
-            transcriptionCredentials = .failed(provider: .volcengine, message: message)
+            let message = localizedErrorDescription(error)
+            transcriptionCredentials = .failed(provider: .volcengine, message: message, strings: strings)
             lastErrorMessage = message
         }
     }
@@ -492,8 +492,8 @@ public final class AppCoordinator: ObservableObject {
             transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
             lastErrorMessage = nil
         } catch {
-            let message = error.localizedDescription
-            transcriptionCredentials = .failed(provider: .volcengine, message: message)
+            let message = localizedErrorDescription(error)
+            transcriptionCredentials = .failed(provider: .volcengine, message: message, strings: strings)
             lastErrorMessage = message
         }
     }
@@ -670,7 +670,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     private func failFromWorkflowError(_ error: Error) {
-        lastErrorMessage = error.localizedDescription
+        lastErrorMessage = localizedErrorDescription(error)
         if error is TranscriptionProviderError {
             status = .providerOffline
         } else {
@@ -718,7 +718,7 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = Self.sessionStoreFailureMessage(prefix: "无法保存会话记录", error: error)
+            let message = sessionStoreFailureMessage(kind: .save, error: error)
             NSLog("Voco: \(message)")
             return message
         }
@@ -739,7 +739,7 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = Self.sessionStoreFailureMessage(prefix: "无法更新会话记录保留策略", error: error)
+            let message = sessionStoreFailureMessage(kind: .updateRetention, error: error)
             NSLog("Voco: \(message)")
             return message
         }
@@ -752,13 +752,36 @@ public final class AppCoordinator: ObservableObject {
             )
             return nil
         } catch {
-            let message = Self.sessionStoreFailureMessage(prefix: "无法加载会话记录", error: error)
+            let message = sessionStoreFailureMessage(kind: .load, error: error)
             NSLog("Voco: \(message)")
             return message
         }
     }
 
-    private static func sessionStoreFailureMessage(prefix: String, error: Error) -> String {
+    private func localizedErrorDescription(_ error: Error) -> String {
+        switch error {
+        case let providerError as TranscriptionProviderError:
+            providerError.localizedDescription(strings: strings)
+        case let injectionError as TextInjectionError:
+            injectionError.localizedDescription(strings: strings)
+        case let credentialError as TranscriptionCredentialError:
+            credentialError.localizedDescription(strings: strings)
+        case let sessionStoreError as VoiceInputSessionStoreError:
+            sessionStoreError.localizedDescription(strings: strings)
+        default:
+            error.localizedDescription
+        }
+    }
+
+    private func sessionStoreFailureMessage(kind: VoiceInputSessionStoreFailureKind, error: Error) -> String {
+        Self.sessionStoreFailureMessage(kind: kind, error: error, strings: strings)
+    }
+
+    private static func sessionStoreFailureMessage(
+        kind: VoiceInputSessionStoreFailureKind,
+        error: Error,
+        strings: VocoStrings
+    ) -> String {
         let detail: String
         switch error {
         case let VoiceInputSessionStoreError.loadFailed(message):
@@ -769,7 +792,20 @@ public final class AppCoordinator: ObservableObject {
             detail = error.localizedDescription
         }
 
-        return "\(prefix)：\(detail)"
+        switch kind {
+        case .load:
+            return strings.sessions.loadFailureMessage(detail: detail)
+        case .save:
+            return strings.sessions.saveFailureMessage(detail: detail)
+        case .updateRetention:
+            return strings.sessions.updateRetentionFailureMessage(detail: detail)
+        }
+    }
+
+    private enum VoiceInputSessionStoreFailureKind {
+        case load
+        case save
+        case updateRetention
     }
 }
 

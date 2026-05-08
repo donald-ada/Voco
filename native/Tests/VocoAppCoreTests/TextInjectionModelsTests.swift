@@ -80,4 +80,16 @@ final class TextInjectionModelsTests: XCTestCase {
             "剪贴板回退后恢复原剪贴板失败：write failed"
         )
     }
+
+    func testTextInjectionErrorCanRenderEnglishDescription() {
+        XCTAssertEqual(
+            TextInjectionError.accessibilityPermissionMissing
+                .localizedDescription(strings: VocoStrings(language: .en)),
+            "Unable to insert text: allow Voco to use Accessibility in System Settings first."
+        )
+        XCTAssertEqual(
+            TextInjectionError.accessibilityPermissionMissing.localizedDescription,
+            "无法插入文本：请先在系统设置中允许 Voco 使用辅助功能。"
+        )
+    }
 }

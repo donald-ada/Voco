@@ -81,6 +81,35 @@ final class TranscriptionCredentialModelsTests: XCTestCase {
         )
     }
 
+    func testCredentialErrorsCanRenderEnglishDescription() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(
+            TranscriptionCredentialError.emptyAPIKey.localizedDescription(strings: strings),
+            "ASR API Key cannot be empty."
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.emptyAppIDAccessToken.localizedDescription(strings: strings),
+            "Volcengine App ID and Access Token cannot be empty."
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.readFailed(message: "read failed").localizedDescription(strings: strings),
+            "Unable to read ASR credentials: read failed"
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.storeFailed(message: "OSStatus -50").localizedDescription(strings: strings),
+            "Unable to save ASR credentials: OSStatus -50"
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.deleteFailed(message: "delete failed").localizedDescription(strings: strings),
+            "Unable to delete ASR credentials: delete failed"
+        )
+        XCTAssertEqual(
+            TranscriptionCredentialError.storeFailed(message: "OSStatus -50").localizedDescription,
+            "保存 ASR 凭证失败：OSStatus -50"
+        )
+    }
+
     @MainActor
     func testInMemoryCredentialStoreSavesAndDeletesKey() async throws {
         let store = InMemoryTranscriptionCredentialStore()

@@ -120,12 +120,11 @@ public enum VoiceInputSessionStoreError: LocalizedError, Sendable {
     case saveFailed(message: String)
 
     public var errorDescription: String? {
-        switch self {
-        case let .loadFailed(message):
-            "无法加载会话记录：\(message)"
-        case let .saveFailed(message):
-            "无法保存会话记录：\(message)"
-        }
+        localizedDescription(strings: VocoStrings())
+    }
+
+    public func localizedDescription(strings: VocoStrings) -> String {
+        strings.sessions.storeErrorDescription(for: self)
     }
 }
 
