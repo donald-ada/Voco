@@ -6,31 +6,13 @@ on:
   pull_request:
 
 jobs:
-  rust:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14]
-    runs-on: ${{ matrix.os }}
+  native:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: fmt
-        run: cargo fmt --all -- --check
-      - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: test
-        run: cargo test --workspace --all-targets
-      - name: build release
-        run: cargo build --release --workspace
-      - name: swift test
-        run: swift test
-        working-directory: hud
-      - name: swift build
-        run: swift build
-        working-directory: hud
-      - name: app bundle smoke
-        run: packaging/tests/app_bundle_smoke.sh
+      - name: Swift build
+        run: swift build --package-path native
+      - name: Swift test
+        run: swift test --package-path native
+      - name: Native app bundle smoke
+        run: packaging/tests/native_app_bundle_smoke.sh

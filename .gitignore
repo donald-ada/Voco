@@ -1,14 +1,11 @@
 /target
 /dist/
-**/*.rs.bk
-Cargo.lock.bak
 .DS_Store
 .idea/
 .vscode/
 *.swp
 /tmp
 /build
-/hud/.build/
 /native/.build/
 .superpowers/
 *.log

@@ -1,14 +1,14 @@
 # packaging/
 
-Packaging templates and development bundle scripts.
+Native packaging scripts for the Swift/SwiftUI Voco app.
 
-## Native App Shell
+## Native App Bundle
 
 The native Swift/SwiftUI app bundle and DMG are the user-facing install path.
 The native app uses macOS Login Items and must not install the legacy
 `~/Library/LaunchAgents/com.voco.daemon.plist` plist.
 
-Build the native Swift/SwiftUI app shell:
+Build the native Swift/SwiftUI app bundle:
 
 ```bash
 packaging/build_native_app_bundle.sh --profile debug
@@ -138,107 +138,3 @@ When present, Settings shows a migration warning and an explicit removal action.
 The cleanup path removes only that known user-level plist, never touches
 `/Library/LaunchAgents`, and never requires `sudo`. If removal fails, the app
 surfaces the exact path and the underlying OS error.
-
-## Legacy Asset Removal Gate
-
-The older LaunchAgent and development app bundle workflows remain documented
-below as archived/development-only references. Do not delete or archive the
-legacy CLI, daemon, LaunchAgent template, legacy app bundle script, or Swift HUD
-helper packaging until all native feature-parity items and Task 8 manual UX
-verification pass:
-
-```text
-native microphone capture
-native hotkey recording workflow
-native Volcengine model
-native text injection
-native HUD overlay
-native Keychain credentials
-native Settings and Diagnostics
-native launch-at-login
-native release packaging
-Task 8 manual UX verification
-```
-
-## Legacy LaunchAgent (Development-Only)
-
-`com.voco.daemon.plist.tmpl` is rendered by:
-
-```bash
-target/debug/voco daemon install
-```
-
-The rendered plist is written to:
-
-```text
-~/Library/LaunchAgents/com.voco.daemon.plist
-```
-
-Template variables:
-
-```text
-{{VOCO_DAEMON_PATH}} absolute path to voco-daemon
-{{HOME}}             user home directory
-{{WORKING_DIR}}      daemon working directory
-```
-
-Phase 6-A uses a user-level LaunchAgent and does not require `sudo`.
-
-## Legacy Development App Bundle (Development-Only)
-
-Build an unsigned local `Voco.app` bundle:
-
-```bash
-packaging/build_app_bundle.sh --profile debug
-```
-
-The generated bundle is:
-
-```text
-target/Voco.app
-```
-
-It contains:
-
-```text
-Contents/Info.plist
-Contents/MacOS/voco
-Contents/MacOS/voco-daemon
-Contents/MacOS/voco-hud
-```
-
-Install the generated bundle for the current user:
-
-```bash
-target/debug/voco app install --app-bundle target/Voco.app
-```
-
-The command copies the bundle to:
-
-```text
-~/Applications/Voco.app
-```
-
-and renders `~/Library/LaunchAgents/com.voco.daemon.plist` so
-`ProgramArguments:0` points at:
-
-```text
-~/Applications/Voco.app/Contents/MacOS/voco-daemon
-```
-
-For development-only plist rendering without copying the app, this lower-level
-command remains available:
-
-```bash
-target/debug/voco daemon install --app-bundle target/Voco.app
-```
-
-Run the bundle smoke test:
-
-```bash
-packaging/tests/app_bundle_smoke.sh
-```
-
-Native signing, notarization, and DMG creation are handled by the native app
-commands above. Legacy pkg creation and `/Applications` installation remain
-deferred.
