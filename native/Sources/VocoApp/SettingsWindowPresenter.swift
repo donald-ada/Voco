@@ -67,7 +67,7 @@ final class SettingsWindowPresenter {
             backing: .buffered,
             defer: false
         )
-        settingsWindow.title = "Voco 设置"
+        settingsWindow.title = coordinator.strings.app.settingsWindowTitle
         settingsWindow.titleVisibility = .hidden
         settingsWindow.titlebarAppearsTransparent = true
         settingsWindow.isMovableByWindowBackground = false
