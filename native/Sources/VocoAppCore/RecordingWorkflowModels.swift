@@ -49,11 +49,18 @@ public extension TranscriptSnapshot {
 public struct RecordingWorkflowResult: Equatable, Sendable {
     public let audio: CapturedAudioSnapshot
     public let transcript: TranscriptSnapshot
+    public let postProcessing: TranscriptPostProcessingResult
     public let injection: TextInjectionSnapshot
 
-    public init(audio: CapturedAudioSnapshot, transcript: TranscriptSnapshot, injection: TextInjectionSnapshot) {
+    public init(
+        audio: CapturedAudioSnapshot,
+        transcript: TranscriptSnapshot,
+        postProcessing: TranscriptPostProcessingResult? = nil,
+        injection: TextInjectionSnapshot
+    ) {
         self.audio = audio
         self.transcript = transcript
+        self.postProcessing = postProcessing ?? .unchanged(transcript.finalText)
         self.injection = injection
     }
 }
@@ -165,16 +172,19 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     private let audioCapture: any AudioCaptureProviding
     private let transcription: any TranscriptionProviding
     private let textInjection: any TextInjectionProviding
+    private let postProcessingSettingsProvider: @MainActor () -> SkillSettings
     private var currentStreamingSession: (any RealtimeTranscriptionSession)?
 
     public init(
         audioCapture: any AudioCaptureProviding,
         transcription: any TranscriptionProviding,
-        textInjection: any TextInjectionProviding
+        textInjection: any TextInjectionProviding,
+        postProcessingSettingsProvider: @escaping @MainActor () -> SkillSettings = { .default }
     ) {
         self.audioCapture = audioCapture
         self.transcription = transcription
         self.textInjection = textInjection
+        self.postProcessingSettingsProvider = postProcessingSettingsProvider
     }
 
     public var transcriptionStatus: TranscriptionProviderStatus {
@@ -242,8 +252,17 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
             }
 
             transcript = emptyTranscript()
-            let insertion = try await insertionSnapshot(for: transcript)
-            return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)
+            let postProcessing = TranscriptPostProcessingPipeline(settings: postProcessingSettingsProvider()).process(
+                transcript.finalText,
+                context: TranscriptPostProcessingContext(targetAppName: nil)
+            )
+            let insertion = try await insertionSnapshot(for: postProcessing.processedText)
+            return RecordingWorkflowResult(
+                audio: audio,
+                transcript: transcript,
+                postProcessing: postProcessing,
+                injection: insertion
+            )
         }
 
         if let streamingSession = currentStreamingSession {
@@ -252,9 +271,18 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         } else {
             transcript = try await transcription.transcribe(audio, progress: progress)
         }
-        let insertion = try await insertionSnapshot(for: transcript)
+        let postProcessing = TranscriptPostProcessingPipeline(settings: postProcessingSettingsProvider()).process(
+            transcript.finalText,
+            context: TranscriptPostProcessingContext(targetAppName: nil)
+        )
+        let insertion = try await insertionSnapshot(for: postProcessing.processedText)
 
-        return RecordingWorkflowResult(audio: audio, transcript: transcript, injection: insertion)
+        return RecordingWorkflowResult(
+            audio: audio,
+            transcript: transcript,
+            postProcessing: postProcessing,
+            injection: insertion
+        )
     }
 
     private static func isTranscribableAudio(_ audio: CapturedAudioSnapshot) -> Bool {
@@ -284,13 +312,13 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         }
     }
 
-    private func insertionSnapshot(for transcript: TranscriptSnapshot) async throws -> TextInjectionSnapshot {
-        let trimmedText = transcript.finalText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func insertionSnapshot(for processedText: String) async throws -> TextInjectionSnapshot {
+        let trimmedText = processedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             return .skippedEmpty
         }
 
-        return try await textInjection.insert(transcript.finalText)
+        return try await textInjection.insert(processedText)
     }
 }
 

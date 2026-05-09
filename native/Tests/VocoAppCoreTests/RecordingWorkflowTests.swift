@@ -57,6 +57,50 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testStopRecordingPostProcessesTranscriptBeforeInsertion() async throws {
+        let audio = CapturedAudioSnapshot(
+            durationSeconds: 1,
+            sampleRate: 16_000,
+            peakAmplitude: 0.1,
+            pcm16Samples: [1, 2, 3]
+        )
+        let audioCapture = FakeAudioCaptureEngine(capturedAudio: audio)
+        let transcription = StaticTranscriptionProvider(
+            transcript: TranscriptSnapshot(
+                finalText: "嗯今天开始",
+                partials: [],
+                providerName: "TestProvider",
+                latencyMilliseconds: 12
+            )
+        )
+        let injection = FakeTextInjectionEngine()
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: injection,
+            postProcessingSettingsProvider: {
+                SkillSettings(
+                    isEnabled: true,
+                    fillerCleanup: FillerCleanupSettings(
+                        isEnabled: true,
+                        rules: [
+                            FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, isEnabled: true, order: 0)
+                        ]
+                    )
+                )
+            }
+        )
+
+        try await workflow.startRecording()
+        let result = try await workflow.stopRecording()
+
+        XCTAssertEqual(injection.requests, ["今天开始"])
+        XCTAssertEqual(result.transcript.finalText, "嗯今天开始")
+        XCTAssertEqual(result.postProcessing.originalText, "嗯今天开始")
+        XCTAssertEqual(result.postProcessing.processedText, "今天开始")
+    }
+
+    @MainActor
     func testStopRecordingSkipsInjectionForEmptyFinalText() async throws {
         let transcript = TranscriptSnapshot(
             finalText: " \n ",
