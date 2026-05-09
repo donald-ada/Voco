@@ -2910,10 +2910,37 @@ private struct VoiceInputSessionRow: View {
     }
 }
 
+struct VoiceInputSessionDetailSummary: Equatable {
+    let processedTextTitle: String
+    let processedText: String
+    let rawTextTitle: String
+    let rawText: String
+    let matchedRulesTitle: String
+    let matchedRules: [String]
+
+    init(session: VoiceInputSessionSnapshot, strings: VocoStrings) {
+        self.processedTextTitle = strings.skills.processedTextTitle
+        self.processedText = session.transcriptText
+        self.rawTextTitle = strings.language == .zhHans ? "原始转写" : "Raw Transcript"
+        self.rawText = session.rawTranscriptText
+        self.matchedRulesTitle = strings.skills.matchedRulesTitle
+        self.matchedRules = session.postProcessingDiagnostics.map { diagnostic in
+            let replacement = diagnostic.replacementText.isEmpty
+                ? strings.skills.replacementEmptyTitle
+                : diagnostic.replacementText
+            return "\(diagnostic.ruleDisplayName)：\(diagnostic.matchedText) -> \(replacement) x\(diagnostic.matchCount)"
+        }
+    }
+}
+
 private struct VoiceInputSessionDetailSheet: View {
     let session: VoiceInputSessionSnapshot
     let strings: VocoStrings
     @Environment(\.dismiss) private var dismiss
+
+    private var summary: VoiceInputSessionDetailSummary {
+        VoiceInputSessionDetailSummary(session: session, strings: strings)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2954,16 +2981,62 @@ private struct VoiceInputSessionDetailSheet: View {
             .padding(.top, 18)
 
             ScrollView {
-                Text(session.transcriptText)
-                    .font(SettingsWorkbenchVisual.bodyFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                    .lineSpacing(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
+                VStack(alignment: .leading, spacing: 18) {
+                    VoiceInputSessionDetailTextBlock(
+                        title: summary.processedTextTitle,
+                        text: summary.processedText
+                    )
+
+                    VoiceInputSessionDetailTextBlock(
+                        title: summary.rawTextTitle,
+                        text: summary.rawText
+                    )
+
+                    if !summary.matchedRules.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(summary.matchedRulesTitle)
+                                .font(SettingsWorkbenchVisual.caption2BoldFont)
+                                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(summary.matchedRules.enumerated()), id: \.offset) { _, rule in
+                                    Text(rule)
+                                        .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                                        .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(22)
             }
         }
         .frame(width: 680, height: 460)
         .background(SettingsWorkbenchVisual.panelBackground)
+    }
+}
+
+private struct VoiceInputSessionDetailTextBlock: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(SettingsWorkbenchVisual.caption2BoldFont)
+                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+
+            Text(text)
+                .font(SettingsWorkbenchVisual.bodyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineSpacing(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
