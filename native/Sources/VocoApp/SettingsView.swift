@@ -90,7 +90,7 @@ struct SettingsView: View {
         case .model:
             modelWorkbenchSection
         case .skills:
-            Text(strings.skills.title)
+            SettingsSkillsView(coordinator: coordinator, strings: strings)
         case .statistics:
             statisticsSection
         case .settings:
@@ -946,7 +946,7 @@ struct SettingsView: View {
     }
 }
 
-private enum SettingsWorkbenchVisual {
+enum SettingsWorkbenchVisual {
     static let primaryText = rgb(0x16, 0x17, 0x16)
     static let secondaryText = rgb(0x66, 0x6a, 0x64)
     static let tertiaryText = rgb(0x8a, 0x8e, 0x87)
@@ -1112,7 +1112,7 @@ private struct SettingsWorkbenchPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-private struct SettingsWorkbenchSecondaryButtonStyle: ButtonStyle {
+struct SettingsWorkbenchSecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
