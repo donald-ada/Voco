@@ -129,6 +129,7 @@ final class RecordingWorkflowTests: XCTestCase {
             postProcessingSettingsProvider: { settings.value }
         )
 
+        try await workflow.startRecording()
         settings.value = SkillSettings(
             isEnabled: true,
             fillerCleanup: FillerCleanupSettings(
@@ -145,10 +146,9 @@ final class RecordingWorkflowTests: XCTestCase {
             )
         )
 
-        try await workflow.startRecording()
         _ = try await workflow.stopRecording()
 
-        XCTAssertEqual(injection.requests, ["今天"])
+        XCTAssertEqual(injection.insertedTexts, ["今天"])
     }
 
     @MainActor
@@ -595,6 +595,10 @@ private final class FakeTextInjectionEngine: TextInjectionProviding {
     var requests: [String] = []
     var error: Error?
     let result: TextInjectionSnapshot
+
+    var insertedTexts: [String] {
+        requests
+    }
 
     init(
         result: TextInjectionSnapshot = TextInjectionSnapshot(
