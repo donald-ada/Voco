@@ -85,6 +85,115 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorSkillToggleActionsPersistSemanticChanges() {
+        let rule = FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0)
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: false, rules: [rule])
+            )
+        )
+        let coordinator = AppCoordinator(skillPreferenceStore: store)
+
+        coordinator.setSkillsEnabled(false)
+
+        XCTAssertFalse(coordinator.skillSettings.isEnabled)
+        XCTAssertEqual(coordinator.skillSettings.fillerCleanup, FillerCleanupSettings(isEnabled: false, rules: [rule]))
+        XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+
+        coordinator.setFillerCleanupEnabled(true)
+
+        XCTAssertFalse(coordinator.skillSettings.isEnabled)
+        XCTAssertTrue(coordinator.skillSettings.fillerCleanup.isEnabled)
+        XCTAssertEqual(coordinator.skillSettings.fillerCleanup.rules, [rule])
+        XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+    }
+
+    @MainActor
+    func testCoordinatorAddsFillerCleanupRuleWithNextOrder() {
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(
+                    isEnabled: true,
+                    rules: [
+                        FillerCleanupRule(displayName: "First", matchText: "first", action: .delete, order: 2),
+                        FillerCleanupRule(displayName: "Last", matchText: "last", action: .delete, order: 7),
+                    ]
+                )
+            )
+        )
+        let coordinator = AppCoordinator(skillPreferenceStore: store)
+
+        coordinator.addFillerCleanupRule(displayName: "New", matchText: "new", action: .replace(" "))
+
+        let addedRule = coordinator.skillSettings.fillerCleanup.rules.last
+        XCTAssertEqual(addedRule?.displayName, "New")
+        XCTAssertEqual(addedRule?.matchText, "new")
+        XCTAssertEqual(addedRule?.matchType, .plainText)
+        XCTAssertEqual(addedRule?.action, .replace(" "))
+        XCTAssertEqual(addedRule?.isEnabled, true)
+        XCTAssertEqual(addedRule?.order, 8)
+        XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+    }
+
+    @MainActor
+    func testCoordinatorUpdatesAndRemovesFillerCleanupRulesByID() {
+        let keptRule = FillerCleanupRule(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            displayName: "Keep",
+            matchText: "keep",
+            action: .delete,
+            order: 0
+        )
+        let targetRule = FillerCleanupRule(
+            id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            displayName: "Target",
+            matchText: "target",
+            action: .delete,
+            order: 1
+        )
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: true, rules: [keptRule, targetRule])
+            )
+        )
+        let coordinator = AppCoordinator(skillPreferenceStore: store)
+        let updatedRule = FillerCleanupRule(
+            id: targetRule.id,
+            displayName: "Updated",
+            matchText: "updated",
+            action: .replace("replacement"),
+            isEnabled: false,
+            order: 3
+        )
+
+        coordinator.updateFillerCleanupRule(updatedRule)
+
+        XCTAssertEqual(coordinator.skillSettings.fillerCleanup.rules, [keptRule, updatedRule])
+        XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+
+        let stateBeforeMissingUpdate = coordinator.skillSettings
+        coordinator.updateFillerCleanupRule(
+            FillerCleanupRule(
+                id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+                displayName: "Missing",
+                matchText: "missing",
+                action: .delete,
+                order: 4
+            )
+        )
+
+        XCTAssertEqual(coordinator.skillSettings, stateBeforeMissingUpdate)
+
+        coordinator.removeFillerCleanupRule(id: keptRule.id)
+
+        XCTAssertEqual(coordinator.skillSettings.fillerCleanup.rules, [updatedRule])
+        XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+    }
+
+    @MainActor
     func testMenuRecordingToggleMovesThroughRecordingWorkflow() async {
         let coordinator = AppCoordinator()
         coordinator.finishLaunching()

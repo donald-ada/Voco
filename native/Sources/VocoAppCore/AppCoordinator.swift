@@ -257,6 +257,77 @@ public final class AppCoordinator: ObservableObject {
         skillPreferenceStore.saveSkillSettings(settings)
     }
 
+    public func setSkillsEnabled(_ enabled: Bool) {
+        saveSkillSettings(
+            SkillSettings(
+                isEnabled: enabled,
+                fillerCleanup: skillSettings.fillerCleanup
+            )
+        )
+    }
+
+    public func setFillerCleanupEnabled(_ enabled: Bool) {
+        saveFillerCleanupSettings(
+            FillerCleanupSettings(
+                isEnabled: enabled,
+                rules: skillSettings.fillerCleanup.rules
+            )
+        )
+    }
+
+    public func addFillerCleanupRule(
+        displayName: String,
+        matchText: String,
+        action: FillerCleanupAction
+    ) {
+        let currentRules = skillSettings.fillerCleanup.rules
+        let nextOrder = currentRules.map(\.order).max().map { $0 + 1 } ?? 0
+        let rule = FillerCleanupRule(
+            displayName: displayName,
+            matchText: matchText,
+            matchType: .plainText,
+            action: action,
+            isEnabled: true,
+            order: nextOrder
+        )
+
+        saveFillerCleanupSettings(
+            FillerCleanupSettings(
+                isEnabled: skillSettings.fillerCleanup.isEnabled,
+                rules: currentRules + [rule]
+            )
+        )
+    }
+
+    public func updateFillerCleanupRule(_ rule: FillerCleanupRule) {
+        var rules = skillSettings.fillerCleanup.rules
+        guard let index = rules.firstIndex(where: { $0.id == rule.id }) else {
+            return
+        }
+
+        rules[index] = rule
+        saveFillerCleanupSettings(
+            FillerCleanupSettings(
+                isEnabled: skillSettings.fillerCleanup.isEnabled,
+                rules: rules
+            )
+        )
+    }
+
+    public func removeFillerCleanupRule(id: UUID) {
+        let rules = skillSettings.fillerCleanup.rules.filter { $0.id != id }
+        guard rules.count != skillSettings.fillerCleanup.rules.count else {
+            return
+        }
+
+        saveFillerCleanupSettings(
+            FillerCleanupSettings(
+                isEnabled: skillSettings.fillerCleanup.isEnabled,
+                rules: rules
+            )
+        )
+    }
+
     public func finishLaunching() {
         clearRuntimeError()
         installLocation = installLocationProvider.currentInstallLocation(strings: strings)
@@ -538,6 +609,15 @@ public final class AppCoordinator: ObservableObject {
     public func fail(_ message: String) {
         setRuntimeError(.message(message))
         status = .error
+    }
+
+    private func saveFillerCleanupSettings(_ fillerCleanup: FillerCleanupSettings) {
+        saveSkillSettings(
+            SkillSettings(
+                isEnabled: skillSettings.isEnabled,
+                fillerCleanup: fillerCleanup
+            )
+        )
     }
 
     private func refreshLocalizedRuntimeSnapshots() {

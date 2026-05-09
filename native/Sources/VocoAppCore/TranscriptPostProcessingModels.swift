@@ -127,6 +127,27 @@ public struct FillerCleanupSettings: Codable, Equatable, Sendable {
         self.isEnabled = isEnabled
         self.rules = rules
     }
+
+    public var orderedRulesForDisplay: [FillerCleanupRule] {
+        rules.enumerated()
+            .sorted { lhs, rhs in
+                Self.compareRuleOrder(lhs, rhs)
+            }
+            .map(\.element)
+    }
+
+    private static func compareRuleOrder(
+        _ lhs: EnumeratedSequence<[FillerCleanupRule]>.Element,
+        _ rhs: EnumeratedSequence<[FillerCleanupRule]>.Element
+    ) -> Bool {
+        if lhs.element.order != rhs.element.order {
+            return lhs.element.order < rhs.element.order
+        }
+        if lhs.element.displayName != rhs.element.displayName {
+            return lhs.element.displayName < rhs.element.displayName
+        }
+        return lhs.offset < rhs.offset
+    }
 }
 
 public struct SkillSettings: Codable, Equatable, Sendable {
@@ -223,20 +244,10 @@ public struct FillerCleanupSkill: TranscriptPostProcessingSkill {
     }
 
     private var orderedPlainTextRules: [FillerCleanupRule] {
-        settings.rules.enumerated()
-            .filter { _, rule in
+        settings.orderedRulesForDisplay
+            .filter { rule in
                 rule.isEnabled && rule.matchType == .plainText && !rule.matchText.isEmpty
             }
-            .sorted { lhs, rhs in
-                if lhs.element.order != rhs.element.order {
-                    return lhs.element.order < rhs.element.order
-                }
-                if lhs.element.displayName != rhs.element.displayName {
-                    return lhs.element.displayName < rhs.element.displayName
-                }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
     }
 }
 

@@ -37,7 +37,7 @@ public struct SkillSettingsSnapshot: Equatable, Sendable {
         self.fillerCleanupTitle = strings.skills.fillerCleanupTitle
         self.fillerCleanupDetail = strings.skills.fillerCleanupDetail
         self.isFillerCleanupEnabled = settings.fillerCleanup.isEnabled
-        self.rules = settings.fillerCleanup.rules.sorted { $0.order < $1.order }
+        self.rules = settings.fillerCleanup.orderedRulesForDisplay
         self.preview = SkillPreviewSnapshot(result: result)
     }
 }
