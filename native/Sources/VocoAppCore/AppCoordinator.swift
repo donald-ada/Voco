@@ -67,6 +67,7 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var voiceInputSessionHistoryEnabled: Bool
     @Published public private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
     @Published public private(set) var appLanguage: AppLanguage
+    @Published public private(set) var skillSettings: SkillSettings
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
@@ -78,6 +79,7 @@ public final class AppCoordinator: ObservableObject {
     private let voiceInputPreferenceStore: any VoiceInputPreferenceStoring
     private let appPreferenceStore: any AppPreferenceStoring
     private let voiceInputSessionStore: any VoiceInputSessionStoring
+    private let skillPreferenceStore: any SkillPreferenceStoring
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
@@ -96,6 +98,7 @@ public final class AppCoordinator: ObservableObject {
         voiceInputPreferenceStore: any VoiceInputPreferenceStoring = NoOpVoiceInputPreferenceStore(),
         appPreferenceStore: any AppPreferenceStoring = NoOpAppPreferenceStore(),
         voiceInputSessionStore: any VoiceInputSessionStoring = InMemoryVoiceInputSessionStore(),
+        skillPreferenceStore: any SkillPreferenceStoring = NoOpSkillPreferenceStore(),
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -108,6 +111,7 @@ public final class AppCoordinator: ObservableObject {
         let initialVoiceInputSessionHistoryEnabled = appPreferenceStore.voiceInputSessionHistoryEnabled
         let initialVoiceInputSessionRetentionPolicy = appPreferenceStore.voiceInputSessionRetentionPolicy
         let initialLegacyInstall = legacyInstallProvider.currentSnapshot(strings: initialStrings)
+        let initialSkillSettings = skillPreferenceStore.skillSettings
         let initialSessionLoadResult: (sessions: [VoiceInputSessionSnapshot], errorMessage: String?)
         if initialVoiceInputSessionHistoryEnabled {
             do {
@@ -139,6 +143,7 @@ public final class AppCoordinator: ObservableObject {
         self.voiceInputPreferenceStore = voiceInputPreferenceStore
         self.appPreferenceStore = appPreferenceStore
         self.voiceInputSessionStore = voiceInputSessionStore
+        self.skillPreferenceStore = skillPreferenceStore
         self.permissions = initialPermissions
         self.launchAtLoginState = initialLaunchAtLoginState
         self.hotkeyRuntimeState = .inactive
@@ -160,6 +165,7 @@ public final class AppCoordinator: ObservableObject {
         self.voiceInputSessionHistoryEnabled = initialVoiceInputSessionHistoryEnabled
         self.voiceInputSessionRetentionPolicy = initialVoiceInputSessionRetentionPolicy
         self.appLanguage = initialAppLanguage
+        self.skillSettings = initialSkillSettings
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -240,6 +246,15 @@ public final class AppCoordinator: ObservableObject {
 
     public var strings: VocoStrings {
         VocoStrings(language: appLanguage)
+    }
+
+    public func skillSettingsSnapshot(previewInput: String) -> SkillSettingsSnapshot {
+        SkillSettingsSnapshot(settings: skillSettings, previewInput: previewInput, strings: strings)
+    }
+
+    public func saveSkillSettings(_ settings: SkillSettings) {
+        skillSettings = settings
+        skillPreferenceStore.saveSkillSettings(settings)
     }
 
     public func finishLaunching() {

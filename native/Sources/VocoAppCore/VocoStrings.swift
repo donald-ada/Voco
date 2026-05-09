@@ -18,6 +18,7 @@ public struct VocoStrings: Sendable {
     public var credentials: CredentialStrings { CredentialStrings(language: language) }
     public var transcription: TranscriptionStatusStrings { TranscriptionStatusStrings(language: language) }
     public var injection: InjectionSettingsStrings { InjectionSettingsStrings(language: language) }
+    public var skills: SkillStrings { SkillStrings(language: language) }
     public var statistics: StatisticsStrings { StatisticsStrings(language: language) }
     public var sessions: SessionStrings { SessionStrings(language: language) }
     public var installLocation: InstallLocationStrings { InstallLocationStrings(language: language) }
@@ -259,6 +260,30 @@ public struct RuntimeStrings: Sendable {
         case (.en, .error):
             "Error"
         }
+    }
+}
+
+public struct SkillStrings: Sendable {
+    let language: AppLanguage
+
+    public var title: String {
+        language == .zhHans ? "技能" : "Skills"
+    }
+
+    public var detail: String {
+        language == .zhHans
+            ? "清理和调整转写文本，再插入到目标 App。"
+            : "Clean and adjust transcripts before inserting them into the target app."
+    }
+
+    public var fillerCleanupTitle: String {
+        language == .zhHans ? "语气词清理" : "Filler Cleanup"
+    }
+
+    public var fillerCleanupDetail: String {
+        language == .zhHans
+            ? "删除或替换常见口语填充词。"
+            : "Delete or replace common spoken filler words."
     }
 }
 

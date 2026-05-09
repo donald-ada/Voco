@@ -31,6 +31,60 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorLoadsAndPersistsSkillSettings() {
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: false, rules: [])
+            )
+        )
+        let coordinator = AppCoordinator(skillPreferenceStore: store)
+
+        XCTAssertFalse(coordinator.skillSettings.fillerCleanup.isEnabled)
+
+        let updated = SkillSettings(
+            isEnabled: coordinator.skillSettings.isEnabled,
+            fillerCleanup: FillerCleanupSettings(isEnabled: true, rules: coordinator.skillSettings.fillerCleanup.rules)
+        )
+        coordinator.saveSkillSettings(updated)
+
+        XCTAssertTrue(coordinator.skillSettings.fillerCleanup.isEnabled)
+        XCTAssertEqual(store.savedSkillSettings.last, updated)
+    }
+
+    @MainActor
+    func testCoordinatorBuildsSkillSettingsSnapshotFromCurrentSettings() {
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(
+                    isEnabled: true,
+                    rules: [
+                        FillerCleanupRule(
+                            displayName: "删除嗯",
+                            matchText: "嗯",
+                            action: .delete,
+                            isEnabled: true,
+                            order: 0
+                        )
+                    ]
+                )
+            )
+        )
+        let coordinator = AppCoordinator(
+            appPreferenceStore: FakeAppPreferenceStore(appLanguage: .en),
+            skillPreferenceStore: store
+        )
+
+        let snapshot = coordinator.skillSettingsSnapshot(previewInput: "嗯hello")
+
+        XCTAssertEqual(snapshot.title, "Skills")
+        XCTAssertTrue(snapshot.isFillerCleanupEnabled)
+        XCTAssertEqual(snapshot.preview.processedText, "hello")
+        XCTAssertEqual(snapshot.preview.matchedRuleTitles, ["删除嗯"])
+    }
+
+    @MainActor
     func testMenuRecordingToggleMovesThroughRecordingWorkflow() async {
         let coordinator = AppCoordinator()
         coordinator.finishLaunching()
@@ -1614,6 +1668,21 @@ private final class FakeVoiceInputPreferenceStore: VoiceInputPreferenceStoring {
 
     func saveAudioInputDevice(_ device: AudioInputDeviceSelection) {
         audioInputDevice = device
+    }
+}
+
+@MainActor
+private final class FakeSkillPreferenceStore: SkillPreferenceStoring {
+    private(set) var skillSettings: SkillSettings
+    private(set) var savedSkillSettings: [SkillSettings] = []
+
+    init(skillSettings: SkillSettings = .default) {
+        self.skillSettings = skillSettings
+    }
+
+    func saveSkillSettings(_ settings: SkillSettings) {
+        skillSettings = settings
+        savedSkillSettings.append(settings)
     }
 }
 
