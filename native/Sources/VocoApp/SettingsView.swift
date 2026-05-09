@@ -1199,15 +1199,14 @@ private struct WorkbenchPopUpButton<Option: Identifiable>: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
-        button.isBordered = false
-        button.isTransparent = true
-        button.focusRingType = .none
+        SettingsWorkbenchPopUpButtonChrome.apply(to: button)
         button.target = context.coordinator
         button.action = #selector(Coordinator.selectOption(_:))
         return button
     }
 
     func updateNSView(_ button: NSPopUpButton, context: Context) {
+        SettingsWorkbenchPopUpButtonChrome.apply(to: button)
         context.coordinator.options = options
         context.coordinator.onSelect = onSelect
 
@@ -1241,6 +1240,19 @@ private struct WorkbenchPopUpButton<Option: Identifiable>: NSViewRepresentable {
             }
 
             onSelect(options[selectedIndex])
+        }
+    }
+}
+
+enum SettingsWorkbenchPopUpButtonChrome {
+    @MainActor
+    static func apply(to button: NSPopUpButton) {
+        button.isBordered = false
+        button.isTransparent = true
+        button.focusRingType = .none
+
+        if let cell = button.cell as? NSPopUpButtonCell {
+            cell.arrowPosition = .noArrow
         }
     }
 }
