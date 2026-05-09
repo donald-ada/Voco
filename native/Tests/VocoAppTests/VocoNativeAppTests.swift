@@ -10,4 +10,10 @@ final class VocoNativeAppTests: XCTestCase {
         XCTAssertEqual(VocoStrings(language: .zhHans).app.quitMenuTitle, "退出")
         XCTAssertEqual(VocoStrings(language: .en).app.quitMenuTitle, "Quit")
     }
+
+    func testNativeAppDependenciesIncludeSkillPreferenceStore() {
+        let dependencies = VocoNativeAppDependencies.make()
+
+        XCTAssertNotNil(dependencies.skillPreferenceStore as? MacSkillPreferenceStore)
+    }
 }

@@ -2,6 +2,54 @@ import AppKit
 import SwiftUI
 import VocoAppCore
 
+@MainActor
+struct VocoNativeAppDependencies {
+    let coordinator: AppCoordinator
+    let skillPreferenceStore: any SkillPreferenceStoring
+    let displayInDockEnabled: Bool
+
+    static func make() -> VocoNativeAppDependencies {
+        let permissionProvider = MacPermissionProvider()
+        let credentialStore = MacKeychainCredentialStore()
+        let voiceInputPreferences = MacVoiceInputPreferenceStore()
+        let appPreferences = MacAppPreferenceStore()
+        let skillPreferenceStore = MacSkillPreferenceStore()
+        let voiceInputSessionStore = MacVoiceInputSessionStore.makeDefault()
+        let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
+        let audioCapture = MacAudioCaptureEngine()
+        if let audioInputDevice = voiceInputPreferences.audioInputDevice {
+            audioCapture.setInputDevice(audioInputDevice)
+        }
+
+        let coordinator = AppCoordinator(
+            permissionProvider: permissionProvider,
+            launchAtLoginProvider: MacLaunchAtLoginProvider(),
+            transcriptionCredentialStore: credentialStore,
+            recordingWorkflow: NativeRecordingWorkflow(
+                audioCapture: audioCapture,
+                transcription: transcriptionProvider,
+                textInjection: MacTextInjectionProvider(),
+                postProcessingSettingsProvider: { skillPreferenceStore.skillSettings }
+            ),
+            hotkeyProvider: MacHotkeyProvider(),
+            installLocationProvider: MacInstallLocationProvider(),
+            legacyInstallProvider: MacLegacyInstallProvider(),
+            voiceInputPreferenceStore: voiceInputPreferences,
+            appPreferenceStore: appPreferences,
+            voiceInputSessionStore: voiceInputSessionStore,
+            skillPreferenceStore: skillPreferenceStore,
+            hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
+            hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
+        )
+
+        return VocoNativeAppDependencies(
+            coordinator: coordinator,
+            skillPreferenceStore: skillPreferenceStore,
+            displayInDockEnabled: appPreferences.displayInDockEnabled
+        )
+    }
+}
+
 @main
 @MainActor
 struct VocoNativeApp: App {
@@ -37,40 +85,12 @@ struct VocoNativeApp: App {
 
     init() {
         SettingsWorkbenchFontRegistrar.registerBundledFonts()
-        let permissionProvider = MacPermissionProvider()
-        let credentialStore = MacKeychainCredentialStore()
-        let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
-        let voiceInputPreferences = MacVoiceInputPreferenceStore()
-        let appPreferences = MacAppPreferenceStore()
-        let voiceInputSessionStore = MacVoiceInputSessionStore.makeDefault()
-        MacDockPresentationController.apply(displayInDockEnabled: appPreferences.displayInDockEnabled)
-        let audioCapture = MacAudioCaptureEngine()
-        if let audioInputDevice = voiceInputPreferences.audioInputDevice {
-            audioCapture.setInputDevice(audioInputDevice)
-        }
-
-        let appCoordinator = AppCoordinator(
-            permissionProvider: permissionProvider,
-            launchAtLoginProvider: MacLaunchAtLoginProvider(),
-            transcriptionCredentialStore: credentialStore,
-            recordingWorkflow: NativeRecordingWorkflow(
-                audioCapture: audioCapture,
-                transcription: transcriptionProvider,
-                textInjection: MacTextInjectionProvider()
-            ),
-            hotkeyProvider: MacHotkeyProvider(),
-            installLocationProvider: MacInstallLocationProvider(),
-            legacyInstallProvider: MacLegacyInstallProvider(),
-            voiceInputPreferenceStore: voiceInputPreferences,
-            appPreferenceStore: appPreferences,
-            voiceInputSessionStore: voiceInputSessionStore,
-            hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
-            hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
-        )
-        appCoordinator.finishLaunching()
-        HUDOverlayPresenter.shared.attach(coordinator: appCoordinator)
-        _coordinator = StateObject(wrappedValue: appCoordinator)
-        appDelegate.coordinator = appCoordinator
+        let dependencies = VocoNativeAppDependencies.make()
+        MacDockPresentationController.apply(displayInDockEnabled: dependencies.displayInDockEnabled)
+        dependencies.coordinator.finishLaunching()
+        HUDOverlayPresenter.shared.attach(coordinator: dependencies.coordinator)
+        _coordinator = StateObject(wrappedValue: dependencies.coordinator)
+        appDelegate.coordinator = dependencies.coordinator
         appDelegate.coordinatorDidBecomeAvailable()
     }
 

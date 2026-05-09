@@ -101,6 +101,57 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testWorkflowReadsLatestPostProcessingSettingsOnStop() async throws {
+        let settings = SkillSettingsBox(
+            SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: false, rules: [])
+            )
+        )
+        let audio = CapturedAudioSnapshot(
+            durationSeconds: 1,
+            sampleRate: 16_000,
+            peakAmplitude: 0.1,
+            pcm16Samples: [1]
+        )
+        let injection = FakeTextInjectionEngine()
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: FakeAudioCaptureEngine(capturedAudio: audio),
+            transcription: StaticTranscriptionProvider(
+                transcript: TranscriptSnapshot(
+                    finalText: "嗯今天",
+                    partials: [],
+                    providerName: "TestProvider",
+                    latencyMilliseconds: nil
+                )
+            ),
+            textInjection: injection,
+            postProcessingSettingsProvider: { settings.value }
+        )
+
+        settings.value = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(
+                        displayName: "删除嗯",
+                        matchText: "嗯",
+                        action: .delete,
+                        isEnabled: true,
+                        order: 0
+                    )
+                ]
+            )
+        )
+
+        try await workflow.startRecording()
+        _ = try await workflow.stopRecording()
+
+        XCTAssertEqual(injection.requests, ["今天"])
+    }
+
+    @MainActor
     func testStopRecordingSkipsInjectionForEmptyFinalText() async throws {
         let transcript = TranscriptSnapshot(
             finalText: " \n ",
@@ -335,6 +386,15 @@ final class RecordingWorkflowTests: XCTestCase {
         )
 
         XCTAssertEqual(workflow.transcriptionStatus, .notConfigured)
+    }
+}
+
+@MainActor
+private final class SkillSettingsBox {
+    var value: SkillSettings
+
+    init(_ value: SkillSettings) {
+        self.value = value
     }
 }
 
