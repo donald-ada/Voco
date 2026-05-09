@@ -3,6 +3,7 @@ import Foundation
 public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendable {
     case overview
     case model
+    case skills
     case statistics
     case settings
 
@@ -18,6 +19,8 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
             strings.language == .zhHans ? "主页" : "Home"
         case .model:
             strings.language == .zhHans ? "模型" : "Model"
+        case .skills:
+            strings.skills.title
         case .statistics:
             strings.language == .zhHans ? "统计" : "Statistics"
         case .settings:
@@ -35,6 +38,8 @@ public enum SettingsWorkbenchSection: String, CaseIterable, Identifiable, Sendab
             strings.language == .zhHans ? "当前状态" : "Current status"
         case .model:
             strings.language == .zhHans ? "火山引擎和 Keychain" : "Volcengine and Keychain"
+        case .skills:
+            strings.language == .zhHans ? "转写清理和动作" : "Transcript cleanup and actions"
         case .statistics:
             strings.language == .zhHans ? "使用趋势和分布" : "Usage trends and distribution"
         case .settings:
@@ -241,6 +246,7 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                     ? .needsAttention
                     : .ok,
                 .model: transcriptionNeedsAttention ? .needsAttention : .ok,
+                .skills: .neutral,
                 .statistics: .ok,
                 .settings: settingsStatus,
             ],

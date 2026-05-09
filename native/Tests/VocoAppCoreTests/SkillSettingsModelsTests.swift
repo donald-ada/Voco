@@ -2,6 +2,13 @@ import XCTest
 @testable import VocoAppCore
 
 final class SkillSettingsModelsTests: XCTestCase {
+    func testSkillSettingsSnapshotUsesChineseCopyByDefault() {
+        let snapshot = SkillSettingsSnapshot(settings: .default, previewInput: "嗯测试")
+
+        XCTAssertEqual(snapshot.title, "技能")
+        XCTAssertEqual(snapshot.fillerCleanupTitle, "语气词清理")
+    }
+
     func testSkillSettingsSnapshotUsesEnglishCopyAndPreview() {
         let settings = SkillSettings(
             isEnabled: true,

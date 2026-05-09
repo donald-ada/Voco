@@ -89,6 +89,8 @@ struct SettingsView: View {
             overviewSection
         case .model:
             modelWorkbenchSection
+        case .skills:
+            Text(strings.skills.title)
         case .statistics:
             statisticsSection
         case .settings:
@@ -3199,6 +3201,8 @@ private extension SettingsWorkbenchSection {
             "house"
         case .model:
             "cpu"
+        case .skills:
+            "wand.and.stars"
         case .statistics:
             "chart.bar"
         case .settings:

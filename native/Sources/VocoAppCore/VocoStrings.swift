@@ -285,6 +285,19 @@ public struct SkillStrings: Sendable {
             ? "删除或替换常见口语填充词。"
             : "Delete or replace common spoken filler words."
     }
+
+    public var enabledTitle: String { language == .zhHans ? "启用技能" : "Enable Skills" }
+    public var rulesTitle: String { language == .zhHans ? "规则" : "Rules" }
+    public var previewTitle: String { language == .zhHans ? "测试预览" : "Preview" }
+    public var originalTextTitle: String { language == .zhHans ? "原文" : "Original" }
+    public var processedTextTitle: String { language == .zhHans ? "处理后" : "Processed" }
+    public var matchedRulesTitle: String { language == .zhHans ? "命中规则" : "Matched Rules" }
+    public var noMatchedRulesTitle: String { language == .zhHans ? "没有命中规则" : "No matched rules" }
+    public var addRuleButton: String { language == .zhHans ? "新增规则" : "Add Rule" }
+    public var deleteActionTitle: String { language == .zhHans ? "删除" : "Delete" }
+    public var replaceActionTitle: String { language == .zhHans ? "替换" : "Replace" }
+    public var replacementEmptyTitle: String { language == .zhHans ? "空字符串" : "Empty String" }
+    public var replacementSpaceTitle: String { language == .zhHans ? "空格" : "Space" }
 }
 
 public struct HUDStrings: Sendable {

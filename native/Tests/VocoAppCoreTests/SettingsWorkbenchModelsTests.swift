@@ -5,18 +5,22 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
     func testWorkbenchSectionsStayInApprovedOrder() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.rawValue),
-            ["overview", "model", "statistics", "settings"]
+            ["overview", "model", "skills", "statistics", "settings"]
         )
+    }
+
+    func testWorkbenchSectionsIncludeSkillsInApprovedOrder() {
+        XCTAssertEqual(SettingsWorkbenchSection.allCases, [.overview, .model, .skills, .statistics, .settings])
     }
 
     func testWorkbenchSectionsExposeUserVisibleCopy() {
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.title),
-            ["主页", "模型", "统计", "设置"]
+            ["主页", "模型", "技能", "统计", "设置"]
         )
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map(\.summary),
-            ["当前状态", "火山引擎和 Keychain", "使用趋势和分布", "快捷键、麦克风、系统"]
+            ["当前状态", "火山引擎和 Keychain", "转写清理和动作", "使用趋势和分布", "快捷键、麦克风、系统"]
         )
     }
 
@@ -25,12 +29,19 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
 
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map { $0.title(strings: strings) },
-            ["Home", "Model", "Statistics", "Settings"]
+            ["Home", "Model", "Skills", "Statistics", "Settings"]
         )
         XCTAssertEqual(
             SettingsWorkbenchSection.allCases.map { $0.summary(strings: strings) },
-            ["Current status", "Volcengine and Keychain", "Usage trends and distribution", "Hotkey, microphone, and system"]
+            ["Current status", "Volcengine and Keychain", "Transcript cleanup and actions", "Usage trends and distribution", "Hotkey, microphone, and system"]
         )
+    }
+
+    func testSkillsSectionUsesEnglishCopy() {
+        let strings = VocoStrings(language: .en)
+
+        XCTAssertEqual(SettingsWorkbenchSection.skills.title(strings: strings), "Skills")
+        XCTAssertEqual(SettingsWorkbenchSection.skills.summary(strings: strings), "Transcript cleanup and actions")
     }
 
     func testStatusToneMapsToSystemImages() {
