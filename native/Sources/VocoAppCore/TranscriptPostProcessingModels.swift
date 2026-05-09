@@ -141,6 +141,23 @@ public struct SkillSettings: Codable, Equatable, Sendable {
     }
 }
 
+@MainActor
+public protocol SkillPreferenceStoring: AnyObject {
+    var skillSettings: SkillSettings { get }
+
+    func saveSkillSettings(_ settings: SkillSettings)
+}
+
+public final class NoOpSkillPreferenceStore: SkillPreferenceStoring {
+    public init() {}
+
+    public var skillSettings: SkillSettings {
+        .default
+    }
+
+    public func saveSkillSettings(_ settings: SkillSettings) {}
+}
+
 public protocol TranscriptPostProcessingSkill: Sendable {
     var id: String { get }
 

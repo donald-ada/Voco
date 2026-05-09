@@ -145,4 +145,9 @@ final class TranscriptPostProcessingModelsTests: XCTestCase {
         XCTAssertEqual(result.diagnostics.count, 1)
         XCTAssertEqual(result.diagnostics[0].skillID, FillerCleanupSkill.skillID)
     }
+
+    @MainActor
+    func testNoOpSkillPreferenceStoreReturnsDefaultSettings() {
+        XCTAssertEqual(NoOpSkillPreferenceStore().skillSettings, .default)
+    }
 }
