@@ -18,6 +18,36 @@ final class MacVoiceInputSessionStoreTests: XCTestCase {
         XCTAssertEqual(sessions, [session])
     }
 
+    func testSQLiteStorePersistsRawTranscriptAndPostProcessingDiagnostics() throws {
+        let databaseURL = try temporaryDatabaseURL()
+        let store = try MacVoiceInputSessionStore(databaseURL: databaseURL)
+        let session = VoiceInputSessionSnapshot(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!,
+            transcriptText: "今天开始",
+            rawTranscriptText: "嗯今天开始",
+            postProcessingDiagnostics: [
+                TranscriptPostProcessingDiagnostic(
+                    skillID: FillerCleanupSkill.skillID,
+                    ruleID: UUID(uuidString: "00000000-0000-0000-0000-000000000203")!,
+                    ruleDisplayName: "删除嗯",
+                    matchedText: "嗯",
+                    replacementText: "",
+                    matchCount: 1
+                )
+            ],
+            wordCount: 4,
+            durationSeconds: 2,
+            createdAt: Date(timeIntervalSince1970: 100),
+            targetAppName: "Notes",
+            providerName: "TestProvider"
+        )
+
+        try store.save(session)
+
+        let loaded = try store.loadRecentSessions(limit: 10)
+        XCTAssertEqual(loaded, [session])
+    }
+
     func testSQLiteStoreTrimsOlderSessionsWhenCustomerChoosesLimitedRetention() throws {
         let databaseURL = try temporaryDatabaseURL()
         let store = try MacVoiceInputSessionStore(databaseURL: databaseURL)

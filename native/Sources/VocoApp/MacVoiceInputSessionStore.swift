@@ -55,7 +55,16 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
 
         let statement = try prepare(
             """
-            SELECT id, transcript_text, word_count, duration_seconds, created_at, target_app_name, provider_name
+            SELECT
+                id,
+                transcript_text,
+                raw_transcript_text,
+                post_processing_diagnostics_json,
+                word_count,
+                duration_seconds,
+                created_at,
+                target_app_name,
+                provider_name
             FROM voice_input_sessions
             ORDER BY created_at DESC, rowid DESC
             LIMIT ?;
@@ -129,6 +138,15 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
             );
             """
         )
+        try addColumnIfMissing(name: "raw_transcript_text", definition: "TEXT")
+        try addColumnIfMissing(name: "post_processing_diagnostics_json", definition: "TEXT NOT NULL DEFAULT '[]'")
+        try execute(
+            """
+            UPDATE voice_input_sessions
+            SET raw_transcript_text = transcript_text
+            WHERE raw_transcript_text IS NULL;
+            """
+        )
         try execute(
             """
             CREATE INDEX IF NOT EXISTS idx_voice_input_sessions_created_at
@@ -143,26 +161,31 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
             INSERT OR REPLACE INTO voice_input_sessions (
                 id,
                 transcript_text,
+                raw_transcript_text,
+                post_processing_diagnostics_json,
                 word_count,
                 duration_seconds,
                 created_at,
                 target_app_name,
                 provider_name
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
         )
         defer {
             sqlite3_finalize(statement)
         }
 
+        let postProcessingDiagnosticsJSON = try diagnosticsJSON(session.postProcessingDiagnostics)
         try bindText(session.id.uuidString, to: 1, in: statement)
         try bindText(session.transcriptText, to: 2, in: statement)
-        try bindInt(session.wordCount, to: 3, in: statement)
-        try bindDouble(session.durationSeconds, to: 4, in: statement)
-        try bindDouble(session.createdAt.timeIntervalSince1970, to: 5, in: statement)
-        try bindNullableText(session.targetAppName, to: 6, in: statement)
-        try bindText(session.providerName, to: 7, in: statement)
+        try bindText(session.rawTranscriptText, to: 3, in: statement)
+        try bindText(postProcessingDiagnosticsJSON, to: 4, in: statement)
+        try bindInt(session.wordCount, to: 5, in: statement)
+        try bindDouble(session.durationSeconds, to: 6, in: statement)
+        try bindDouble(session.createdAt.timeIntervalSince1970, to: 7, in: statement)
+        try bindNullableText(session.targetAppName, to: 8, in: statement)
+        try bindText(session.providerName, to: 9, in: statement)
 
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw VoiceInputSessionStoreError.saveFailed(message: databaseErrorMessage)
@@ -198,6 +221,70 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
         }
     }
 
+    private func addColumnIfMissing(name: String, definition: String) throws {
+        let columns = try tableColumns()
+        guard !columns.contains(name) else {
+            return
+        }
+
+        try execute("ALTER TABLE voice_input_sessions ADD COLUMN \(name) \(definition);")
+    }
+
+    private func tableColumns() throws -> Set<String> {
+        let statement = try prepare("PRAGMA table_info(voice_input_sessions);")
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        var columns = Set<String>()
+        while true {
+            let stepResult = sqlite3_step(statement)
+            if stepResult == SQLITE_DONE {
+                return columns
+            }
+
+            guard stepResult == SQLITE_ROW else {
+                throw VoiceInputSessionStoreError.loadFailed(message: databaseErrorMessage)
+            }
+
+            if let name = columnText(statement, 1) {
+                columns.insert(name)
+            }
+        }
+    }
+
+    private func diagnosticsJSON(_ diagnostics: [TranscriptPostProcessingDiagnostic]) throws -> String {
+        do {
+            let data = try JSONEncoder().encode(diagnostics)
+            guard let json = String(data: data, encoding: .utf8) else {
+                throw VoiceInputSessionStoreError.saveFailed(message: "无法将 post-processing diagnostics 编码为 UTF-8。")
+            }
+            return json
+        } catch let error as VoiceInputSessionStoreError {
+            throw error
+        } catch {
+            throw VoiceInputSessionStoreError.saveFailed(
+                message: "无法编码 post-processing diagnostics：\(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func decodeDiagnostics(_ json: String?) throws -> [TranscriptPostProcessingDiagnostic] {
+        guard let json,
+              !json.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return []
+        }
+
+        do {
+            return try JSONDecoder().decode([TranscriptPostProcessingDiagnostic].self, from: Data(json.utf8))
+        } catch {
+            throw VoiceInputSessionStoreError.loadFailed(
+                message: "无法解码 post-processing diagnostics：\(error.localizedDescription)"
+            )
+        }
+    }
+
     private func prepare(_ sql: String) throws -> OpaquePointer? {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -212,18 +299,22 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
             let idText = columnText(statement, 0),
             let id = UUID(uuidString: idText),
             let transcriptText = columnText(statement, 1),
-            let providerName = columnText(statement, 6)
+            let providerName = columnText(statement, 8)
         else {
             throw VoiceInputSessionStoreError.loadFailed(message: "数据库中存在格式无效的会话记录。")
         }
 
-        let targetAppName = columnText(statement, 5)
+        let rawTranscriptText = columnText(statement, 2) ?? transcriptText
+        let postProcessingDiagnostics = try decodeDiagnostics(columnText(statement, 3))
+        let targetAppName = columnText(statement, 7)
         return VoiceInputSessionSnapshot(
             id: id,
             transcriptText: transcriptText,
-            wordCount: Int(sqlite3_column_int64(statement, 2)),
-            durationSeconds: sqlite3_column_double(statement, 3),
-            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+            rawTranscriptText: rawTranscriptText,
+            postProcessingDiagnostics: postProcessingDiagnostics,
+            wordCount: Int(sqlite3_column_int64(statement, 4)),
+            durationSeconds: sqlite3_column_double(statement, 5),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 6)),
             targetAppName: targetAppName,
             providerName: providerName
         )

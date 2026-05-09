@@ -3,6 +3,8 @@ import Foundation
 public struct VoiceInputSessionSnapshot: Equatable, Identifiable, Sendable {
     public let id: UUID
     public let transcriptText: String
+    public let rawTranscriptText: String
+    public let postProcessingDiagnostics: [TranscriptPostProcessingDiagnostic]
     public let wordCount: Int
     public let durationSeconds: Double
     public let createdAt: Date
@@ -12,6 +14,8 @@ public struct VoiceInputSessionSnapshot: Equatable, Identifiable, Sendable {
     public init(
         id: UUID = UUID(),
         transcriptText: String,
+        rawTranscriptText: String? = nil,
+        postProcessingDiagnostics: [TranscriptPostProcessingDiagnostic] = [],
         wordCount: Int,
         durationSeconds: Double,
         createdAt: Date = Date(),
@@ -20,6 +24,8 @@ public struct VoiceInputSessionSnapshot: Equatable, Identifiable, Sendable {
     ) {
         self.id = id
         self.transcriptText = transcriptText
+        self.rawTranscriptText = rawTranscriptText ?? transcriptText
+        self.postProcessingDiagnostics = postProcessingDiagnostics
         self.wordCount = wordCount
         self.durationSeconds = durationSeconds
         self.createdAt = createdAt
@@ -32,11 +38,13 @@ public struct VoiceInputSessionSnapshot: Equatable, Identifiable, Sendable {
         id: UUID = UUID(),
         createdAt: Date = Date()
     ) {
-        let trimmedText = result.transcript.finalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let processedText = result.postProcessing.processedText.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(
             id: id,
-            transcriptText: trimmedText,
-            wordCount: trimmedText.count,
+            transcriptText: processedText,
+            rawTranscriptText: result.postProcessing.originalText,
+            postProcessingDiagnostics: result.postProcessing.diagnostics,
+            wordCount: processedText.count,
             durationSeconds: result.audio.durationSeconds,
             createdAt: createdAt,
             targetAppName: result.injection.targetAppName,

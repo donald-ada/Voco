@@ -42,6 +42,35 @@ final class VoiceInputSessionModelsTests: XCTestCase {
         )
     }
 
+    func testSessionSnapshotUsesProcessedTextAndKeepsRawTranscriptAndDiagnostics() {
+        let result = RecordingWorkflowResult(
+            audio: CapturedAudioSnapshot(durationSeconds: 2, sampleRate: 16_000, peakAmplitude: 0.2),
+            transcript: TranscriptSnapshot(finalText: "嗯今天开始", partials: [], providerName: "TestProvider", latencyMilliseconds: 10),
+            postProcessing: TranscriptPostProcessingResult(
+                originalText: "嗯今天开始",
+                processedText: "今天开始",
+                diagnostics: [
+                    TranscriptPostProcessingDiagnostic(
+                        skillID: FillerCleanupSkill.skillID,
+                        ruleID: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!,
+                        ruleDisplayName: "删除嗯",
+                        matchedText: "嗯",
+                        replacementText: "",
+                        matchCount: 1
+                    )
+                ]
+            ),
+            injection: .success(targetAppName: "Notes", strategy: .clipboardFallback)
+        )
+
+        let session = VoiceInputSessionSnapshot(result: result)
+
+        XCTAssertEqual(session.transcriptText, "今天开始")
+        XCTAssertEqual(session.rawTranscriptText, "嗯今天开始")
+        XCTAssertEqual(session.postProcessingDiagnostics.first?.ruleDisplayName, "删除嗯")
+        XCTAssertEqual(session.wordCount, 4)
+    }
+
     func testSessionSnapshotUsesRawTranscriptPreviewWithoutGeneratedTitle() {
         let session = VoiceInputSessionSnapshot(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
