@@ -304,7 +304,7 @@ final class MacVoiceInputSessionStore: VoiceInputSessionStoring {
             throw VoiceInputSessionStoreError.loadFailed(message: "数据库中存在格式无效的会话记录。")
         }
 
-        let rawTranscriptText = columnText(statement, 2) ?? transcriptText
+        let rawTranscriptText = columnText(statement, 2).flatMap { $0.isEmpty ? nil : $0 } ?? transcriptText
         let postProcessingDiagnostics = try decodeDiagnostics(columnText(statement, 3))
         let targetAppName = columnText(statement, 7)
         return VoiceInputSessionSnapshot(
