@@ -85,6 +85,43 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorSkillSettingsSnapshotUsesRecentSessionHitTotals() {
+        let session = VoiceInputSessionSnapshot(
+            transcriptText: "今天继续",
+            rawTranscriptText: "嗯今天继续",
+            postProcessingDiagnostics: [
+                TranscriptPostProcessingDiagnostic(
+                    skillID: FillerCleanupSkill.skillID,
+                    ruleID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+                    ruleDisplayName: "删除嗯",
+                    matchedText: "嗯",
+                    replacementText: "",
+                    matchCount: 4
+                )
+            ],
+            wordCount: 4,
+            durationSeconds: 3,
+            targetAppName: "Notes",
+            providerName: "火山引擎"
+        )
+        let coordinator = AppCoordinator(
+            voiceInputSessionStore: FakeVoiceInputSessionStore(storedSessions: [session]),
+            skillPreferenceStore: FakeSkillPreferenceStore(
+                skillSettings: SkillSettings(
+                    isEnabled: true,
+                    fillerCleanup: FillerCleanupSettings(isEnabled: true)
+                )
+            )
+        )
+
+        let snapshot = coordinator.skillSettingsSnapshot(previewInput: "嗯")
+
+        XCTAssertEqual(snapshot.preview.processedText, "")
+        XCTAssertEqual(snapshot.fillerCleanupDetail.totalHitCount, 4)
+        XCTAssertEqual(snapshot.fillerCleanupDetail.hitRows.map(\.matchedText), ["嗯"])
+    }
+
+    @MainActor
     func testCoordinatorSkillToggleActionsPersistSemanticChanges() {
         let rule = FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0)
         let store = FakeSkillPreferenceStore(
@@ -135,6 +172,29 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(addedRule?.isEnabled, true)
         XCTAssertEqual(addedRule?.order, 8)
         XCTAssertEqual(store.savedSkillSettings.last, coordinator.skillSettings)
+    }
+
+    @MainActor
+    func testCoordinatorAddedFillerCleanupRuleActionAffectsPreviewProcessing() {
+        let store = FakeSkillPreferenceStore(
+            skillSettings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: true, rules: [])
+            )
+        )
+        let coordinator = AppCoordinator(skillPreferenceStore: store)
+
+        coordinator.addFillerCleanupRule(
+            displayName: "那个啥",
+            matchText: "那个啥",
+            action: .replace("项目")
+        )
+
+        let snapshot = coordinator.skillSettingsSnapshot(previewInput: "那个啥今天继续")
+
+        XCTAssertEqual(snapshot.preview.processedText, "项目今天继续")
+        XCTAssertEqual(snapshot.fillerCleanupDetail.totalHitCount, 0)
+        XCTAssertTrue(snapshot.fillerCleanupDetail.hitRows.isEmpty)
     }
 
     @MainActor

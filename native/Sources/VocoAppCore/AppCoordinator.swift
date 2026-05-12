@@ -249,7 +249,12 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func skillSettingsSnapshot(previewInput: String) -> SkillSettingsSnapshot {
-        SkillSettingsSnapshot(settings: skillSettings, previewInput: previewInput, strings: strings)
+        SkillSettingsSnapshot(
+            settings: skillSettings,
+            previewInput: previewInput,
+            historicalSessions: recentVoiceInputSessions,
+            strings: strings
+        )
     }
 
     public func saveSkillSettings(_ settings: SkillSettings) {

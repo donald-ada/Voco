@@ -248,6 +248,63 @@ final class RecordingWorkflowTests: XCTestCase {
     }
 
     @MainActor
+    func testRealtimeRecordingStartsAudioCaptureBeforeOpeningTranscriptionStream() async throws {
+        let audioCapture = FakeAudioCaptureEngine()
+        var events: [String] = []
+        audioCapture.onStartCapture = {
+            events.append("audio")
+        }
+        let transcription = FakeRealtimeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "live recording final",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: nil
+            ),
+            partialsToEmitAfterAudio: []
+        )
+        transcription.onStartStreaming = {
+            events.append("stream")
+        }
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: FakeTextInjectionEngine()
+        )
+
+        try await workflow.startRecording()
+
+        XCTAssertEqual(events, ["audio", "stream"])
+    }
+
+    @MainActor
+    func testRealtimeRecordingFlushesAudioCapturedWhileStreamStarts() async throws {
+        let audioCapture = FakeAudioCaptureEngine()
+        let transcription = FakeRealtimeTranscriptionEngine(
+            transcript: TranscriptSnapshot(
+                finalText: "live recording final",
+                partials: [],
+                providerName: "Fake ASR",
+                latencyMilliseconds: nil
+            ),
+            partialsToEmitAfterAudio: []
+        )
+        transcription.onStartStreaming = {
+            audioCapture.emitAudioChunk([11, 12, 13])
+        }
+        let workflow = NativeRecordingWorkflow(
+            audioCapture: audioCapture,
+            transcription: transcription,
+            textInjection: FakeTextInjectionEngine()
+        )
+
+        try await workflow.startRecording()
+        let audioChunks = await transcription.streamingSession?.audioChunksSnapshot()
+
+        XCTAssertEqual(audioChunks, [[11, 12, 13]])
+    }
+
+    @MainActor
     func testStopRecordingCancelsRealtimeTranscriptionAndSkipsInsertionForTooShortAudio() async throws {
         let audioCapture = FakeAudioCaptureEngine(
             capturedAudio: CapturedAudioSnapshot(
@@ -403,6 +460,7 @@ private final class FakeAudioCaptureEngine: AudioCaptureProviding {
     var stopCount = 0
     var startError: Error?
     var stopError: Error?
+    var onStartCapture: (() -> Void)?
     let capturedAudio: CapturedAudioSnapshot
     private var audioChunkHandler: AudioCaptureChunkHandler?
 
@@ -424,6 +482,7 @@ private final class FakeAudioCaptureEngine: AudioCaptureProviding {
     func startCapture(audioChunkHandler: AudioCaptureChunkHandler?) async throws {
         startCount += 1
         self.audioChunkHandler = audioChunkHandler
+        onStartCapture?()
 
         if let startError {
             throw startError
@@ -489,6 +548,7 @@ private final class FakeRealtimeTranscriptionEngine: TranscriptionProviding, Rea
     var inputs: [CapturedAudioSnapshot] = []
     let transcript: TranscriptSnapshot
     let partialsToEmitAfterAudio: [TranscriptPartialSnapshot]
+    var onStartStreaming: (() -> Void)?
     private(set) var streamingSession: FakeRealtimeTranscriptionSession?
     var status: TranscriptionProviderStatus {
         .ready(providerName: transcript.providerName)
@@ -511,6 +571,7 @@ private final class FakeRealtimeTranscriptionEngine: TranscriptionProviding, Rea
     }
 
     func startStreaming(progress: TranscriptionProgressHandler?) async throws -> any RealtimeTranscriptionSession {
+        onStartStreaming?()
         let session = FakeRealtimeTranscriptionSession(
             transcript: transcript,
             partialsToEmitAfterAudio: partialsToEmitAfterAudio,

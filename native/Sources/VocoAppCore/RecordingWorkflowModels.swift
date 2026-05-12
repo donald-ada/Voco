@@ -174,6 +174,7 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     private let textInjection: any TextInjectionProviding
     private let postProcessingSettingsProvider: @MainActor () -> SkillSettings
     private var currentStreamingSession: (any RealtimeTranscriptionSession)?
+    private var currentAudioChunkRelay: RealtimeAudioChunkRelay?
 
     public init(
         audioCapture: any AudioCaptureProviding,
@@ -208,23 +209,31 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
     }
 
     public func startRecording(progress: TranscriptionProgressHandler? = nil) async throws {
-        guard currentStreamingSession == nil else {
+        guard currentStreamingSession == nil, currentAudioChunkRelay == nil else {
             throw RecordingWorkflowError("transcription stream already running")
         }
 
         if let realtimeTranscription = transcription as? any RealtimeTranscriptionProviding {
-            let streamingSession = try await realtimeTranscription.startStreaming(progress: progress)
-            currentStreamingSession = streamingSession
-
+            let relay = RealtimeAudioChunkRelay()
+            currentAudioChunkRelay = relay
             do {
                 try await audioCapture.startCapture { samples in
                     Task {
-                        await streamingSession.acceptAudioChunk(samples)
+                        await relay.accept(samples)
                     }
                 }
             } catch {
-                currentStreamingSession = nil
-                await streamingSession.cancel()
+                currentAudioChunkRelay = nil
+                throw error
+            }
+
+            do {
+                let streamingSession = try await realtimeTranscription.startStreaming(progress: progress)
+                currentStreamingSession = streamingSession
+                await relay.attach(streamingSession)
+            } catch {
+                currentAudioChunkRelay = nil
+                _ = try? await audioCapture.stopCapture()
                 throw error
             }
         } else {
@@ -239,6 +248,7 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         } catch {
             if let streamingSession = currentStreamingSession {
                 currentStreamingSession = nil
+                currentAudioChunkRelay = nil
                 await streamingSession.cancel()
             }
             throw error
@@ -248,6 +258,7 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         if !Self.isTranscribableAudio(audio) {
             if let streamingSession = currentStreamingSession {
                 currentStreamingSession = nil
+                currentAudioChunkRelay = nil
                 await streamingSession.cancel()
             }
 
@@ -267,6 +278,7 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
 
         if let streamingSession = currentStreamingSession {
             currentStreamingSession = nil
+            currentAudioChunkRelay = nil
             transcript = try await streamingSession.finish(audio: audio)
         } else {
             transcript = try await transcription.transcribe(audio, progress: progress)
@@ -319,6 +331,33 @@ public final class NativeRecordingWorkflow: RecordingWorkflowing {
         }
 
         return try await textInjection.insert(processedText)
+    }
+}
+
+private actor RealtimeAudioChunkRelay {
+    private var session: (any RealtimeTranscriptionSession)?
+    private var pendingChunks: [[Int16]] = []
+
+    func accept(_ samples: [Int16]) async {
+        guard !samples.isEmpty else {
+            return
+        }
+
+        if let session {
+            await session.acceptAudioChunk(samples)
+        } else {
+            pendingChunks.append(samples)
+        }
+    }
+
+    func attach(_ session: any RealtimeTranscriptionSession) async {
+        self.session = session
+        let chunks = pendingChunks
+        pendingChunks.removeAll(keepingCapacity: false)
+
+        for samples in chunks {
+            await session.acceptAudioChunk(samples)
+        }
     }
 }
 

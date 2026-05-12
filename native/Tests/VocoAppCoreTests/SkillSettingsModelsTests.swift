@@ -9,6 +9,173 @@ final class SkillSettingsModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.fillerCleanupTitle, "语气词清理")
     }
 
+    func testSkillSettingsSnapshotBuildsPrototypeSkillLibrary() {
+        let snapshot = SkillSettingsSnapshot(
+            settings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: true)
+            ),
+            previewInput: "嗯测试"
+        )
+
+        XCTAssertEqual(snapshot.catalogItems.map(\.id), ["fillerCleanup", "punctuation", "format", "polish", "modelRoute"])
+        XCTAssertEqual(snapshot.catalogItems.map(\.glyph), ["CL", "PU", "FM", "PL", "MR"])
+        XCTAssertEqual(snapshot.catalogItems.first?.title, "语气词清理")
+        XCTAssertEqual(snapshot.catalogItems.first?.statusTitle, "已开启")
+        XCTAssertTrue(snapshot.catalogItems.first?.isConfigurable == true)
+        XCTAssertFalse(snapshot.catalogItems.dropFirst().contains { $0.isConfigurable })
+    }
+
+    func testSkillSettingsSnapshotLocalizesSkillLibraryStatuses() {
+        let snapshot = SkillSettingsSnapshot(
+            settings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: false)
+            ),
+            previewInput: "um test",
+            strings: VocoStrings(language: .en)
+        )
+
+        XCTAssertEqual(snapshot.catalogItems.first?.title, "Filler Cleanup")
+        XCTAssertEqual(snapshot.catalogItems.first?.statusTitle, "Disabled")
+        XCTAssertEqual(snapshot.catalogItems[1].statusTitle, "Planned")
+        XCTAssertEqual(snapshot.catalogItems[4].statusTitle, "Later")
+    }
+
+    func testFillerCleanupDetailSplitsDefaultAndCustomWords() {
+        let customRule = FillerCleanupRule(
+            displayName: "就是吧",
+            matchText: "就是吧",
+            action: .replace(" "),
+            isEnabled: true,
+            order: 99
+        )
+        let disabledDefaultRule = FillerCleanupRule(
+            displayName: "删除就是",
+            matchText: "就是",
+            action: .delete,
+            isEnabled: false,
+            order: 5
+        )
+        let settings = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0),
+                    disabledDefaultRule,
+                    customRule
+                ]
+            )
+        )
+
+        let snapshot = SkillSettingsSnapshot(settings: settings, previewInput: "嗯这个")
+
+        XCTAssertEqual(snapshot.fillerCleanupDetail.tabs.map(\.title), ["概览", "词库", "命中"])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.defaultWords.map(\.text), ["嗯", "就是"])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.defaultWords.map(\.isEnabled), [true, false])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.customWords.map(\.text), ["就是吧"])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.customWords.first?.actionTitle, "替换为空格")
+    }
+
+    func testFillerCleanupDetailDoesNotCountPreviewTextAsHistoricalHits() {
+        let settings = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0),
+                    FillerCleanupRule(displayName: "删除这个", matchText: "这个", action: .delete, order: 1),
+                ]
+            )
+        )
+
+        let snapshot = SkillSettingsSnapshot(settings: settings, previewInput: "嗯这个嗯")
+
+        XCTAssertEqual(snapshot.preview.processedText, "")
+        XCTAssertEqual(snapshot.fillerCleanupDetail.totalHitCount, 0)
+        XCTAssertTrue(snapshot.fillerCleanupDetail.hitRows.isEmpty)
+    }
+
+    func testFillerCleanupDetailAggregatesHitRowsFromHistoricalSessions() {
+        let ruleID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+        let ignoredRuleID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let sessions = [
+            VoiceInputSessionSnapshot(
+                transcriptText: "今天继续",
+                rawTranscriptText: "嗯今天继续",
+                postProcessingDiagnostics: [
+                    TranscriptPostProcessingDiagnostic(
+                        id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+                        skillID: FillerCleanupSkill.skillID,
+                        ruleID: ruleID,
+                        ruleDisplayName: "删除嗯",
+                        matchedText: "嗯",
+                        replacementText: "",
+                        matchCount: 2
+                    ),
+                    TranscriptPostProcessingDiagnostic(
+                        id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+                        skillID: "otherSkill",
+                        ruleID: ignoredRuleID,
+                        ruleDisplayName: "其他技能",
+                        matchedText: "其他",
+                        replacementText: "",
+                        matchCount: 9
+                    )
+                ],
+                wordCount: 4,
+                durationSeconds: 5,
+                createdAt: Date(timeIntervalSince1970: 2),
+                targetAppName: "Notes",
+                providerName: "火山引擎"
+            ),
+            VoiceInputSessionSnapshot(
+                transcriptText: "继续",
+                rawTranscriptText: "嗯这个继续",
+                postProcessingDiagnostics: [
+                    TranscriptPostProcessingDiagnostic(
+                        id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+                        skillID: FillerCleanupSkill.skillID,
+                        ruleID: ruleID,
+                        ruleDisplayName: "删除嗯",
+                        matchedText: "嗯",
+                        replacementText: "",
+                        matchCount: 3
+                    ),
+                    TranscriptPostProcessingDiagnostic(
+                        id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+                        skillID: FillerCleanupSkill.skillID,
+                        ruleID: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
+                        ruleDisplayName: "删除这个",
+                        matchedText: "这个",
+                        replacementText: "",
+                        matchCount: 1
+                    )
+                ],
+                wordCount: 2,
+                durationSeconds: 4,
+                createdAt: Date(timeIntervalSince1970: 1),
+                targetAppName: "Notes",
+                providerName: "火山引擎"
+            )
+        ]
+        let snapshot = SkillSettingsSnapshot(
+            settings: SkillSettings(
+                isEnabled: true,
+                fillerCleanup: FillerCleanupSettings(isEnabled: true)
+            ),
+            previewInput: "啊啊啊",
+            historicalSessions: sessions
+        )
+
+        XCTAssertEqual(snapshot.fillerCleanupDetail.totalHitCount, 6)
+        XCTAssertEqual(snapshot.fillerCleanupDetail.hitRows.map(\.matchedText), ["嗯", "这个"])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.hitRows.map(\.matchCount), [5, 1])
+        XCTAssertEqual(snapshot.fillerCleanupDetail.hitRows.map(\.actionTitle), ["删除", "删除"])
+        XCTAssertFalse(snapshot.fillerCleanupDetail.hitRows.contains { $0.title.contains("删除") })
+    }
+
     func testSkillSettingsSnapshotUsesEnglishCopyAndPreview() {
         let settings = SkillSettings(
             isEnabled: true,

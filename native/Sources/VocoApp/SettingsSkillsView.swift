@@ -47,6 +47,8 @@ struct SettingsSkillsView: View {
     let strings: VocoStrings
 
     @State private var previewInput: String
+    @State private var selectedDetailTab: FillerCleanupDetailTab = .overview
+    @State private var isDetailPresented = false
     @State private var newMatchText = ""
     @State private var newReplacementText = ""
     @State private var replacementPreset: FillerCleanupReplacementPreset = .empty
@@ -61,21 +63,136 @@ struct SettingsSkillsView: View {
         let snapshot = coordinator.skillSettingsSnapshot(previewInput: previewInput)
 
         VStack(alignment: .leading, spacing: 16) {
-            header(snapshot)
-            masterTogglePanel(snapshot)
-
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 16) {
-                    fillerCleanupPanel(snapshot)
-                    ruleListPanel(snapshot)
-                    addRulePanel
+            masterToggle(snapshot)
+            skillLibrary(snapshot)
+        }
+        .sheet(isPresented: $isDetailPresented) {
+            FillerCleanupDetailSheet(
+                coordinator: coordinator,
+                strings: strings,
+                previewInput: $previewInput,
+                selectedTab: $selectedDetailTab,
+                newMatchText: $newMatchText,
+                newReplacementText: $newReplacementText,
+                replacementPreset: $replacementPreset,
+                onClose: {
+                    isDetailPresented = false
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+            )
+        }
+    }
 
-                previewPanel(snapshot.preview)
-                    .frame(width: 300, alignment: .topLeading)
+    private func localized(_ zhHans: String, _ en: String) -> String {
+        strings.language == .zhHans ? zhHans : en
+    }
+
+    private func masterToggle(_ snapshot: SkillSettingsSnapshot) -> some View {
+        HStack(spacing: 12) {
+            Text(strings.skills.enabledTitle)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+
+            Spacer()
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { snapshot.isEnabled },
+                    set: { coordinator.setSkillsEnabled($0) }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .pointingHandCursor()
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .skillsPanel(cornerRadius: 18)
+    }
+
+    private func skillLibrary(_ snapshot: SkillSettingsSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(localized("技能库", "Skill Library"))
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+
+            Divider()
+
+            VStack(spacing: 0) {
+                ForEach(snapshot.catalogItems) { item in
+                    SkillCatalogRow(
+                        item: item,
+                        configureTitle: localized("配置", "Configure"),
+                        onConfigure: {
+                            selectedDetailTab = .overview
+                            isDetailPresented = true
+                        }
+                    )
+                    .disabled(!item.isConfigurable)
+
+                    if item.id != snapshot.catalogItems.last?.id {
+                        Divider()
+                            .padding(.leading, 78)
+                    }
+                }
             }
         }
+        .skillsPanel(cornerRadius: 18)
+    }
+}
+
+private struct SkillCatalogRow: View {
+    let item: SkillCatalogItemSnapshot
+    let configureTitle: String
+    let onConfigure: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(item.glyph)
+                .font(SettingsWorkbenchVisual.monoBadgeFont)
+                .foregroundStyle(item.statusTone == .active ? SettingsWorkbenchVisual.accent : SettingsWorkbenchVisual.primaryText)
+                .frame(width: 38, height: 38)
+                .background(
+                    item.statusTone == .active ? SettingsWorkbenchVisual.accentSoft : SettingsWorkbenchVisual.smallCardBackground,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+                )
+
+            Text(item.title)
+                .font(SettingsWorkbenchVisual.sectionTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+
+            Spacer(minLength: 16)
+
+            SkillPill(title: item.statusTitle, tone: item.statusTone)
+
+            Button(configureTitle, action: onConfigure)
+                .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+    }
+}
+
+private struct FillerCleanupDetailSheet: View {
+    @ObservedObject var coordinator: AppCoordinator
+    let strings: VocoStrings
+    @Binding var previewInput: String
+    @Binding var selectedTab: FillerCleanupDetailTab
+    @Binding var newMatchText: String
+    @Binding var newReplacementText: String
+    @Binding var replacementPreset: FillerCleanupReplacementPreset
+    let onClose: () -> Void
+
+    private var snapshot: SkillSettingsSnapshot {
+        coordinator.skillSettingsSnapshot(previewInput: previewInput)
     }
 
     private var trimmedNewMatchText: String {
@@ -86,225 +203,272 @@ struct SettingsSkillsView: View {
         !trimmedNewMatchText.isEmpty && (replacementPreset != .custom || !newReplacementText.isEmpty)
     }
 
+    var body: some View {
+        let snapshot = snapshot
+
+        VStack(spacing: 0) {
+            header(snapshot)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    SkillsTabBar(tabs: snapshot.fillerCleanupDetail.tabs, selectedTab: $selectedTab)
+
+                    switch selectedTab {
+                    case .overview:
+                        overviewContent(snapshot)
+                    case .words:
+                        wordsContent(snapshot)
+                    case .hits:
+                        hitsContent(snapshot)
+                    }
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .scrollIndicators(.hidden)
+            .background(SettingsWorkbenchVisual.windowBackground)
+        }
+        .frame(width: 780)
+        .frame(minHeight: 620)
+        .font(SettingsWorkbenchVisual.bodyFont)
+        .background(SettingsWorkbenchVisual.windowBackground)
+    }
+
     private func localized(_ zhHans: String, _ en: String) -> String {
         strings.language == .zhHans ? zhHans : en
     }
 
     private func header(_ snapshot: SkillSettingsSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SKILLS")
-                .font(SettingsWorkbenchVisual.eyebrowFont)
-                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+        HStack(alignment: .center, spacing: 14) {
+            SkillPill(
+                title: snapshot.catalogItems.first?.statusTitle ?? "",
+                tone: snapshot.isFillerCleanupEnabled ? .active : .neutral
+            )
 
-            Text(snapshot.title)
+            Text(snapshot.fillerCleanupTitle)
                 .font(SettingsWorkbenchVisual.pageTitleFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.74)
+                .minimumScaleFactor(0.8)
 
-            Text(snapshot.detail)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
+            Spacer()
 
-    private func masterTogglePanel(_ snapshot: SkillSettingsSnapshot) -> some View {
-        Toggle(
-            isOn: Binding(
-                get: { snapshot.isEnabled },
-                set: { coordinator.setSkillsEnabled($0) }
-            )
-        ) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(strings.skills.enabledTitle)
-                    .font(SettingsWorkbenchVisual.panelTitleFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-
-                Text(snapshot.detail)
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-            }
-        }
-        .toggleStyle(.switch)
-        .padding(18)
-        .settingsSkillsPanel(cornerRadius: 16)
-    }
-
-    private func fillerCleanupPanel(_ snapshot: SkillSettingsSnapshot) -> some View {
-        Toggle(
-            isOn: Binding(
-                get: { snapshot.isFillerCleanupEnabled },
-                set: { coordinator.setFillerCleanupEnabled($0) }
-            )
-        ) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(snapshot.fillerCleanupTitle)
-                    .font(SettingsWorkbenchVisual.panelTitleFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-
-                Text(snapshot.fillerCleanupDetail)
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
-        .padding(18)
-        .settingsSkillsPanel(cornerRadius: 16)
-    }
-
-    private func ruleListPanel(_ snapshot: SkillSettingsSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(strings.skills.rulesTitle)
-                    .font(SettingsWorkbenchVisual.panelTitleFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-
-                Spacer()
-
-                Text(localized("\(snapshot.rules.count) 条", "\(snapshot.rules.count) rules"))
-                    .font(SettingsWorkbenchVisual.monoTinyFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .overlay(alignment: .bottom) {
-                Divider()
-            }
-
-            if snapshot.rules.isEmpty {
-                Text(localized("暂无规则", "No rules"))
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: 64)
-            } else {
-                ForEach(snapshot.rules) { rule in
-                    SettingsSkillRuleRow(
-                        rule: rule,
-                        actionLabel: actionLabel(for: rule.action),
-                        strings: strings,
-                        onEnabledChange: { updateRule(rule, isEnabled: $0) },
-                        onDelete: { coordinator.removeFillerCleanupRule(id: rule.id) }
-                    )
-                    .overlay(alignment: .bottom) {
-                        Divider()
-                    }
-                }
-            }
-        }
-        .settingsSkillsPanel(cornerRadius: 16)
-    }
-
-    private var addRulePanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(localized("添加自定义规则", "Add Custom Rule"))
-                .font(SettingsWorkbenchVisual.panelTitleFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(localized("匹配文本", "Match Text"))
-                    .font(SettingsWorkbenchVisual.caption2BoldFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
-
-                TextField(localized("输入要清理的语气词", "Text to clean up"), text: $newMatchText)
-                    .settingsSkillsField()
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(localized("动作", "Action"))
-                    .font(SettingsWorkbenchVisual.caption2BoldFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
-
-                Picker(localized("动作", "Action"), selection: $replacementPreset) {
-                    ForEach(FillerCleanupReplacementPreset.allCases) { preset in
-                        Text(preset.title(strings: strings)).tag(preset)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-
-            if replacementPreset == .custom {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localized("替换文本", "Replacement Text"))
-                        .font(SettingsWorkbenchVisual.caption2BoldFont)
-                        .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
-
-                    TextField(localized("输入替换后的文本", "Replacement text"), text: $newReplacementText)
-                        .settingsSkillsField()
-                }
-            }
-
-            HStack {
-                Text(actionLabel(for: replacementPreset.action(customText: newReplacementText)))
-                    .font(SettingsWorkbenchVisual.captionFont)
-                    .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button(strings.skills.addRuleButton) {
-                    addRule()
-                }
+            Button(localized("关闭", "Close"), action: onClose)
                 .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
-                .disabled(!canAddRule)
-            }
         }
-        .padding(18)
-        .settingsSkillsPanel(cornerRadius: 16)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
+        .background(SettingsWorkbenchVisual.panelBackground)
     }
 
-    private func previewPanel(_ preview: SkillPreviewSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(strings.skills.previewTitle)
-                .font(SettingsWorkbenchVisual.panelTitleFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+    private func overviewContent(_ snapshot: SkillSettingsSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            previewSection(snapshot.preview)
+            baseSettingsSection(snapshot)
+            summarySection(snapshot)
+        }
+    }
 
-            TextEditor(text: $previewInput)
-                .font(SettingsWorkbenchVisual.bodyFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .frame(minHeight: 104)
-                .background(
-                    SettingsWorkbenchVisual.softPreviewBackground,
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+    private func previewSection(_ preview: SkillPreviewSnapshot) -> some View {
+        SkillSection(title: localized("处理预览", "Preview")) {
+            HStack(alignment: .top, spacing: 14) {
+                SkillPreviewEditor(
+                    title: strings.skills.originalTextTitle,
+                    text: $previewInput
                 )
 
-            SettingsSkillPreviewTextBlock(title: strings.skills.originalTextTitle, text: preview.originalText)
-            SettingsSkillPreviewTextBlock(title: strings.skills.processedTextTitle, text: preview.processedText)
+                SkillPreviewText(
+                    title: strings.skills.processedTextTitle,
+                    text: preview.processedText
+                )
+            }
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(strings.skills.matchedRulesTitle)
-                    .font(SettingsWorkbenchVisual.caption2BoldFont)
+    private func baseSettingsSection(_ snapshot: SkillSettingsSnapshot) -> some View {
+        SkillSection(title: localized("基础设置", "Settings")) {
+            VStack(spacing: 0) {
+                SkillValueRow(title: localized("状态", "Status")) {
+                    SkillPill(
+                        title: snapshot.isFillerCleanupEnabled ? localized("已开启", "Enabled") : localized("已关闭", "Disabled"),
+                        tone: snapshot.isFillerCleanupEnabled ? .active : .neutral
+                    )
+
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { snapshot.isFillerCleanupEnabled },
+                            set: { coordinator.setFillerCleanupEnabled($0) }
+                        )
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .pointingHandCursor()
+                }
+
+                Divider()
+
+                SkillValueRow(title: localized("启用规则", "Enabled Rules")) {
+                    SkillPill(
+                        title: localized("\(snapshot.fillerCleanupDetail.enabledRuleCount) 条", "\(snapshot.fillerCleanupDetail.enabledRuleCount) rules"),
+                        tone: .neutral
+                    )
+                }
+            }
+        }
+    }
+
+    private func summarySection(_ snapshot: SkillSettingsSnapshot) -> some View {
+        SkillSection(title: localized("词库 / 命中", "Words / Hits")) {
+            HStack(alignment: .top, spacing: 12) {
+                SkillSummaryButton(
+                    title: localized("默认词库", "Default Words"),
+                    value: localized("\(snapshot.fillerCleanupDetail.defaultWords.count) 个", "\(snapshot.fillerCleanupDetail.defaultWords.count) words")
+                ) {
+                    selectedTab = .words
+                }
+
+                SkillSummaryButton(
+                    title: localized("自定义词", "Custom Words"),
+                    value: localized("\(snapshot.fillerCleanupDetail.customWords.count) 个", "\(snapshot.fillerCleanupDetail.customWords.count) words")
+                ) {
+                    selectedTab = .words
+                }
+
+                SkillSummaryButton(
+                    title: localized("累计命中", "Total Hits"),
+                    value: localized("\(snapshot.fillerCleanupDetail.totalHitCount) 处", "\(snapshot.fillerCleanupDetail.totalHitCount) hits")
+                ) {
+                    selectedTab = .hits
+                }
+            }
+        }
+    }
+
+    private func wordsContent(_ snapshot: SkillSettingsSnapshot) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            wordBlock(
+                title: localized("默认词库", "Default Words"),
+                words: snapshot.fillerCleanupDetail.defaultWords,
+                allowsDelete: false
+            )
+
+            VStack(alignment: .leading, spacing: 16) {
+                wordBlock(
+                    title: localized("自定义词", "Custom Words"),
+                    words: snapshot.fillerCleanupDetail.customWords,
+                    allowsDelete: true
+                )
+
+                addWordSection
+            }
+        }
+    }
+
+    private func wordBlock(
+        title: String,
+        words: [FillerCleanupWordSnapshot],
+        allowsDelete: Bool
+    ) -> some View {
+        SkillSection(title: title) {
+            if words.isEmpty {
+                Text(localized("暂无", "None"))
+                    .font(SettingsWorkbenchVisual.sectionTitleFont)
                     .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(words) { word in
+                        WordManageRow(
+                            word: word,
+                            enabledTitle: localized("启用", "On"),
+                            disabledTitle: localized("停用", "Off"),
+                            deleteTitle: localized("删除", "Delete"),
+                            allowsDelete: allowsDelete,
+                            onEnabledChange: { isEnabled in
+                                updateRule(id: word.id, isEnabled: isEnabled)
+                            },
+                            onDelete: {
+                                coordinator.removeFillerCleanupRule(id: word.id)
+                            }
+                        )
 
-                if preview.matchedRuleTitles.isEmpty {
-                    Text(strings.skills.noMatchedRulesTitle)
-                        .font(SettingsWorkbenchVisual.captionFont)
-                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(preview.matchedRuleTitles.enumerated()), id: \.offset) { _, title in
-                            Text(title)
-                                .font(SettingsWorkbenchVisual.captionSemiboldFont)
-                                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                                .lineLimit(1)
+                        if word.id != words.last?.id {
+                            Divider()
                         }
                     }
                 }
             }
         }
-        .padding(18)
-        .settingsSkillsPanel(cornerRadius: 16)
     }
 
-    private func updateRule(_ rule: FillerCleanupRule, isEnabled: Bool) {
+    private var addWordSection: some View {
+        SkillSection(title: localized("新增", "Add")) {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField(localized("例如：那个啥", "Example: you know"), text: $newMatchText)
+                    .skillsField()
+
+                SkillsReplacementPicker(
+                    strings: strings,
+                    selection: $replacementPreset
+                )
+
+                if replacementPreset == .custom {
+                    TextField(localized("替换字符", "Replacement"), text: $newReplacementText)
+                        .skillsField()
+                }
+
+                HStack {
+                    SkillPill(
+                        title: FillerCleanupDetailSnapshot.actionTitle(
+                            for: replacementPreset.action(customText: newReplacementText),
+                            strings: strings
+                        ),
+                        tone: replacementPreset == .empty ? .active : .neutral
+                    )
+
+                    Spacer()
+
+                    Button(localized("新增", "Add")) {
+                        addRule()
+                    }
+                    .buttonStyle(SkillsPrimaryButtonStyle())
+                    .disabled(!canAddRule)
+                }
+            }
+        }
+    }
+
+    private func hitsContent(_ snapshot: SkillSettingsSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SkillSection(title: localized("累计命中", "Total Hits")) {
+                if snapshot.fillerCleanupDetail.hitRows.isEmpty {
+                    Text(localized("暂无历史命中", "No Historical Hits"))
+                        .font(SettingsWorkbenchVisual.sectionTitleFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(snapshot.fillerCleanupDetail.hitRows) { hit in
+                            HitRow(hit: hit, countTitle: localized("\(hit.matchCount) 次", "\(hit.matchCount)x"))
+
+                            if hit.id != snapshot.fillerCleanupDetail.hitRows.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func updateRule(id: UUID, isEnabled: Bool) {
+        guard let rule = coordinator.skillSettings.fillerCleanup.rules.first(where: { $0.id == id }) else {
+            return
+        }
+
         coordinator.updateFillerCleanupRule(
             FillerCleanupRule(
                 id: rule.id,
@@ -325,7 +489,7 @@ struct SettingsSkillsView: View {
         }
 
         coordinator.addFillerCleanupRule(
-            displayName: displayName(for: matchText),
+            displayName: matchText,
             matchText: matchText,
             action: replacementPreset.action(customText: newReplacementText)
         )
@@ -333,116 +497,350 @@ struct SettingsSkillsView: View {
         newReplacementText = ""
         replacementPreset = .empty
     }
+}
 
-    private func displayName(for matchText: String) -> String {
-        switch replacementPreset {
-        case .empty:
-            "\(strings.skills.deleteActionTitle) \(matchText)"
-        case .space, .custom:
-            "\(strings.skills.replaceActionTitle) \(matchText)"
-        }
-    }
+private struct SkillsTabBar: View {
+    let tabs: [FillerCleanupDetailTabSnapshot]
+    @Binding var selectedTab: FillerCleanupDetailTab
 
-    private func actionLabel(for action: FillerCleanupAction) -> String {
-        switch action {
-        case .delete:
-            return strings.skills.deleteActionTitle
-        case .replace(let text):
-            if text == " " {
-                return "\(strings.skills.replaceActionTitle): \(strings.skills.replacementSpaceTitle)"
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(tabs) { tab in
+                let isSelected = tab.id == selectedTab
+
+                Button {
+                    selectedTab = tab.id
+                } label: {
+                    Text(tab.title)
+                        .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                        .foregroundStyle(isSelected ? Color.white : SettingsWorkbenchVisual.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .frame(maxWidth: .infinity, minHeight: 30)
+                        .background(
+                            isSelected ? SettingsWorkbenchVisual.primaryText : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, minHeight: 30)
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .pointingHandCursor()
             }
-            if text.isEmpty {
-                return "\(strings.skills.replaceActionTitle): \(strings.skills.replacementEmptyTitle)"
-            }
-            return "\(strings.skills.replaceActionTitle): \(text)"
         }
+        .padding(4)
+        .frame(maxWidth: .infinity)
+        .background(
+            SettingsWorkbenchVisual.smallCardBackground,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(SettingsWorkbenchVisual.strongBorder, lineWidth: 1)
+        )
     }
 }
 
-private struct SettingsSkillRuleRow: View {
-    let rule: FillerCleanupRule
-    let actionLabel: String
-    let strings: VocoStrings
-    let onEnabledChange: (Bool) -> Void
-    let onDelete: () -> Void
+private struct SkillSection<Content: View>: View {
+    let title: String
+    private let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { rule.isEnabled },
-                    set: { isEnabled in onEnabledChange(isEnabled) }
-                )
-            )
-            .labelsHidden()
-            .toggleStyle(.switch)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(SettingsWorkbenchVisual.panelTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(rule.displayName)
-                    .font(SettingsWorkbenchVisual.captionSemiboldFont)
+            content
+        }
+        .padding(18)
+        .skillsPanel(cornerRadius: 16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct SkillValueRow<Accessory: View>: View {
+    let title: String
+    private let accessory: Accessory
+
+    init(title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(SettingsWorkbenchVisual.sectionTitleFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                accessory
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+    }
+}
+
+private struct SkillSummaryButton: View {
+    let title: String
+    let value: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(SettingsWorkbenchVisual.sectionTitleFont)
                     .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Text(rule.matchText)
-                        .font(SettingsWorkbenchVisual.monoTinyFont)
-                        .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                        .lineLimit(1)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(
-                            SettingsWorkbenchVisual.softPreviewBackground,
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        )
+                Spacer(minLength: 8)
 
-                    Text(actionLabel)
-                        .font(SettingsWorkbenchVisual.caption2Font)
-                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
-                        .lineLimit(1)
-                }
+                SkillPill(title: value, tone: .neutral)
             }
-
-            Spacer(minLength: 8)
-
-            Button(strings.skills.deleteActionTitle, action: onDelete)
-                .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(
+                SettingsWorkbenchVisual.smallCardBackground,
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+            )
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .buttonStyle(.plain)
+        .pointingHandCursor()
     }
 }
 
-private struct SettingsSkillPreviewTextBlock: View {
+private struct SkillPreviewEditor: View {
+    let title: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(SettingsWorkbenchVisual.caption2BoldFont)
+                .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
+
+            TextEditor(text: $text)
+                .font(SettingsWorkbenchVisual.bodyFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+                .background(
+                    SettingsWorkbenchVisual.softPreviewBackground,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+                )
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct SkillPreviewText: View {
     let title: String
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(SettingsWorkbenchVisual.caption2BoldFont)
                 .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
 
             Text(text.isEmpty ? " " : text)
-                .font(SettingsWorkbenchVisual.captionFont)
+                .font(SettingsWorkbenchVisual.bodyFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
-                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+                .padding(12)
                 .background(
                     SettingsWorkbenchVisual.softPreviewBackground,
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
                 )
         }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct WordManageRow: View {
+    let word: FillerCleanupWordSnapshot
+    let enabledTitle: String
+    let disabledTitle: String
+    let deleteTitle: String
+    let allowsDelete: Bool
+    let onEnabledChange: (Bool) -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            WordToken(text: word.text)
+
+            Text(word.actionTitle)
+                .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            SkillPill(
+                title: word.isEnabled ? enabledTitle : disabledTitle,
+                tone: word.isEnabled ? .active : .neutral
+            )
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { word.isEnabled },
+                    set: { onEnabledChange($0) }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .pointingHandCursor()
+
+            if allowsDelete {
+                Button(deleteTitle, action: onDelete)
+                    .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+            }
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+private struct HitRow: View {
+    let hit: FillerCleanupHitSnapshot
+    let countTitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            WordToken(text: hit.matchedText)
+
+            Text(hit.actionTitle)
+                .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+                .lineLimit(1)
+
+            Spacer()
+
+            SkillPill(title: countTitle, tone: .neutral)
+        }
+        .padding(.vertical, 11)
+    }
+}
+
+private struct SkillsReplacementPicker: View {
+    let strings: VocoStrings
+    @Binding var selection: FillerCleanupReplacementPreset
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(FillerCleanupReplacementPreset.allCases) { preset in
+                let isSelected = preset == selection
+
+                Button {
+                    selection = preset
+                } label: {
+                    Text(preset.title(strings: strings))
+                        .font(SettingsWorkbenchVisual.captionSemiboldFont)
+                        .foregroundStyle(isSelected ? Color.white : SettingsWorkbenchVisual.primaryText)
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .background(
+                            isSelected ? SettingsWorkbenchVisual.primaryText : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .pointingHandCursor()
+            }
+        }
+        .padding(4)
+        .background(
+            SettingsWorkbenchVisual.smallCardBackground,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(SettingsWorkbenchVisual.strongBorder, lineWidth: 1)
+        )
+    }
+}
+
+private struct WordToken: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(SettingsWorkbenchVisual.captionSemiboldFont)
+            .foregroundStyle(SettingsWorkbenchVisual.primaryText)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                SettingsWorkbenchVisual.smallCardBackground,
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(SettingsWorkbenchVisual.subtleBorder, lineWidth: 1)
+            )
+    }
+}
+
+private struct SkillPill: View {
+    let title: String
+    let tone: SkillCatalogStatusTone
+
+    var body: some View {
+        let color = tone == .active ? SettingsWorkbenchVisual.accent : SettingsWorkbenchVisual.tertiaryText
+
+        Text(title)
+            .font(SettingsWorkbenchVisual.caption2BoldFont)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.10), in: Capsule())
+            .overlay(Capsule().strokeBorder(color.opacity(0.18), lineWidth: 1))
+    }
+}
+
+private struct SkillsPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(SettingsWorkbenchVisual.captionSemiboldFont)
+            .foregroundStyle(Color.white.opacity(isEnabled ? 1 : 0.58))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                SettingsWorkbenchVisual.primaryText.opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.36),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .pointingHandCursor()
     }
 }
 
 private extension View {
-    func settingsSkillsPanel(cornerRadius: CGFloat) -> some View {
+    func skillsPanel(cornerRadius: CGFloat) -> some View {
         background(
             SettingsWorkbenchVisual.panelBackground,
             in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -453,12 +851,12 @@ private extension View {
         )
     }
 
-    func settingsSkillsField() -> some View {
+    func skillsField() -> some View {
         textFieldStyle(.plain)
             .font(SettingsWorkbenchVisual.bodyFont)
             .foregroundStyle(SettingsWorkbenchVisual.primaryText)
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .background(
                 SettingsWorkbenchVisual.panelBackground,
                 in: RoundedRectangle(cornerRadius: 9, style: .continuous)
