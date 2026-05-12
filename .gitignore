@@ -9,6 +9,11 @@
 /native/.build/
 /native/.swiftpm/
 .superpowers/
+AGENTS.md
+agents.md
+/docs/superpowers/
+/prototypes/
+/videos/
 *.log
 .env
 .env.local
