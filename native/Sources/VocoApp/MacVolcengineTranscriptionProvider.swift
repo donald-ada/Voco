@@ -73,7 +73,7 @@ final class MacVolcengineTranscriptionProvider: TranscriptionProviding, Realtime
         }
     }
 
-    private func withOpenSpeechResourceFallback<T>(
+    private func withOpenSpeechResourceFallback<T: Sendable>(
         operation: (String) async throws -> T
     ) async throws -> T {
         let resourceIDs = Self.openSpeechResourceIDs
