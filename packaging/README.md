@@ -14,6 +14,9 @@ Build the native Swift/SwiftUI app bundle:
 packaging/build_native_app_bundle.sh --profile debug
 ```
 
+The build script automatically prepares the pinned SherpaOnnx static runtime in
+local cache when it is missing.
+
 The generated bundle is:
 
 ```text

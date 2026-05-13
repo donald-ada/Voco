@@ -5,6 +5,7 @@ import VocoAppCore
 struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
     @State private var selectedSection: SettingsWorkbenchSection = .overview
+    @State private var selectedModelSource: TranscriptionModelProviderID = .volcengine
     @State private var selectedVolcengineCredentialMode: VolcengineCredentialMode = .apiKey
     @State private var transcriptionAPIKey = ""
     @State private var volcengineAppID = ""
@@ -46,6 +47,7 @@ struct SettingsView: View {
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             coordinator.prepareForSettingsPresentation()
+            syncSelectedModelSource()
             syncSelectedVolcengineCredentialMode()
             refreshStatisticsDashboardSnapshot()
         }
@@ -63,6 +65,9 @@ struct SettingsView: View {
         .onChange(of: coordinator.appLanguage) { _, _ in
             refreshStatisticsDashboardSnapshot()
         }
+        .onChange(of: coordinator.transcriptionModelSelection.providerID) { _, _ in
+            syncSelectedModelSource()
+        }
         .onChange(of: coordinator.recentVoiceInputSessions) { _, _ in
             if selectedSection == .statistics {
                 refreshStatisticsDashboardSnapshot()
@@ -72,6 +77,8 @@ struct SettingsView: View {
             coordinator.refreshLegacyInstall()
             coordinator.refreshPermissions()
             coordinator.refreshTranscriptionCredentials()
+            coordinator.refreshLocalSpeechModelStatus()
+            syncSelectedModelSource()
             syncSelectedVolcengineCredentialMode()
             if selectedSection == .statistics {
                 refreshStatisticsDashboardSnapshot()
@@ -181,7 +188,17 @@ struct SettingsView: View {
                 detail: strings.settings.modelDetail
             )
 
-            credentialPanel
+            modelSourcePanel
+
+            switch ModelSourcePanelKind.resolve(
+                selectedProviderID: selectedModelSource,
+                localModelStatus: coordinator.localSpeechModelStatus
+            ) {
+            case .volcengineCredentials:
+                credentialPanel
+            case .localModelDownload, .localModelReady, .localModelFailed:
+                localModelPanel
+            }
         }
     }
 
@@ -479,6 +496,126 @@ struct SettingsView: View {
                     }
                     .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
                     .disabled(!coordinator.transcriptionCredentials.hasCredential)
+                }
+            }
+        }
+    }
+
+    private var modelSourcePanel: some View {
+        workbenchPanel(
+            title: strings.settings.providerSourceTitle,
+            detail: strings.settings.providerSourceDetail
+        ) {
+            WorkbenchStatusPill(
+                coordinator.transcriptionModelSelection.providerID.title(strings: strings),
+                color: SettingsWorkbenchVisual.accent
+            )
+        } content: {
+            WorkbenchSegmentedControl(
+                options: Array(TranscriptionModelProviderID.allCases),
+                selected: selectedModelSource,
+                width: 270,
+                title: { $0.title(strings: strings) }
+            ) { providerID in
+                selectModelSource(providerID)
+            }
+        }
+    }
+
+    private var localModelPanel: some View {
+        workbenchPanel(
+            title: strings.settings.localModelPanelTitle,
+            detail: strings.settings.localModelPanelDetail
+        ) {
+            WorkbenchStatusPill(
+                localModelStatusTitle,
+                systemImage: localModelStatusSystemImage,
+                color: localModelStatusColor
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 10) {
+                WorkbenchInfoRow(
+                    systemImage: "waveform.badge.mic",
+                    title: strings.settings.recommendedModelNameLabel,
+                    detail: LocalSpeechModelManifest.recommended.displayName,
+                    color: SettingsWorkbenchVisual.accent
+                ) {
+                    Text(LocalSpeechModelManifest.recommended.version)
+                        .font(SettingsWorkbenchVisual.caption2BoldFont)
+                        .foregroundStyle(SettingsWorkbenchVisual.secondaryText)
+                }
+
+                WorkbenchInfoRow(
+                    systemImage: localModelStatusSystemImage,
+                    title: strings.settings.localModelStatusLabel,
+                    detail: localModelStatusDetail,
+                    color: localModelStatusColor
+                ) {
+                    WorkbenchStatusPill(localModelStatusTitle, color: localModelStatusColor)
+                }
+
+                WorkbenchInfoRow(
+                    systemImage: "arrow.down.circle",
+                    title: strings.settings.localModelArchiveLabel,
+                    detail: LocalSpeechModelManifest.recommended.archiveURL.absoluteString,
+                    color: SettingsWorkbenchVisual.neutral
+                ) {
+                    EmptyView()
+                }
+
+                HStack(spacing: 8) {
+                    switch ModelSourcePanelKind.resolve(
+                        selectedProviderID: selectedModelSource,
+                        localModelStatus: coordinator.localSpeechModelStatus
+                    ) {
+                    case .volcengineCredentials:
+                        EmptyView()
+                    case .localModelDownload:
+                        Button {
+                            Task {
+                                await coordinator.downloadRecommendedLocalModel()
+                                if coordinator.localSpeechModelStatus.canApply {
+                                    settingsFeedbackMessage = strings.settings.localModelDownloadedFeedback
+                                }
+                            }
+                        } label: {
+                            Label(strings.settings.downloadLocalModelButton, systemImage: "arrow.down.circle")
+                        }
+                        .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
+                        .disabled(isLocalModelBusy)
+                    case .localModelReady:
+                        Button {
+                            coordinator.applyTranscriptionModelSelection(.localRecommended)
+                            settingsFeedbackMessage = strings.settings.localModelActivatedFeedback
+                        } label: {
+                            Label(
+                                coordinator.transcriptionModelSelection.providerID == .localRecommended
+                                    ? strings.settings.localModelActiveButton
+                                    : strings.settings.applyLocalModelButton,
+                                systemImage: coordinator.transcriptionModelSelection.providerID == .localRecommended
+                                    ? "checkmark.circle"
+                                    : "waveform.badge.checkmark"
+                            )
+                        }
+                        .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
+                        .disabled(coordinator.transcriptionModelSelection.providerID == .localRecommended)
+                    case .localModelFailed:
+                        Button {
+                            Task {
+                                await coordinator.downloadRecommendedLocalModel()
+                            }
+                        } label: {
+                            Label(strings.settings.downloadLocalModelButton, systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
+                        .disabled(isLocalModelBusy)
+                    }
+
+                    Button(strings.settings.refreshStatusButton) {
+                        coordinator.refreshLocalSpeechModelStatus()
+                        settingsFeedbackMessage = strings.settings.refreshedLocalModelStatusFeedback
+                    }
+                    .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
                 }
             }
         }
@@ -817,6 +954,98 @@ struct SettingsView: View {
         }
 
         selectedVolcengineCredentialMode = mode
+    }
+
+    private func syncSelectedModelSource() {
+        selectedModelSource = coordinator.transcriptionModelSelection.providerID
+    }
+
+    private func selectModelSource(_ providerID: TranscriptionModelProviderID) {
+        selectedModelSource = providerID
+
+        switch providerID {
+        case .volcengine:
+            coordinator.applyTranscriptionModelSelection(.volcengine)
+            settingsFeedbackMessage = strings.settings.modelSourceChangedFeedback(
+                providerID.title(strings: strings)
+            )
+        case .localRecommended:
+            coordinator.refreshLocalSpeechModelStatus()
+            if coordinator.localSpeechModelStatus.canApply {
+                coordinator.applyTranscriptionModelSelection(.localRecommended)
+                settingsFeedbackMessage = strings.settings.localModelActivatedFeedback
+            }
+        }
+    }
+
+    private var localModelStatusTitle: String {
+        switch coordinator.localSpeechModelStatus {
+        case .notDownloaded:
+            return strings.settings.localModelNotDownloadedTitle
+        case .downloading:
+            return strings.settings.localModelDownloadingTitle
+        case .verifying:
+            return strings.settings.localModelVerifyingTitle
+        case .ready:
+            return strings.settings.localModelReadyTitle
+        case .failed, .unavailable:
+            return strings.settings.localModelUnavailableTitle
+        }
+    }
+
+    private var localModelStatusDetail: String {
+        switch coordinator.localSpeechModelStatus {
+        case .notDownloaded:
+            return strings.settings.localModelNotDownloadedDetail
+        case .downloading(let progress):
+            if let fraction = progress.fractionCompleted {
+                return "\(strings.settings.localModelDownloadingDetail) \(Int((fraction * 100).rounded()))%"
+            }
+            return strings.settings.localModelDownloadingDetail
+        case .verifying:
+            return strings.settings.localModelVerifyingDetail
+        case .ready:
+            return strings.settings.localModelReadyDetail
+        case .failed(let message), .unavailable(let message):
+            return message
+        }
+    }
+
+    private var localModelStatusColor: Color {
+        switch coordinator.localSpeechModelStatus {
+        case .ready:
+            return SettingsWorkbenchVisual.success
+        case .failed, .unavailable:
+            return SettingsWorkbenchVisual.danger
+        case .downloading, .verifying:
+            return SettingsWorkbenchVisual.warning
+        case .notDownloaded:
+            return SettingsWorkbenchVisual.neutral
+        }
+    }
+
+    private var localModelStatusSystemImage: String {
+        switch coordinator.localSpeechModelStatus {
+        case .notDownloaded:
+            return "arrow.down.circle"
+        case .downloading:
+            return "arrow.down.circle.fill"
+        case .verifying:
+            return "checkmark.shield"
+        case .ready:
+            return "checkmark.circle"
+        case .failed, .unavailable:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var isLocalModelBusy: Bool {
+        switch coordinator.localSpeechModelStatus {
+        case .downloading, .verifying:
+            return true
+        case .notDownloaded, .ready, .failed, .unavailable:
+            return false
+        }
     }
 
     private func clearTranscriptionInputFields() {

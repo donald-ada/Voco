@@ -103,6 +103,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NATIVE_DIR="${REPO_ROOT}/native"
+ENSURE_SHERPA_RUNTIME="${NATIVE_DIR}/scripts/ensure_sherpa_onnx_runtime.sh"
 BUNDLE_PATH="${REPO_ROOT}/target/native/Voco.app"
 CONTENTS_DIR="${BUNDLE_PATH}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -131,6 +132,8 @@ if [[ ! -f "${MENU_BAR_ICON_SOURCE}" ]]; then
   echo "missing required file: ${MENU_BAR_ICON_SOURCE}" >&2
   exit 66
 fi
+
+"${ENSURE_SHERPA_RUNTIME}"
 
 swift build --package-path "${NATIVE_DIR}" -c "${SWIFT_CONFIG}" --product Voco
 echo "ok: built native Swift app: ${SWIFT_CONFIG}"

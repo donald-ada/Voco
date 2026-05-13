@@ -304,38 +304,6 @@ public struct SkillSettingsSnapshot: Equatable, Sendable {
                 statusTitle: settings.fillerCleanup.isEnabled ? localized("已开启", "Enabled", strings: strings) : localized("已关闭", "Disabled", strings: strings),
                 statusTone: settings.fillerCleanup.isEnabled ? .active : .neutral,
                 isConfigurable: true
-            ),
-            SkillCatalogItemSnapshot(
-                id: "punctuation",
-                glyph: "PU",
-                title: localized("标点优化", "Punctuation", strings: strings),
-                statusTitle: localized("规划中", "Planned", strings: strings),
-                statusTone: .neutral,
-                isConfigurable: false
-            ),
-            SkillCatalogItemSnapshot(
-                id: "format",
-                glyph: "FM",
-                title: localized("格式整理", "Formatting", strings: strings),
-                statusTitle: localized("规划中", "Planned", strings: strings),
-                statusTone: .neutral,
-                isConfigurable: false
-            ),
-            SkillCatalogItemSnapshot(
-                id: "polish",
-                glyph: "PL",
-                title: localized("文本润色", "Text Polish", strings: strings),
-                statusTitle: localized("未启用", "Disabled", strings: strings),
-                statusTone: .neutral,
-                isConfigurable: false
-            ),
-            SkillCatalogItemSnapshot(
-                id: "modelRoute",
-                glyph: "MR",
-                title: localized("模型路由", "Model Routing", strings: strings),
-                statusTitle: localized("后续", "Later", strings: strings),
-                statusTone: .neutral,
-                isConfigurable: false
             )
         ]
     }

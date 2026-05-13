@@ -501,8 +501,9 @@ public struct SettingsStrings: Sendable {
     public var voiceInputExperienceDetail: String { language == .zhHans ? "配置开始录音的按键、触发方式、麦克风输入和 macOS 权限。" : "Configure the recording key, trigger mode, microphone input, and macOS permissions." }
     public var recordingControlTitle: String { language == .zhHans ? "录音控制" : "Recording Control" }
     public var recordingControlDetail: String { language == .zhHans ? "选择快捷键、录音方式和输入设备。" : "Choose the hotkey, recording mode, and input device." }
-    public var modelTitle: String { language == .zhHans ? "火山引擎模型" : "Volcengine Model" }
-    public var modelDetail: String { language == .zhHans ? "选择凭证模式，并将火山引擎凭证保存到 macOS Keychain。" : "Choose a credential mode and save Volcengine credentials to macOS Keychain." }
+    public var modelTitle: String { language == .zhHans ? "模型" : "Model" }
+    public var modelDetail: String { language == .zhHans ? "选择火山引擎或按需下载本地模型，并应用到后续录音。" : "Choose Volcengine or download the recommended local model on demand for future recordings." }
+    public var providerSourceDetail: String { language == .zhHans ? "切换当前录音使用的转写来源。" : "Switch the transcription source used for future recordings." }
     public var statisticsTitle: String { language == .zhHans ? "统计" : "Statistics" }
     public var statisticsDetail: String { language == .zhHans ? "查看语音输入使用趋势、应用分布和活跃时段。" : "View voice input usage trends, app distribution, and active hours." }
     public var hotkeyLabel: String { language == .zhHans ? "快捷键" : "Hotkey" }
@@ -519,6 +520,29 @@ public struct SettingsStrings: Sendable {
     public var refreshedVolcengineStatusFeedback: String { language == .zhHans ? "已刷新火山引擎状态。" : "Volcengine status refreshed." }
     public var clearedCredentialsFeedback: String { language == .zhHans ? "已清除火山引擎凭证。" : "Volcengine credentials cleared." }
     public var clearCredentialsButton: String { language == .zhHans ? "清除凭证" : "Clear Credentials" }
+    public var localModelPanelTitle: String { language == .zhHans ? "推荐本地模型" : "Recommended Local Model" }
+    public var localModelPanelDetail: String { language == .zhHans ? "模型文件按需下载到本机缓存，不会内置在 App 中。" : "Model files are downloaded on demand into local cache and are not bundled in the app." }
+    public var recommendedModelNameLabel: String { language == .zhHans ? "推荐模型" : "Recommended Model" }
+    public var localModelStatusLabel: String { language == .zhHans ? "模型状态" : "Model Status" }
+    public var localModelArchiveLabel: String { language == .zhHans ? "模型来源" : "Model Source" }
+    public var downloadLocalModelButton: String { language == .zhHans ? "下载模型" : "Download Model" }
+    public var applyLocalModelButton: String { language == .zhHans ? "应用本地模型" : "Apply Local Model" }
+    public var localModelActiveButton: String { language == .zhHans ? "当前使用中" : "Active" }
+    public var localModelDownloadedFeedback: String { language == .zhHans ? "本地模型已下载，可立即应用。" : "Local model downloaded and ready to apply." }
+    public var localModelActivatedFeedback: String { language == .zhHans ? "后续录音将使用本地模型。" : "Future recordings will use the local model." }
+    public var refreshedLocalModelStatusFeedback: String { language == .zhHans ? "已刷新本地模型状态。" : "Local model status refreshed." }
+    public func modelSourceChangedFeedback(_ sourceTitle: String) -> String {
+        language == .zhHans ? "模型来源已切换为 \(sourceTitle)。" : "Model source switched to \(sourceTitle)."
+    }
+    public var localModelNotDownloadedTitle: String { language == .zhHans ? "未下载" : "Not Downloaded" }
+    public var localModelNotDownloadedDetail: String { language == .zhHans ? "推荐模型尚未下载到本机。" : "The recommended model has not been downloaded yet." }
+    public var localModelDownloadingTitle: String { language == .zhHans ? "下载中" : "Downloading" }
+    public var localModelDownloadingDetail: String { language == .zhHans ? "正在下载推荐模型文件。" : "Downloading the recommended model files." }
+    public var localModelVerifyingTitle: String { language == .zhHans ? "校验中" : "Verifying" }
+    public var localModelVerifyingDetail: String { language == .zhHans ? "正在校验并安装本地模型。" : "Verifying and installing the local model." }
+    public var localModelReadyTitle: String { language == .zhHans ? "已就绪" : "Ready" }
+    public var localModelReadyDetail: String { language == .zhHans ? "模型文件已安装在本机，可用于实时转写。" : "The model files are installed locally and ready for realtime transcription." }
+    public var localModelUnavailableTitle: String { language == .zhHans ? "不可用" : "Unavailable" }
     public var permissionsTitle: String { language == .zhHans ? "权限" : "Permissions" }
     public var permissionsDetail: String { language == .zhHans ? "允许麦克风和辅助功能。" : "Allow microphone and accessibility access." }
     public var recheckedPermissionsFeedback: String { language == .zhHans ? "已重新检查权限。" : "Permissions rechecked." }

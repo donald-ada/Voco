@@ -10,16 +10,29 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CSherpaOnnx",
+            path: "Vendor/SherpaOnnx/CSherpaOnnx",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "VocoAppCore",
             path: "Sources/VocoAppCore",
             linkerSettings: [.linkedLibrary("z")]
         ),
         .executableTarget(
             name: "VocoApp",
-            dependencies: ["VocoAppCore"],
+            dependencies: ["VocoAppCore", "CSherpaOnnx"],
             path: "Sources/VocoApp",
             resources: [.process("Resources")],
-            linkerSettings: [.linkedLibrary("sqlite3")]
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
+                .linkedLibrary("c++"),
+                .unsafeFlags([
+                    "-L", "Vendor/SherpaOnnx/lib",
+                    "-lsherpa-onnx",
+                    "-lonnxruntime",
+                ])
+            ]
         ),
         .testTarget(
             name: "VocoAppCoreTests",

@@ -68,18 +68,23 @@ public final class AppCoordinator: ObservableObject {
     @Published public private(set) var voiceInputSessionRetentionPolicy: VoiceInputSessionRetentionPolicy
     @Published public private(set) var appLanguage: AppLanguage
     @Published public private(set) var skillSettings: SkillSettings
+    @Published public private(set) var transcriptionModelSelection: TranscriptionModelSelection
+    @Published public private(set) var localSpeechModelStatus: LocalSpeechModelStatus
 
     private let permissionProvider: any PermissionProviding
     private let launchAtLoginProvider: any LaunchAtLoginProviding
     private let recordingWorkflow: any RecordingWorkflowing
     private let hotkeyProvider: any HotkeyProviding
     private let transcriptionCredentialStore: any TranscriptionCredentialStoring
+    private let transcriptionModelSelectionStore: any TranscriptionModelSelectionStoring
     private let installLocationProvider: any InstallLocationProviding
     private let legacyInstallProvider: any LegacyInstallProviding
     private let voiceInputPreferenceStore: any VoiceInputPreferenceStoring
     private let appPreferenceStore: any AppPreferenceStoring
     private let voiceInputSessionStore: any VoiceInputSessionStoring
     private let skillPreferenceStore: any SkillPreferenceStoring
+    private let localSpeechModelStatusProvider: @MainActor () -> LocalSpeechModelStatus
+    private let downloadRecommendedLocalModelHandler: @MainActor (@escaping @MainActor (LocalSpeechModelStatus) -> Void) async -> Void
     private var activeTranscriptionSessionID: UUID?
     private var isRecordingWorkflowTransitionActive: Bool
     private var pendingStopAfterRecordingStart: Bool
@@ -99,6 +104,9 @@ public final class AppCoordinator: ObservableObject {
         appPreferenceStore: any AppPreferenceStoring = NoOpAppPreferenceStore(),
         voiceInputSessionStore: any VoiceInputSessionStoring = InMemoryVoiceInputSessionStore(),
         skillPreferenceStore: any SkillPreferenceStoring = NoOpSkillPreferenceStore(),
+        transcriptionModelSelectionStore: any TranscriptionModelSelectionStoring = NoOpTranscriptionModelSelectionStore(),
+        localSpeechModelStatusProvider: @escaping @MainActor () -> LocalSpeechModelStatus = { .notDownloaded },
+        downloadRecommendedLocalModelHandler: @escaping @MainActor (@escaping @MainActor (LocalSpeechModelStatus) -> Void) async -> Void = { _ in },
         hotkeyBinding: HotkeyBinding = .default,
         hotkeyMode: HotkeyMode = .toggle
     ) {
@@ -112,6 +120,8 @@ public final class AppCoordinator: ObservableObject {
         let initialVoiceInputSessionRetentionPolicy = appPreferenceStore.voiceInputSessionRetentionPolicy
         let initialLegacyInstall = legacyInstallProvider.currentSnapshot(strings: initialStrings)
         let initialSkillSettings = skillPreferenceStore.skillSettings
+        let initialTranscriptionModelSelection = transcriptionModelSelectionStore.selection
+        let initialLocalSpeechModelStatus = localSpeechModelStatusProvider()
         let initialSessionLoadResult: (sessions: [VoiceInputSessionSnapshot], errorMessage: String?)
         if initialVoiceInputSessionHistoryEnabled {
             do {
@@ -138,12 +148,15 @@ public final class AppCoordinator: ObservableObject {
         self.recordingWorkflow = recordingWorkflow
         self.hotkeyProvider = hotkeyProvider
         self.transcriptionCredentialStore = transcriptionCredentialStore
+        self.transcriptionModelSelectionStore = transcriptionModelSelectionStore
         self.installLocationProvider = installLocationProvider
         self.legacyInstallProvider = legacyInstallProvider
         self.voiceInputPreferenceStore = voiceInputPreferenceStore
         self.appPreferenceStore = appPreferenceStore
         self.voiceInputSessionStore = voiceInputSessionStore
         self.skillPreferenceStore = skillPreferenceStore
+        self.localSpeechModelStatusProvider = localSpeechModelStatusProvider
+        self.downloadRecommendedLocalModelHandler = downloadRecommendedLocalModelHandler
         self.permissions = initialPermissions
         self.launchAtLoginState = initialLaunchAtLoginState
         self.hotkeyRuntimeState = .inactive
@@ -166,6 +179,8 @@ public final class AppCoordinator: ObservableObject {
         self.voiceInputSessionRetentionPolicy = initialVoiceInputSessionRetentionPolicy
         self.appLanguage = initialAppLanguage
         self.skillSettings = initialSkillSettings
+        self.transcriptionModelSelection = initialTranscriptionModelSelection
+        self.localSpeechModelStatus = initialLocalSpeechModelStatus
         self.activeTranscriptionSessionID = nil
         self.isRecordingWorkflowTransitionActive = false
         self.pendingStopAfterRecordingStart = false
@@ -203,10 +218,12 @@ public final class AppCoordinator: ObservableObject {
             hotkeyState: hotkeyRuntimeState,
             hotkeyBinding: hotkeyBinding,
             hotkeyMode: hotkeyMode,
-            asrStatus: transcriptionProviderStatus,
+            asrStatus: workbenchTranscriptionProviderStatus,
             credentials: transcriptionCredentials,
             injection: lastInjection,
             lastErrorMessage: lastErrorMessage,
+            modelSelection: transcriptionModelSelection,
+            localModelStatus: localSpeechModelStatus,
             transcriptionErrorMessage: status == .providerOffline ? lastErrorMessage : nil
         )
     }
@@ -337,6 +354,7 @@ public final class AppCoordinator: ObservableObject {
         clearRuntimeError()
         installLocation = installLocationProvider.currentInstallLocation(strings: strings)
         refreshLegacyInstall()
+        refreshLocalSpeechModelStatus()
         permissions = permissionProvider.currentSnapshots()
         launchAtLoginState = launchAtLoginProvider.currentState()
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
@@ -362,6 +380,7 @@ public final class AppCoordinator: ObservableObject {
     public func prepareForSettingsPresentation() {
         transcriptionProviderStatus = recordingWorkflow.transcriptionStatus
         refreshLegacyInstall()
+        refreshLocalSpeechModelStatus()
         refreshTranscriptionCredentials()
         refreshTranscriptionCredentialsInBackground()
         refreshPermissions()
@@ -373,6 +392,50 @@ public final class AppCoordinator: ObservableObject {
 
     public func refreshTranscriptionCredentials() {
         applyTranscriptionCredentialSnapshot(transcriptionCredentialStore.currentSnapshot())
+    }
+
+    public func refreshLocalSpeechModelStatus() {
+        localSpeechModelStatus = localSpeechModelStatusProvider()
+    }
+
+    public func applyTranscriptionModelSelection(_ providerID: TranscriptionModelProviderID) {
+        refreshLocalSpeechModelStatus()
+
+        let nextSelection = TranscriptionModelSelection(
+            providerID: providerID,
+            localModelID: transcriptionModelSelection.localModelID
+        )
+
+        switch providerID {
+        case .volcengine:
+            transcriptionModelSelection = nextSelection
+            transcriptionModelSelectionStore.saveSelection(nextSelection)
+            clearRuntimeError()
+        case .localRecommended:
+            guard localSpeechModelStatus.canApply else {
+                setRuntimeError(.message(localSpeechModelUnavailableMessage(for: localSpeechModelStatus)))
+                return
+            }
+
+            transcriptionModelSelection = nextSelection
+            transcriptionModelSelectionStore.saveSelection(nextSelection)
+            clearRuntimeError()
+        }
+    }
+
+    public func downloadRecommendedLocalModel() async {
+        await downloadRecommendedLocalModelHandler { [weak self] status in
+            self?.localSpeechModelStatus = status
+        }
+
+        switch localSpeechModelStatus {
+        case .ready:
+            clearRuntimeError()
+        case .failed(let message), .unavailable(let message):
+            setRuntimeError(.message(message))
+        case .notDownloaded, .downloading, .verifying:
+            break
+        }
     }
 
     public func refreshTranscriptionCredentialsInBackground() {
@@ -654,6 +717,22 @@ public final class AppCoordinator: ObservableObject {
         return transcriptionCredentials.localized(strings: strings)
     }
 
+    private var workbenchTranscriptionProviderStatus: TranscriptionProviderStatus {
+        switch transcriptionModelSelection.providerID {
+        case .volcengine:
+            return transcriptionProviderStatus
+        case .localRecommended:
+            guard localSpeechModelStatus.canApply else {
+                return .failed(
+                    providerName: localRecommendedTranscriptionProviderName,
+                    message: localSpeechModelUnavailableMessage(for: localSpeechModelStatus)
+                )
+            }
+
+            return .ready(providerName: localRecommendedTranscriptionProviderName)
+        }
+    }
+
     private func runtimeStatusAfterPermissionCheck() -> AppRuntimeStatus {
         return permissionSummary.allRequiredGranted ? .ready : .permissionNeeded
     }
@@ -905,6 +984,21 @@ public final class AppCoordinator: ObservableObject {
             legacyInstallError.localizedDescription(strings: strings)
         default:
             error.localizedDescription
+        }
+    }
+
+    private func localSpeechModelUnavailableMessage(for status: LocalSpeechModelStatus) -> String {
+        switch status {
+        case .notDownloaded:
+            return LocalSpeechModelError.notDownloaded.localizedDescription
+        case .downloading:
+            return strings.language == .zhHans ? "本地模型正在下载。" : "Local model is downloading."
+        case .verifying:
+            return strings.language == .zhHans ? "本地模型正在校验。" : "Local model is verifying."
+        case .ready:
+            return strings.language == .zhHans ? "本地模型已就绪。" : "Local model is ready."
+        case .failed(let message), .unavailable(let message):
+            return message
         }
     }
 

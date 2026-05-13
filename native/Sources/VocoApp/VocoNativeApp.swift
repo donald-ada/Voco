@@ -11,11 +11,33 @@ struct VocoNativeAppDependencies {
     static func make() -> VocoNativeAppDependencies {
         let permissionProvider = MacPermissionProvider()
         let credentialStore = MacKeychainCredentialStore()
+        let transcriptionModelSelectionStore = MacTranscriptionModelSelectionStore()
         let voiceInputPreferences = MacVoiceInputPreferenceStore()
         let appPreferences = MacAppPreferenceStore()
         let skillPreferenceStore = MacSkillPreferenceStore()
         let voiceInputSessionStore = MacVoiceInputSessionStore.makeDefault()
-        let transcriptionProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
+        let localSpeechModelStore = LocalSpeechModelStore()
+        let localSpeechModelDownloader = LocalSpeechModelDownloader(store: localSpeechModelStore)
+        let volcengineProvider = MacVolcengineTranscriptionProvider(credentialStore: credentialStore)
+        let localProvider = MacSherpaOnnxTranscriptionProvider(
+            runtime: NativeSherpaOnnxRuntime(),
+            modelStatusProvider: {
+                localSpeechModelStore.status(for: .recommended)
+            },
+            modelDirectoryProvider: {
+                try localSpeechModelStore.validateInstalledModel(for: .recommended)
+            }
+        )
+        let transcriptionProvider = SwitchingTranscriptionProvider(
+            selectionProvider: {
+                transcriptionModelSelectionStore.selection
+            },
+            localModelStatusProvider: {
+                localSpeechModelStore.status(for: .recommended)
+            },
+            volcengineProvider: volcengineProvider,
+            localProvider: localProvider
+        )
         let audioCapture = MacAudioCaptureEngine()
         if let audioInputDevice = voiceInputPreferences.audioInputDevice {
             audioCapture.setInputDevice(audioInputDevice)
@@ -38,6 +60,19 @@ struct VocoNativeAppDependencies {
             appPreferenceStore: appPreferences,
             voiceInputSessionStore: voiceInputSessionStore,
             skillPreferenceStore: skillPreferenceStore,
+            transcriptionModelSelectionStore: transcriptionModelSelectionStore,
+            localSpeechModelStatusProvider: {
+                localSpeechModelStore.status(for: .recommended)
+            },
+            downloadRecommendedLocalModelHandler: { update in
+                update(.downloading(LocalSpeechModelDownloadProgress(bytesWritten: 0, totalBytes: nil)))
+                let status = await localSpeechModelDownloader.download(manifest: .recommended) { progress in
+                    Task { @MainActor in
+                        update(.downloading(progress))
+                    }
+                }
+                update(status)
+            },
             hotkeyBinding: voiceInputPreferences.hotkeyPreset?.binding ?? .default,
             hotkeyMode: voiceInputPreferences.hotkeyMode ?? .toggle
         )

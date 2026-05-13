@@ -9,7 +9,7 @@ final class SkillSettingsModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.fillerCleanupTitle, "语气词清理")
     }
 
-    func testSkillSettingsSnapshotBuildsPrototypeSkillLibrary() {
+    func testSkillSettingsSnapshotBuildsImplementedSkillLibraryOnly() {
         let snapshot = SkillSettingsSnapshot(
             settings: SkillSettings(
                 isEnabled: true,
@@ -18,15 +18,14 @@ final class SkillSettingsModelsTests: XCTestCase {
             previewInput: "嗯测试"
         )
 
-        XCTAssertEqual(snapshot.catalogItems.map(\.id), ["fillerCleanup", "punctuation", "format", "polish", "modelRoute"])
-        XCTAssertEqual(snapshot.catalogItems.map(\.glyph), ["CL", "PU", "FM", "PL", "MR"])
+        XCTAssertEqual(snapshot.catalogItems.map(\.id), [FillerCleanupSkill.skillID])
+        XCTAssertEqual(snapshot.catalogItems.map(\.glyph), ["CL"])
         XCTAssertEqual(snapshot.catalogItems.first?.title, "语气词清理")
         XCTAssertEqual(snapshot.catalogItems.first?.statusTitle, "已开启")
         XCTAssertTrue(snapshot.catalogItems.first?.isConfigurable == true)
-        XCTAssertFalse(snapshot.catalogItems.dropFirst().contains { $0.isConfigurable })
     }
 
-    func testSkillSettingsSnapshotLocalizesSkillLibraryStatuses() {
+    func testSkillSettingsSnapshotLocalizesImplementedSkillStatus() {
         let snapshot = SkillSettingsSnapshot(
             settings: SkillSettings(
                 isEnabled: true,
@@ -36,10 +35,9 @@ final class SkillSettingsModelsTests: XCTestCase {
             strings: VocoStrings(language: .en)
         )
 
+        XCTAssertEqual(snapshot.catalogItems.map(\.id), [FillerCleanupSkill.skillID])
         XCTAssertEqual(snapshot.catalogItems.first?.title, "Filler Cleanup")
         XCTAssertEqual(snapshot.catalogItems.first?.statusTitle, "Disabled")
-        XCTAssertEqual(snapshot.catalogItems[1].statusTitle, "Planned")
-        XCTAssertEqual(snapshot.catalogItems[4].statusTitle, "Later")
     }
 
     func testFillerCleanupDetailSplitsDefaultAndCustomWords() {

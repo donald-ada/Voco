@@ -138,6 +138,8 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         credentials: TranscriptionCredentialSnapshot,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?,
+        modelSelection: TranscriptionModelSelection = .default,
+        localModelStatus: LocalSpeechModelStatus = .notDownloaded,
         transcriptionErrorMessage: String? = nil
     ) -> SettingsWorkbenchSnapshot {
         let requiredMissing = permissions.first { permission in
@@ -149,6 +151,13 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         let inputNeedsAttention = injection.map { !$0.succeeded } ?? false
         let transcriptionErrorMessage = transcriptionErrorMessage?.nonEmpty
         let workbenchStrings = strings.workbench
+        let localModelIssue = localModelIssue(
+            strings: workbenchStrings,
+            modelSelection: modelSelection,
+            localModelStatus: localModelStatus
+        )
+        let credentialNeedsAttention = modelSelection.providerID == .volcengine &&
+            (!credentials.hasCredential || credentials.lastErrorMessage != nil)
 
         let overview: SettingsWorkbenchOverviewSnapshot
         if let requiredMissing {
@@ -163,7 +172,15 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
                     : workbenchStrings.openAccessibilitySettingsAction,
                 secondaryActionDisplayTitle: workbenchStrings.refreshAction
             )
-        } else if !credentials.hasCredential || credentials.lastErrorMessage != nil {
+        } else if let localModelIssue {
+            overview = SettingsWorkbenchOverviewSnapshot(
+                title: localModelIssue.title,
+                detail: localModelIssue.detail,
+                primaryActionID: SettingsWorkbenchActionID.openModel,
+                primaryActionDisplayTitle: workbenchStrings.openModelAction,
+                secondaryActionDisplayTitle: workbenchStrings.refreshAction
+            )
+        } else if credentialNeedsAttention {
             overview = SettingsWorkbenchOverviewSnapshot(
                 title: workbenchStrings.credentialTitle(hasError: credentials.lastErrorMessage != nil),
                 detail: workbenchStrings.credentialDetail(lastErrorMessage: credentials.lastErrorMessage),
@@ -214,8 +231,8 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         }
 
         let hasRequiredPermissionProblem = requiredMissing != nil
-        let transcriptionNeedsAttention = !credentials.hasCredential ||
-            credentials.lastErrorMessage != nil ||
+        let transcriptionNeedsAttention = localModelIssue != nil ||
+            credentialNeedsAttention ||
             transcriptionErrorMessage != nil ||
             asrStatus.isWorkbenchAttention
         let hasRuntimeError = lastErrorMessage?.nonEmpty != nil
@@ -233,6 +250,8 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             missingRequiredPermissions: missingRequiredPermissions,
             credentials: credentials,
             asrStatus: asrStatus,
+            modelSelection: modelSelection,
+            localModelStatus: localModelStatus,
             transcriptionErrorMessage: transcriptionErrorMessage,
             injection: injection,
             lastErrorMessage: lastErrorMessage
@@ -260,6 +279,8 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         missingRequiredPermissions: [PermissionSnapshot],
         credentials: TranscriptionCredentialSnapshot,
         asrStatus: TranscriptionProviderStatus,
+        modelSelection: TranscriptionModelSelection,
+        localModelStatus: LocalSpeechModelStatus,
         transcriptionErrorMessage: String?,
         injection: TextInjectionSnapshot?,
         lastErrorMessage: String?
@@ -272,7 +293,14 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
             )
         }
 
-        if !credentials.hasCredential || credentials.lastErrorMessage != nil {
+        if let localModelIssue = localModelIssue(
+            strings: strings,
+            modelSelection: modelSelection,
+            localModelStatus: localModelStatus
+        ) {
+            items.append(localModelIssue)
+        } else if modelSelection.providerID == .volcengine &&
+            (!credentials.hasCredential || credentials.lastErrorMessage != nil) {
             items.append(
                 SettingsWorkbenchIssueItem(
                     id: "transcription-credential",
@@ -317,6 +345,54 @@ public struct SettingsWorkbenchSnapshot: Equatable, Sendable {
         }
 
         return items
+    }
+
+    private static func localModelIssue(
+        strings: SettingsWorkbenchStrings,
+        modelSelection: TranscriptionModelSelection,
+        localModelStatus: LocalSpeechModelStatus
+    ) -> SettingsWorkbenchIssueItem? {
+        guard modelSelection.providerID == .localRecommended else {
+            return nil
+        }
+
+        let title: String
+        let detail: String
+
+        switch (strings.language, localModelStatus) {
+        case (_, .ready):
+            return nil
+        case (.zhHans, .notDownloaded):
+            title = "本地模型未下载"
+            detail = "本地模型未下载。"
+        case (.en, .notDownloaded):
+            title = "Local model not downloaded"
+            detail = "Local model is not downloaded."
+        case (.zhHans, .downloading):
+            title = "本地模型下载中"
+            detail = "本地模型正在下载。"
+        case (.en, .downloading):
+            title = "Local model downloading"
+            detail = "Local model is downloading."
+        case (.zhHans, .verifying):
+            title = "本地模型校验中"
+            detail = "本地模型正在校验。"
+        case (.en, .verifying):
+            title = "Local model verifying"
+            detail = "Local model is verifying."
+        case (.zhHans, .failed(let message)), (.zhHans, .unavailable(let message)):
+            title = "本地模型不可用"
+            detail = message
+        case (.en, .failed(let message)), (.en, .unavailable(let message)):
+            title = "Local model unavailable"
+            detail = message
+        }
+
+        return SettingsWorkbenchIssueItem(
+            id: "local-model",
+            title: title,
+            detail: detail
+        )
     }
 }
 

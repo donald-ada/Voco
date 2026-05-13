@@ -121,6 +121,51 @@ final class SettingsWorkbenchModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.homeIssueItems.map(\.detail), ["No Volcengine credentials are saved in Keychain."])
     }
 
+    func testReadyLocalModelDoesNotRequireVolcengineCredentials() {
+        let snapshot = SettingsWorkbenchSnapshot.make(
+            statusTitle: "就绪",
+            permissions: [
+                .microphone(.granted),
+                .accessibility(.granted),
+            ],
+            hotkeyState: .listening,
+            hotkeyBinding: .default,
+            hotkeyMode: .toggle,
+            asrStatus: .ready(providerName: "本地模型"),
+            credentials: .missing(provider: .volcengine),
+            injection: nil,
+            lastErrorMessage: nil,
+            modelSelection: TranscriptionModelSelection(providerID: .localRecommended),
+            localModelStatus: .ready
+        )
+
+        XCTAssertEqual(snapshot.status(for: .model), .ok)
+        XCTAssertEqual(snapshot.homeIssueItems, [])
+    }
+
+    func testNotDownloadedLocalModelNeedsAttention() {
+        let snapshot = SettingsWorkbenchSnapshot.make(
+            statusTitle: "就绪",
+            permissions: [
+                .microphone(.granted),
+                .accessibility(.granted),
+            ],
+            hotkeyState: .listening,
+            hotkeyBinding: .default,
+            hotkeyMode: .toggle,
+            asrStatus: .ready(providerName: "本地模型"),
+            credentials: .missing(provider: .volcengine),
+            injection: nil,
+            lastErrorMessage: nil,
+            modelSelection: TranscriptionModelSelection(providerID: .localRecommended),
+            localModelStatus: .notDownloaded
+        )
+
+        XCTAssertEqual(snapshot.status(for: .model), .needsAttention)
+        XCTAssertEqual(snapshot.overview.primaryActionID, SettingsWorkbenchActionID.openModel)
+        XCTAssertEqual(snapshot.homeIssueItems.map(\.detail), ["本地模型未下载。"])
+    }
+
     func testEnglishASROfflineLocalizesOverviewCopy() {
         let snapshot = SettingsWorkbenchSnapshot.make(
             strings: VocoStrings(language: .en),

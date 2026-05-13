@@ -122,6 +122,73 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorDefaultsToVolcengineModelSelection() {
+        let store = FakeTranscriptionModelSelectionStore(selection: .default)
+        let coordinator = AppCoordinator(transcriptionModelSelectionStore: store)
+
+        XCTAssertEqual(coordinator.transcriptionModelSelection.providerID, .volcengine)
+    }
+
+    @MainActor
+    func testCoordinatorSavesReadyLocalModelSelection() {
+        let store = FakeTranscriptionModelSelectionStore(selection: .default)
+        let coordinator = AppCoordinator(
+            transcriptionModelSelectionStore: store,
+            localSpeechModelStatusProvider: { .ready }
+        )
+
+        coordinator.applyTranscriptionModelSelection(.localRecommended)
+
+        XCTAssertEqual(coordinator.transcriptionModelSelection.providerID, .localRecommended)
+        XCTAssertEqual(store.savedSelections.map(\.providerID), [.localRecommended])
+    }
+
+    @MainActor
+    func testCoordinatorRejectsLocalModelSelectionWhenModelIsNotReady() {
+        let store = FakeTranscriptionModelSelectionStore(selection: .default)
+        let coordinator = AppCoordinator(
+            transcriptionModelSelectionStore: store,
+            localSpeechModelStatusProvider: { .notDownloaded }
+        )
+
+        coordinator.applyTranscriptionModelSelection(.localRecommended)
+
+        XCTAssertEqual(coordinator.transcriptionModelSelection.providerID, .volcengine)
+        XCTAssertTrue(store.savedSelections.isEmpty)
+        XCTAssertEqual(coordinator.lastErrorMessage, "本地模型未下载。")
+    }
+
+    @MainActor
+    func testCoordinatorWorkbenchSnapshotAllowsReadyLocalModelWithoutVolcengineCredentials() {
+        let coordinator = AppCoordinator(
+            transcriptionCredentialStore: FakeTranscriptionCredentialStore(snapshot: .missing(provider: .volcengine)),
+            transcriptionModelSelectionStore: FakeTranscriptionModelSelectionStore(
+                selection: TranscriptionModelSelection(providerID: .localRecommended)
+            ),
+            localSpeechModelStatusProvider: { .ready }
+        )
+
+        XCTAssertEqual(coordinator.transcriptionModelSelection.providerID, .localRecommended)
+        XCTAssertEqual(coordinator.settingsWorkbenchSnapshot.status(for: .model), .ok)
+    }
+
+    @MainActor
+    func testCoordinatorPublishesLocalModelDownloadProgressAndReadyState() async {
+        let progress = LocalSpeechModelDownloadProgress(bytesWritten: 4, totalBytes: 10)
+        let coordinator = AppCoordinator(
+            downloadRecommendedLocalModelHandler: { update in
+                update(.downloading(progress))
+                update(.ready)
+            }
+        )
+
+        await coordinator.downloadRecommendedLocalModel()
+
+        XCTAssertEqual(coordinator.localSpeechModelStatus, .ready)
+        XCTAssertNil(coordinator.lastErrorMessage)
+    }
+
+    @MainActor
     func testCoordinatorSkillToggleActionsPersistSemanticChanges() {
         let rule = FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0)
         let store = FakeSkillPreferenceStore(
@@ -1852,6 +1919,21 @@ private final class FakeSkillPreferenceStore: SkillPreferenceStoring {
     func saveSkillSettings(_ settings: SkillSettings) {
         skillSettings = settings
         savedSkillSettings.append(settings)
+    }
+}
+
+@MainActor
+private final class FakeTranscriptionModelSelectionStore: TranscriptionModelSelectionStoring {
+    private(set) var selection: TranscriptionModelSelection
+    private(set) var savedSelections: [TranscriptionModelSelection] = []
+
+    init(selection: TranscriptionModelSelection = .default) {
+        self.selection = selection
+    }
+
+    func saveSelection(_ selection: TranscriptionModelSelection) {
+        self.selection = selection
+        savedSelections.append(selection)
     }
 }
 
