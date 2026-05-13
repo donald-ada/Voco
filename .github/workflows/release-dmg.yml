@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare SherpaOnnx runtime
+        run: native/scripts/ensure_sherpa_onnx_runtime.sh
+
       - name: Swift test
         run: swift test --package-path native
 
