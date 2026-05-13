@@ -2,7 +2,9 @@
 
 中文 | [English](#english)
 
-Voco 是一个原生 macOS 菜单栏语音输入 app。它负责录音、实时转写、HUD 预览，并把文本插入当前输入中的应用。
+Voco 是一款 macOS语音输入法，把你的声音变成当前 Mac 应用里的文字。
+
+它常驻菜单栏，需要输入时按下热键开始说话，实时转写结果会出现在屏幕顶部的 HUD 中，确认后直接写入当前正在输入的 app。你可以使用火山引擎，也可以下载本地模型，在更少打断的工作流里完成日常输入、记录和整理。
 
 ## 界面截图 / Screenshots
 
@@ -143,7 +145,9 @@ packaging/build_native_dmg.sh --profile release --signing-style developer-id
 
 ## English
 
-Voco is a native macOS menu bar voice input app. It records audio, transcribes speech in realtime, shows live HUD preview, and inserts text into the active app.
+Voco is a macOS voice input method that turns your voice into text inside the Mac app you are already using.
+
+It lives in the menu bar. Press a hotkey, speak, preview the live transcript in the top HUD, then insert the result directly into the active app. You can use Volcengine or a downloaded local model, so everyday writing, note taking, and cleanup can stay in a lighter workflow.
 
 ## Current Product
 
