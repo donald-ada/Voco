@@ -1,0 +1,37 @@
+name: Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-dmg:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift test
+        run: swift test --package-path native
+
+      - name: Release DMG smoke
+        run: packaging/tests/native_dmg_smoke.sh --profile release
+
+      - name: Publish DMG to GitHub Release
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          DMG_PATH="dist/Voco.dmg"
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" "${DMG_PATH}" --clobber
+          else
+            gh release create "${TAG_NAME}" "${DMG_PATH}" \
+              --title "${TAG_NAME}" \
+              --generate-notes
+          fi

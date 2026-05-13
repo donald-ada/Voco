@@ -125,6 +125,8 @@ VOCO_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Team (TEAMID)" 
 packaging/build_native_dmg.sh --profile release --signing-style developer-id
 ```
 
+推送 `v*` tag 时，GitHub Actions 会自动构建 `release + adhoc` 的 `Voco.dmg` 并发布到对应的 GitHub Release。
+
 ## 项目结构
 
 - `native/`: 当前 macOS app、core models、tests
@@ -249,6 +251,8 @@ Build a Developer ID DMG:
 VOCO_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Team (TEAMID)" \
 packaging/build_native_dmg.sh --profile release --signing-style developer-id
 ```
+
+Pushing a `v*` tag triggers GitHub Actions to build a `release + adhoc` `Voco.dmg` and publish it to the matching GitHub Release.
 
 ## Project Structure
 

@@ -1,6 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  cat >&2 <<'USAGE'
+Usage: packaging/tests/native_dmg_smoke.sh [--profile <debug|release>]
+USAGE
+}
+
+PROFILE="debug"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 64
+      fi
+      PROFILE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      usage
+      exit 64
+      ;;
+  esac
+done
+
+case "${PROFILE}" in
+  debug|release)
+    ;;
+  *)
+    echo "invalid profile: ${PROFILE}" >&2
+    usage
+    exit 64
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DMG_PATH="${REPO_ROOT}/dist/Voco.dmg"
@@ -25,7 +65,7 @@ mkdir -p "${DANGEROUS_DMG_DIR}"
 printf 'must survive rejected --dmg directory paths\n' > "${DANGEROUS_SENTINEL}"
 
 set +e
-DANGEROUS_OUTPUT="$("${REPO_ROOT}/packaging/build_native_dmg.sh" --profile debug --signing-style adhoc --dmg "${DANGEROUS_DMG_DIR}" 2>&1)"
+DANGEROUS_OUTPUT="$("${REPO_ROOT}/packaging/build_native_dmg.sh" --profile "${PROFILE}" --signing-style adhoc --dmg "${DANGEROUS_DMG_DIR}" 2>&1)"
 DANGEROUS_STATUS="$?"
 set -e
 
@@ -46,7 +86,7 @@ if ! printf '%s\n' "${DANGEROUS_OUTPUT}" | grep -q '\.dmg'; then
   exit 1
 fi
 
-"${REPO_ROOT}/packaging/build_native_dmg.sh" --profile debug --signing-style adhoc
+"${REPO_ROOT}/packaging/build_native_dmg.sh" --profile "${PROFILE}" --signing-style adhoc
 
 if [[ ! -f "${DMG_PATH}" ]]; then
   echo "missing DMG: ${DMG_PATH}" >&2
@@ -109,4 +149,4 @@ if printf '%s\n' "${UNTRACKED_DIST}" | grep -q '^?? '; then
   exit 1
 fi
 
-echo "ok: native Voco.dmg smoke passed"
+echo "ok: native Voco.dmg smoke passed: profile=${PROFILE}"

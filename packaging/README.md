@@ -66,6 +66,12 @@ Run the native DMG smoke test:
 packaging/tests/native_dmg_smoke.sh
 ```
 
+To verify the release-profile adhoc path locally:
+
+```bash
+packaging/tests/native_dmg_smoke.sh --profile release
+```
+
 The DMG smoke test uses only local ad-hoc signing. It does not require
 Developer ID certificates, Apple ID credentials, or network access. It verifies
 the copied app signature, the DMG checksum, the DMG code signature, and the
@@ -128,6 +134,12 @@ codesign --verify --strict dist/Voco.dmg
 xcrun stapler validate dist/Voco.dmg
 spctl --assess --type open --verbose=4 dist/Voco.dmg
 ```
+
+## GitHub Releases
+
+Pushing a `v*` tag triggers `.github/workflows/release-dmg.yml`, which runs the
+native Swift test suite, builds a `release` profile ad-hoc signed `Voco.dmg`,
+and publishes `dist/Voco.dmg` to the matching GitHub Release.
 
 ## Native Migration Cleanup
 
