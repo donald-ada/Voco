@@ -921,7 +921,10 @@ final class AppCoordinatorTests: XCTestCase {
         credentialStore.resume(
             .stored(provider: .volcengine, credential: .volcengineAPIKey("sk-test-abcdef"))
         )
-        await Task.yield()
+
+        for _ in 0..<50 where !coordinator.transcriptionCredentials.hasCredential {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
 
         XCTAssertTrue(coordinator.transcriptionCredentials.hasCredential)
     }
