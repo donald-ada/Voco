@@ -59,10 +59,16 @@ final class SettingsWindowPresenter {
     }
 
     private static func makeSettingsWindow(coordinator: AppCoordinator) -> NSWindow {
+        let layoutPolicy = SettingsWorkbenchLayoutPolicy.standard
         let view = SettingsView(coordinator: coordinator)
         let hostingController = NSHostingController(rootView: view)
         let settingsWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: layoutPolicy.windowInitialWidth,
+                height: layoutPolicy.windowInitialHeight
+            ),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -71,7 +77,10 @@ final class SettingsWindowPresenter {
         settingsWindow.titleVisibility = .hidden
         settingsWindow.titlebarAppearsTransparent = true
         settingsWindow.isMovableByWindowBackground = false
-        settingsWindow.minSize = NSSize(width: 900, height: 600)
+        settingsWindow.minSize = NSSize(
+            width: layoutPolicy.windowMinimumWidth,
+            height: layoutPolicy.windowMinimumHeight
+        )
         settingsWindow.center()
         settingsWindow.contentViewController = hostingController
         return settingsWindow

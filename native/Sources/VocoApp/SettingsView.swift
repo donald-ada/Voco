@@ -17,83 +17,106 @@ struct SettingsView: View {
     @State private var selectedStatisticsMetric: VoiceInputSessionStatisticsMetric = .words
     @State private var selectedStatisticsAppID = VoiceInputSessionStatisticsDashboardSnapshot.allAppsSelectionID
     @State private var statisticsDashboardSnapshot = VoiceInputSessionStatisticsDashboardSnapshot.empty(period: .last7Days)
+    private let layoutPolicy = SettingsWorkbenchLayoutPolicy.standard
 
     private var strings: VocoStrings {
         coordinator.strings
     }
 
     var body: some View {
+        settingsRoot
+            .frame(minWidth: layoutPolicy.windowMinimumWidth, minHeight: layoutPolicy.windowMinimumHeight)
+            .font(SettingsWorkbenchVisual.bodyFont)
+            .background(SettingsWorkbenchVisual.pageBackground)
+            .ignoresSafeArea(.container, edges: .top)
+            .onAppear {
+                coordinator.prepareForSettingsPresentation()
+                syncSelectedModelSource()
+                syncSelectedVolcengineCredentialMode()
+                refreshStatisticsDashboardSnapshot()
+            }
+            .onChange(of: selectedSection) { _, section in
+                if section == .statistics {
+                    refreshStatisticsDashboardSnapshot()
+                }
+            }
+            .onChange(of: selectedStatisticsPeriod) { _, _ in
+                refreshStatisticsDashboardSnapshot()
+            }
+            .onChange(of: selectedStatisticsAppID) { _, _ in
+                refreshStatisticsDashboardSnapshot()
+            }
+            .onChange(of: coordinator.appLanguage) { _, _ in
+                refreshStatisticsDashboardSnapshot()
+            }
+            .onChange(of: coordinator.transcriptionModelSelection.providerID) { _, _ in
+                syncSelectedModelSource()
+            }
+            .onChange(of: coordinator.recentVoiceInputSessions) { _, _ in
+                if selectedSection == .statistics {
+                    refreshStatisticsDashboardSnapshot()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                coordinator.refreshLegacyInstall()
+                coordinator.refreshPermissions()
+                coordinator.refreshTranscriptionCredentials()
+                coordinator.refreshLocalSpeechModelStatus()
+                syncSelectedModelSource()
+                syncSelectedVolcengineCredentialMode()
+                if selectedSection == .statistics {
+                    refreshStatisticsDashboardSnapshot()
+                }
+            }
+            .sheet(item: $selectedVoiceInputSession) { session in
+                VoiceInputSessionDetailSheet(session: session, strings: strings)
+            }
+    }
+
+    private var settingsRoot: some View {
         HStack(spacing: 0) {
             SettingsWorkbenchSidebar(
                 selectedSection: $selectedSection,
                 snapshot: coordinator.settingsWorkbenchSnapshot,
-                strings: strings
+                strings: strings,
+                width: layoutPolicy.sidebarWidth
             )
 
             Divider()
 
+            settingsDetailPane
+        }
+    }
+
+    private var settingsDetailPane: some View {
+        GeometryReader { geometry in
+            let detailContentWidth = layoutPolicy.detailContentWidth(
+                forDetailViewportWidth: geometry.size.width
+            )
+
             ScrollView {
-                detailContent(for: selectedSection)
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 30)
-                    .frame(maxWidth: .infinity, minHeight: 560, alignment: .topLeading)
+                detailContent(for: selectedSection, availableWidth: detailContentWidth)
+                    .padding(.horizontal, layoutPolicy.detailHorizontalPadding)
+                    .padding(.vertical, layoutPolicy.detailVerticalPadding)
+                    .frame(width: geometry.size.width, alignment: .topLeading)
+                    .frame(
+                        minHeight: max(layoutPolicy.detailMinimumHeight, geometry.size.height),
+                        alignment: .topLeading
+                    )
             }
             .scrollIndicators(.hidden)
             .background(SettingsWorkbenchVisual.detailBackground)
         }
-        .frame(minWidth: 900, minHeight: 600)
-        .font(SettingsWorkbenchVisual.bodyFont)
-        .background(SettingsWorkbenchVisual.pageBackground)
-        .ignoresSafeArea(.container, edges: .top)
-        .onAppear {
-            coordinator.prepareForSettingsPresentation()
-            syncSelectedModelSource()
-            syncSelectedVolcengineCredentialMode()
-            refreshStatisticsDashboardSnapshot()
-        }
-        .onChange(of: selectedSection) { _, section in
-            if section == .statistics {
-                refreshStatisticsDashboardSnapshot()
-            }
-        }
-        .onChange(of: selectedStatisticsPeriod) { _, _ in
-            refreshStatisticsDashboardSnapshot()
-        }
-        .onChange(of: selectedStatisticsAppID) { _, _ in
-            refreshStatisticsDashboardSnapshot()
-        }
-        .onChange(of: coordinator.appLanguage) { _, _ in
-            refreshStatisticsDashboardSnapshot()
-        }
-        .onChange(of: coordinator.transcriptionModelSelection.providerID) { _, _ in
-            syncSelectedModelSource()
-        }
-        .onChange(of: coordinator.recentVoiceInputSessions) { _, _ in
-            if selectedSection == .statistics {
-                refreshStatisticsDashboardSnapshot()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            coordinator.refreshLegacyInstall()
-            coordinator.refreshPermissions()
-            coordinator.refreshTranscriptionCredentials()
-            coordinator.refreshLocalSpeechModelStatus()
-            syncSelectedModelSource()
-            syncSelectedVolcengineCredentialMode()
-            if selectedSection == .statistics {
-                refreshStatisticsDashboardSnapshot()
-            }
-        }
-        .sheet(item: $selectedVoiceInputSession) { session in
-            VoiceInputSessionDetailSheet(session: session, strings: strings)
-        }
     }
 
     @ViewBuilder
-    private func detailContent(for section: SettingsWorkbenchSection) -> some View {
+    private func detailContent(
+        for section: SettingsWorkbenchSection,
+        availableWidth: CGFloat
+    ) -> some View {
         switch section {
         case .overview:
-            overviewSection
+            overviewSection(availableWidth: availableWidth)
         case .model:
             modelWorkbenchSection
         case .skills:
@@ -105,7 +128,7 @@ struct SettingsView: View {
         }
     }
 
-    private var overviewSection: some View {
+    private func overviewSection(availableWidth: CGFloat) -> some View {
         let workbench = coordinator.settingsWorkbenchSnapshot
 
         return VStack(alignment: .leading, spacing: 16) {
@@ -124,10 +147,11 @@ struct SettingsView: View {
                     coordinator.prepareForSettingsPresentation()
                     settingsFeedbackMessage = strings.settings.recheckedStatusFeedback
                 },
-                strings: strings
+                strings: strings,
+                usesCompactLayout: layoutPolicy.usesCompactHomeHero(detailContentWidth: availableWidth)
             )
 
-            homeMetricsRow
+            homeMetricsRow(availableWidth: availableWidth)
 
             VoiceInputSessionsPanel(
                 sessions: coordinator.recentVoiceInputSessions,
@@ -138,13 +162,17 @@ struct SettingsView: View {
         }
     }
 
-    private var homeMetricsRow: some View {
+    private func homeMetricsRow(availableWidth: CGFloat) -> some View {
         let sessions = coordinator.recentVoiceInputSessions
         let todaySessions = sessions.filter { Calendar.current.isDateInToday($0.createdAt) }
         let totalWords = todaySessions.reduce(0) { $0 + $1.wordCount }
         let latestSession = sessions.first
+        let metricColumns = Array(
+            repeating: GridItem(.flexible(minimum: 0), spacing: layoutPolicy.homeMetricSpacing),
+            count: layoutPolicy.homeMetricColumnCount(detailContentWidth: availableWidth)
+        )
 
-        return HStack(spacing: 12) {
+        return LazyVGrid(columns: metricColumns, alignment: .leading, spacing: layoutPolicy.homeMetricSpacing) {
             HomeMetricCard(label: strings.settings.todaySessionsLabel, value: strings.settings.sessionCountValue(todaySessions.count))
             HomeMetricCard(label: strings.settings.wordsLabel, value: strings.settings.wordCountValue(totalWords))
             HomeMetricCard(label: "LAST", value: latestSession?.timeTitle ?? "--")
@@ -1791,22 +1819,28 @@ private struct SettingsHomeHeroCard: View {
     let primaryAction: () -> Void
     let secondaryAction: () -> Void
     let strings: VocoStrings
+    let usesCompactLayout: Bool
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 24) {
-                statusContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        Group {
+            if usesCompactLayout {
+                VStack(alignment: .leading, spacing: 18) {
+                    statusContent
+                    VoiceInputFlowPreview(strings: strings)
+                        .frame(maxWidth: .infinity)
+                }
+            } else {
+                HStack(alignment: .center, spacing: 24) {
+                    statusContent
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
 
-                VoiceInputFlowPreview(strings: strings)
-                    .frame(width: 510)
-            }
-
-            VStack(alignment: .leading, spacing: 18) {
-                statusContent
-                VoiceInputFlowPreview(strings: strings)
+                    VoiceInputFlowPreview(strings: strings)
+                        .frame(width: 510)
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(25)
         .background(statusColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
@@ -1822,6 +1856,7 @@ private struct SettingsHomeHeroCard: View {
                 .font(SettingsWorkbenchVisual.homeTitleFont)
                 .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             if snapshot.homeIssueItems.isEmpty {
                 Text(snapshot.overview.detail)
@@ -1837,12 +1872,22 @@ private struct SettingsHomeHeroCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                Button(snapshot.overview.primaryActionDisplayTitle, action: primaryAction)
-                    .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    Button(snapshot.overview.primaryActionDisplayTitle, action: primaryAction)
+                        .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
 
-                Button(snapshot.overview.secondaryActionDisplayTitle, action: secondaryAction)
-                    .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+                    Button(snapshot.overview.secondaryActionDisplayTitle, action: secondaryAction)
+                        .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(snapshot.overview.primaryActionDisplayTitle, action: primaryAction)
+                        .buttonStyle(SettingsWorkbenchPrimaryButtonStyle())
+
+                    Button(snapshot.overview.secondaryActionDisplayTitle, action: secondaryAction)
+                        .buttonStyle(SettingsWorkbenchSecondaryButtonStyle())
+                }
             }
             .padding(.top, 2)
         }
@@ -3415,6 +3460,7 @@ private struct SettingsWorkbenchSidebar: View {
     @Binding var selectedSection: SettingsWorkbenchSection
     let snapshot: SettingsWorkbenchSnapshot
     let strings: VocoStrings
+    let width: CGFloat
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -3446,7 +3492,7 @@ private struct SettingsWorkbenchSidebar: View {
 
             Spacer()
         }
-        .frame(width: 220)
+        .frame(width: width)
         .background(SettingsWorkbenchVisual.sidebarBackground)
     }
 }
