@@ -95,6 +95,73 @@ final class SkillSettingsModelsTests: XCTestCase {
         XCTAssertTrue(snapshot.fillerCleanupDetail.hitRows.isEmpty)
     }
 
+    func testSkillPreviewChangeSegmentsMarkDeletedFillerWords() {
+        let settings = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0)
+                ]
+            )
+        )
+
+        let snapshot = SkillSettingsSnapshot(settings: settings, previewInput: "嗯今天开始")
+
+        XCTAssertEqual(
+            segmentSummaries(snapshot.preview.changeSegments),
+            [
+                "removed|嗯|删除嗯",
+                "unchanged|今天开始|"
+            ]
+        )
+    }
+
+    func testSkillPreviewChangeSegmentsMarkReplacementWords() {
+        let settings = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(displayName: "替换那个啥", matchText: "那个啥", action: .replace("项目"), order: 0)
+                ]
+            )
+        )
+
+        let snapshot = SkillSettingsSnapshot(settings: settings, previewInput: "那个啥今天继续")
+
+        XCTAssertEqual(snapshot.preview.processedText, "项目今天继续")
+        XCTAssertEqual(
+            segmentSummaries(snapshot.preview.changeSegments),
+            [
+                "removed|那个啥|替换那个啥",
+                "inserted|项目|替换那个啥",
+                "unchanged|今天继续|"
+            ]
+        )
+    }
+
+    func testSkillPreviewChangeSegmentsStayUnchangedWhenNoRuleMatches() {
+        let settings = SkillSettings(
+            isEnabled: true,
+            fillerCleanup: FillerCleanupSettings(
+                isEnabled: true,
+                rules: [
+                    FillerCleanupRule(displayName: "删除嗯", matchText: "嗯", action: .delete, order: 0)
+                ]
+            )
+        )
+
+        let snapshot = SkillSettingsSnapshot(settings: settings, previewInput: "今天开始")
+
+        XCTAssertEqual(
+            segmentSummaries(snapshot.preview.changeSegments),
+            [
+                "unchanged|今天开始|"
+            ]
+        )
+    }
+
     func testFillerCleanupDetailAggregatesHitRowsFromHistoricalSessions() {
         let ruleID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         let ignoredRuleID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
@@ -228,5 +295,11 @@ final class SkillSettingsModelsTests: XCTestCase {
         )
 
         XCTAssertEqual(settings.orderedRulesForDisplay.map(\.displayName), ["A rule", "B rule", "C rule"])
+    }
+
+    private func segmentSummaries(_ segments: [SkillPreviewChangeSegment]) -> [String] {
+        segments.map { segment in
+            "\(segment.kind.rawValue)|\(segment.text)|\(segment.ruleTitle ?? "")"
+        }
     }
 }

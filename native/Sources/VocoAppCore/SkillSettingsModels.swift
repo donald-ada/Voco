@@ -1,14 +1,158 @@
 import Foundation
 
+public enum SkillPreviewChangeSegmentKind: String, Equatable, Sendable {
+    case unchanged
+    case removed
+    case inserted
+}
+
+public struct SkillPreviewChangeSegment: Equatable, Identifiable, Sendable {
+    public let id: Int
+    public let kind: SkillPreviewChangeSegmentKind
+    public let text: String
+    public let ruleTitle: String?
+
+    public init(
+        id: Int,
+        kind: SkillPreviewChangeSegmentKind,
+        text: String,
+        ruleTitle: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.text = text
+        self.ruleTitle = ruleTitle
+    }
+
+}
+
 public struct SkillPreviewSnapshot: Equatable, Sendable {
     public let originalText: String
     public let processedText: String
     public let matchedRuleTitles: [String]
+    public let changeSegments: [SkillPreviewChangeSegment]
 
     public init(result: TranscriptPostProcessingResult) {
         self.originalText = result.originalText
         self.processedText = result.processedText
         self.matchedRuleTitles = result.diagnostics.map(\.ruleDisplayName)
+        self.changeSegments = Self.makeChangeSegments(result: result)
+    }
+
+    private static func makeChangeSegments(result: TranscriptPostProcessingResult) -> [SkillPreviewChangeSegment] {
+        var segments = [
+            WorkingChangeSegment(kind: .unchanged, text: result.originalText, ruleTitle: nil)
+        ]
+
+        for diagnostic in result.diagnostics {
+            segments = apply(diagnostic: diagnostic, to: segments)
+        }
+
+        return compacted(segments).enumerated().map { index, segment in
+            SkillPreviewChangeSegment(
+                id: index,
+                kind: segment.kind,
+                text: segment.text,
+                ruleTitle: segment.ruleTitle
+            )
+        }
+    }
+
+    private static func apply(
+        diagnostic: TranscriptPostProcessingDiagnostic,
+        to segments: [WorkingChangeSegment]
+    ) -> [WorkingChangeSegment] {
+        var output: [WorkingChangeSegment] = []
+        var remainingMatches = diagnostic.matchCount
+
+        for segment in segments {
+            guard remainingMatches > 0,
+                  segment.kind != .removed,
+                  !diagnostic.matchedText.isEmpty else {
+                output.append(segment)
+                continue
+            }
+
+            output.append(
+                contentsOf: split(
+                    segment,
+                    matchedText: diagnostic.matchedText,
+                    replacementText: diagnostic.replacementText,
+                    ruleTitle: diagnostic.ruleDisplayName,
+                    remainingMatches: &remainingMatches
+                )
+            )
+        }
+
+        return output
+    }
+
+    private static func split(
+        _ segment: WorkingChangeSegment,
+        matchedText: String,
+        replacementText: String,
+        ruleTitle: String,
+        remainingMatches: inout Int
+    ) -> [WorkingChangeSegment] {
+        var output: [WorkingChangeSegment] = []
+        var cursor = segment.text.startIndex
+
+        while remainingMatches > 0,
+              let range = segment.text.range(of: matchedText, range: cursor..<segment.text.endIndex) {
+            appendSegment(
+                kind: segment.kind,
+                text: String(segment.text[cursor..<range.lowerBound]),
+                ruleTitle: segment.ruleTitle,
+                to: &output
+            )
+            appendSegment(kind: .removed, text: String(segment.text[range]), ruleTitle: ruleTitle, to: &output)
+            appendSegment(kind: .inserted, text: replacementText, ruleTitle: ruleTitle, to: &output)
+            remainingMatches -= 1
+            cursor = range.upperBound
+        }
+
+        appendSegment(
+            kind: segment.kind,
+            text: String(segment.text[cursor..<segment.text.endIndex]),
+            ruleTitle: segment.ruleTitle,
+            to: &output
+        )
+        return output
+    }
+
+    private static func compacted(_ segments: [WorkingChangeSegment]) -> [WorkingChangeSegment] {
+        var output: [WorkingChangeSegment] = []
+        for segment in segments {
+            appendSegment(kind: segment.kind, text: segment.text, ruleTitle: segment.ruleTitle, to: &output)
+        }
+        return output
+    }
+
+    private static func appendSegment(
+        kind: SkillPreviewChangeSegmentKind,
+        text: String,
+        ruleTitle: String?,
+        to segments: inout [WorkingChangeSegment]
+    ) {
+        guard !text.isEmpty else {
+            return
+        }
+
+        if var last = segments.last,
+           last.kind == kind,
+           last.ruleTitle == ruleTitle {
+            last.text += text
+            segments[segments.count - 1] = last
+            return
+        }
+
+        segments.append(WorkingChangeSegment(kind: kind, text: text, ruleTitle: ruleTitle))
+    }
+
+    private struct WorkingChangeSegment: Equatable {
+        let kind: SkillPreviewChangeSegmentKind
+        var text: String
+        let ruleTitle: String?
     }
 }
 

@@ -279,9 +279,10 @@ private struct FillerCleanupDetailSheet: View {
                     text: $previewInput
                 )
 
-                SkillPreviewText(
-                    title: strings.skills.processedTextTitle,
-                    text: preview.processedText
+                SkillPreviewDiffText(
+                    title: localized("变化预览", "Diff Preview"),
+                    segments: preview.changeSegments,
+                    strings: strings
                 )
             }
         }
@@ -651,9 +652,20 @@ private struct SkillPreviewEditor: View {
     }
 }
 
-private struct SkillPreviewText: View {
+enum SkillPreviewChangeSegmentDisplay {
+    static func text(for segment: SkillPreviewChangeSegment, strings: VocoStrings) -> String {
+        if segment.kind == .inserted && segment.text == " " {
+            return strings.skills.replacementSpaceTitle
+        }
+
+        return segment.text
+    }
+}
+
+private struct SkillPreviewDiffText: View {
     let title: String
-    let text: String
+    let segments: [SkillPreviewChangeSegment]
+    let strings: VocoStrings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -661,9 +673,8 @@ private struct SkillPreviewText: View {
                 .font(SettingsWorkbenchVisual.caption2BoldFont)
                 .foregroundStyle(SettingsWorkbenchVisual.tertiaryText)
 
-            Text(text.isEmpty ? " " : text)
+            diffText
                 .font(SettingsWorkbenchVisual.bodyFont)
-                .foregroundStyle(SettingsWorkbenchVisual.primaryText)
                 .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
                 .padding(12)
                 .background(
@@ -676,6 +687,33 @@ private struct SkillPreviewText: View {
                 )
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var diffText: Text {
+        guard !segments.isEmpty else {
+            return Text(" ")
+        }
+
+        return segments.reduce(Text("")) { partialText, segment in
+            partialText + styledText(for: segment)
+        }
+    }
+
+    private func styledText(for segment: SkillPreviewChangeSegment) -> Text {
+        let text = SkillPreviewChangeSegmentDisplay.text(for: segment, strings: strings)
+        switch segment.kind {
+        case .unchanged:
+            return Text(text)
+                .foregroundColor(SettingsWorkbenchVisual.primaryText)
+        case .removed:
+            return Text(text)
+                .foregroundColor(SettingsWorkbenchVisual.danger)
+                .strikethrough(true, color: SettingsWorkbenchVisual.danger)
+        case .inserted:
+            return Text(text)
+                .foregroundColor(SettingsWorkbenchVisual.accent)
+                .bold()
+        }
     }
 }
 

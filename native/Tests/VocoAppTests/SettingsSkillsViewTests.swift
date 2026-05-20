@@ -20,4 +20,32 @@ final class SettingsSkillsViewTests: XCTestCase {
         XCTAssertEqual(FillerCleanupReplacementPreset.space.action(customText: "x"), .replace(" "))
         XCTAssertEqual(FillerCleanupReplacementPreset.custom.action(customText: "x"), .replace("x"))
     }
+
+    func testPreviewChangeSegmentDisplayMakesSpaceReplacementsVisible() {
+        let insertedSpace = SkillPreviewChangeSegment(
+            id: 0,
+            kind: .inserted,
+            text: " ",
+            ruleTitle: "空格替换"
+        )
+        let removedWord = SkillPreviewChangeSegment(
+            id: 1,
+            kind: .removed,
+            text: "嗯",
+            ruleTitle: "删除嗯"
+        )
+
+        XCTAssertEqual(
+            SkillPreviewChangeSegmentDisplay.text(for: insertedSpace, strings: VocoStrings(language: .zhHans)),
+            "空格"
+        )
+        XCTAssertEqual(
+            SkillPreviewChangeSegmentDisplay.text(for: insertedSpace, strings: VocoStrings(language: .en)),
+            "Space"
+        )
+        XCTAssertEqual(
+            SkillPreviewChangeSegmentDisplay.text(for: removedWord, strings: VocoStrings(language: .zhHans)),
+            "嗯"
+        )
+    }
 }
